@@ -8,7 +8,7 @@ from discord import app_commands
 
 # ========== CONFIG ==========
 import os
-TOKEN = os.getenv("MTQ2MTM2MTE5MTk3OTg0MzgzNw.G9NcDs.6MN8ubFjhPX0CjbLg-OT9g1bf_9DTNBG9fVtOg")
+TOKEN = os.getenv("DISCORD_TOKEN")
 INTENTS = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=INTENTS)
 
@@ -1010,7 +1010,8 @@ async def diemdanh(interaction: discord.Interaction):
 
 
 keep_alive()
-bot.run("MTQ2MTM2MTE5MTk3OTg0MzgzNw.G9NcDs.6MN8ubFjhPX0CjbLg-OT9g1bf_9DTNBG9fVtOg")
+bot.run(TOKEN)
+
 
 
 
