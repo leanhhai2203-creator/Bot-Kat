@@ -94,8 +94,9 @@ async def check_level_up(uid, channel, name):
     u = await users_col.find_one({"_id": uid})
     if not u: return
     lv, exp, new_lv, leveled = u.get("level", 1), u.get("exp", 0), u.get("level", 1), False
-    while exp >= exp_needed(new_lv):
-        if new_lv % 10 == 0: break
+    while exp >= exp_needed(new_lv) and new_lv < 100: # THÊM: and new_lv < 100
+        if new_lv % 10 == 0:
+            break 
         exp -= exp_needed(new_lv)
         new_lv += 1
         leveled = True
@@ -463,58 +464,43 @@ async def huongdan(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 import asyncio
 
-@bot.tree.command(name="bxh", description="Xem Bảng Xếp Hạng Top 10 Cường Giả")
+@bot.tree.command(name="bxh", description="Xem bảng xếp hạng các đại năng tu tiên")
 async def bxh(interaction: discord.Interaction):
     await interaction.response.defer()
+    
+    # 1. Lấy dữ liệu từ MongoDB: Sắp xếp theo Level giảm dần, nếu Level bằng nhau thì xét EXP
+    # to_list(length=10) để lấy 10 người đứng đầu
+    top_users = await users_col.find().sort([("level", -1), ("exp", -1)]).limit(10).to_list(length=10)
+    
+    if not top_users:
+        return await interaction.followup.send("⚠️ Hiện tại chưa có tu sĩ nào ghi danh trên bảng xếp hạng.")
 
-    try:
-        # 1. Lấy Top 10 dựa trên Level và EXP từ MongoDB
-        # .sort([("level", -1), ("exp", -1)]) tương đương với ORDER BY level DESC, exp DESC
-        cursor = users_col.find().sort([("level", -1), ("exp", -1)]).limit(10)
-        rows = await cursor.to_list(length=10)
-
-        if not rows:
-            return await interaction.followup.send("📜 Hiện tại thiên hạ chưa có ai ghi danh.")
-
-        # 2. ✅ Tính lực chiến song song cho cả 10 người
-        # Lưu ý: Truyền _id (dạng string) vào hàm calc_power
-        tasks = [calc_power(user["_id"]) for user in rows]
-        powers = await asyncio.gather(*tasks)
-
-        embed = discord.Embed(
-            title="🏆 BẢNG VÀNG CƯỜNG GIẢ 🏆",
-            description="Danh sách cường giả có tu vi thâm hậu nhất",
-            color=discord.Color.gold()
-        )
-
-        titles = {1: "🥇 **Thánh Nhân**", 2: "🥈 **Chí Tôn**", 3: "🥉 **Đại Đế**"}
-        leaderboard_text = ""
-
-        for i, user in enumerate(rows):
-            uid = int(user["_id"]) # Chuyển lại về int để dùng get_member của discord.py
-            lv = user.get("level", 1)
-            power = powers[i]
-            
-            # Tìm tên người chơi trong server
-            member = interaction.guild.get_member(uid)
-            name = member.display_name if member else f"Ẩn sĩ ({uid})"
-            
-            prefix = titles.get(i + 1, f"**#{i + 1}**")
-            realm = get_realm(lv)
-
-            leaderboard_text += (
-                f"{prefix} — **{name}**\n"
-                f"└ `{realm}` (Lv.{lv}) - ⚡ Lực chiến: `{power:,}`\n"
-            )
-
-        embed.add_field(name="Thứ hạng / Đạo hiệu / Tu vi", value=leaderboard_text, inline=False)
-        embed.set_footer(text=f"Cập nhật: {datetime.now().strftime('%H:%M:%S')}")
+    description = ""
+    for i, user in enumerate(top_users):
+        # Lấy dữ liệu từ Dictionary (MongoDB trả về dict)
+        uid = user.get("_id") # UID lưu dạng string
+        lv = user.get("level", 1)
+        exp = user.get("exp", 0)
+        pet = user.get("pet", "Không có")
         
-        await interaction.followup.send(embed=embed)
+        # Biểu tượng cho Top 3
+        medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"**#{i+1}**"
+        
+        # Tạo dòng thông tin cho từng người
+        description += f"{medal} <@{uid}> - **Cấp {lv}** ({exp} EXP) | 🐾: {pet}\n"
 
-    except Exception as e:
-        print(f"Lỗi BXH: {e}")
-        await interaction.followup.send("❌ Có lỗi xảy ra khi tính toán thiên cơ, vui lòng thử lại sau.")
+    # 2. Tạo giao diện Embed
+    embed = discord.Embed(
+        title="🏆 BẢNG XẾP HẠNG TU TIÊN 🏆",
+        description=description,
+        color=discord.Color.gold(),
+        timestamp=datetime.now()
+    )
+    
+    embed.set_footer(text="Bảng xếp hạng cập nhật theo thời gian thực")
+    embed.set_thumbnail(url="https://i.imgur.com/vHInX9T.png") # Hình ảnh minh họa bảng vàng
+
+    await interaction.followup.send(embed=embed)
 @bot.tree.command(name="resetday", description="ADMIN: Reset ngày")
 async def resetday(interaction: discord.Interaction):
     # Kiểm tra quyền ADMIN (Giữ nguyên logic của đạo hữu)
@@ -717,3 +703,4 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
