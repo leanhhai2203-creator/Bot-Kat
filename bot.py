@@ -1,81 +1,40 @@
 from keep_alive import keep_alive
+import os
 import discord
 from discord.ext import commands, tasks
-import aiosqlite
 import random
 from datetime import datetime
 from discord import app_commands
+import motor.motor_asyncio
+import asyncio
+
+# ========== KẾT NỐI MONGODB ==========
+MONGO_URI = os.getenv("MONGO_URI") 
+cluster = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
+db_mongo = cluster["game_database"] 
+users_col = db_mongo["users"]       
+eq_col = db_mongo["equipment"]      
 
 # ========== CONFIG ==========
-import os
 TOKEN = os.getenv("DISCORD_TOKEN")
 INTENTS = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=INTENTS)
 
-DB_PATH = "game.db"
-MAX_LEVEL = 100
 ADMIN_ID = 472564016917643264 
-
 MSG_EXP = 10
-# --- CẤU HÌNH THIÊN Ý ---
-THIEN_Y_QUOTES = [
-    "🌤️ Thiên địa mở mang, linh khí tràn trề, toàn dân hưởng phúc!",
-    "🌈 Thụy tường giáng thế, một luồng tiên khí gột rửa thân tâm!",
-    "✨ Chân tiên hiển thánh, ban phát cơ duyên cho chúng sinh!"
-]
-
-TA_NIEM_QUOTES = [
-    "🌑 Ma khí trỗi dậy, tâm ma xâm chiếm lục địa!",
-    "⚡ Thiên nộ giáng lâm, vạn vật bị tước đoạt linh khí!",
-    "🌪️ Hư không dao động, tu vi chúng sinh bị cắn trả!"
-]
-
-@tasks.loop(hours=4.8)
-async def thien_y_loop():
-    async with aiosqlite.connect(DB_PATH) as db:
-        is_thien_y = random.choice([True, False])
-        percent = random.randint(5, 10)
-        
-        if is_thien_y:
-            title, color = "✨ THIÊN Ý GIÁNG LÂM ✨", discord.Color.gold()
-            quote = random.choice(THIEN_Y_QUOTES)
-            await db.execute("UPDATE users SET exp = exp + (exp * ? / 100)", (percent,))
-            msg = f"Tất cả đạo hữu được ban phúc, tăng **{percent}%** EXP tu vi!"
-        else:
-            title, color = "🌑 TÀ NIỆM PHÁT TÁC 🌑", discord.Color.dark_purple()
-            quote = random.choice(TA_NIEM_QUOTES)
-            await db.execute("UPDATE users SET exp = MAX(0, exp - (exp * ? / 100))", (percent,))
-            msg = f"Cảnh báo! Tâm ma quấy nhiễu, chúng sinh bị tổn hao **{percent}%** EXP!"
-        
-        await db.commit()
-
-        # PHẦN GỬI EMBED PHẢI NẰM Ở ĐÂY (Thụt lề thẳng hàng với async with)
-        embed = discord.Embed(title=title, description=f"*{quote}*\n\n{msg}", color=color)
-        for channel_id in NOTIFY_CHANNELS:
-            channel = bot.get_channel(channel_id)
-            if channel:
-                try: await channel.send(embed=embed)
-                except: pass
-KHAU_NGU = [
-    "Thiên địa biến sắc, linh khí hội tụ về một điểm!",
-    "Vạn dặm mây tím kéo đến, điềm lành báo hiệu một bậc kỳ tài xuất thế!",
-    "Tiếng rồng ngâm hổ gầm vang vọng khắp cửu tiêu!",
-    "Đạo vận viên mãn, thân thể thoát thai hoán cốt!",
-    "Trải qua vô vàn khổ hạnh, cuối cùng cũng chạm đến chân lý!"
-]
-NOTIFY_CHANNELS = [1455081842473697362, 1455837230332641280, 1454793019160006783, 1454793109094268948, 1454506037779369986] 
-CHANNEL_EXP_RATES = {
-    1455081842473697362: 0.2,
-    1455837230332641280: 0.2,
-    1454793019160006783: 0.2,
-    1454793109094268948: 0.2,
-    1454506037779369986: 1.5,
-}
 MIN_MSG_LEN = 7
 MSG_COOLDOWN = 20
 last_msg_time = {}
 
-# ========== DATA ==========
+# Các kênh nhận thông báo quan trọng
+NOTIFY_CHANNELS = [1455081842473697362, 1455837230332641280, 1454793019160006783, 1454793109094268948, 1454506037779369986] 
+CHANNEL_EXP_RATES = {
+    1455081842473697362: 0.2, 1455837230332641280: 0.2,
+    1454793019160006783: 0.2, 1454793109094268948: 0.2,
+    1454506037779369986: 1.5,
+}
+
+# --- CẤU HÌNH CẢNH GIỚI & LINH THÚ ---
 REALMS = [
     ("Luyện Khí", 10), ("Trúc Cơ", 20), ("Kết Đan", 30),
     ("Nguyên Anh", 40), ("Hóa Thần", 50), ("Luyện Hư", 60),
@@ -92,122 +51,8 @@ PET_CONFIG = {
     "Hóa Hình Hồ Ly": {"atk": 35, "effect": "X2 tỉ lệ rơi Linh Thạch", "color": 0xff99cc}
 }
 
-# ========== DATABASE ==========
-async def init_db():
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Cấu trúc bảng users
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            exp INTEGER DEFAULT 0,
-            level INTEGER DEFAULT 1,
-            last_daily TEXT,
-            last_gacha TEXT,
-            attack_count INTEGER DEFAULT 0,
-            last_attack TEXT,
-            linh_thach INTEGER DEFAULT 0,
-            dotpha INTEGER DEFAULT 0,
-            gacha_count INTEGER DEFAULT 0,
-            last_gacha_day TEXT,
-            pet TEXT DEFAULT NULL
-        )
-        """)
+# ========== UTIL FUNCTIONS (THUẦN MONGODB) ==========
 
-        # Cấu trúc bảng equipment
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS equipment (
-            user_id INTEGER,
-            type TEXT,
-            level INTEGER
-        )
-        """)
-        await db.commit()
-
-# Hàm này phải nằm RIÊNG BIỆT, không thụt lề chung với init_db
-async def upgrade_db():
-    async with aiosqlite.connect(DB_PATH) as db:
-        try:
-            # Lệnh này yêu cầu Database tự thêm cột 'pet' vào bảng 'users'
-            await db.execute("ALTER TABLE users ADD COLUMN pet TEXT DEFAULT NULL")
-            await db.commit()
-            print("✅ Đã nâng cấp Database thành công: Thêm cột Linh thú!")
-        except:
-            # Nếu cột đã có rồi thì nó sẽ báo lỗi, ta dùng 'pass' để bỏ qua
-            pass
-
-# ========== UTIL ==========
-async def create_user(uid: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            "SELECT 1 FROM users WHERE user_id=?",
-            (uid,)
-        ) as cur:
-            if await cur.fetchone() is None:
-                await db.execute("""
-                    INSERT INTO users (
-                        user_id, exp, level, last_daily, last_gacha,
-                        attack_count, last_attack,
-                        linh_thach, dotpha, gacha_count, last_gacha_day
-                    ) VALUES (?,0,1,NULL,NULL,0,NULL,0,0,0,NULL)
-                """, (uid,))
-                await db.commit()
-
-async def get_user(uid: int) -> dict:
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT * FROM users WHERE user_id=?",
-            (uid,)
-        ) as cur:
-            row = await cur.fetchone()
-            if row is None:
-                await create_user(uid)
-                return await get_user(uid)
-            return dict(row)
-
-def get_monster_data(lv: int):
-    if lv <= 10:
-        return "Yêu thú", 0.15, (1, 2)   # Chỉ rơi đồ cấp 1-2
-    elif lv <= 30:
-        return "Ma thú", 0.20, (2, 4)   # Chỉ rơi đồ cấp 2-4
-    elif lv <= 60:
-        return "Linh thú", 0.25, (4, 7)  # Chỉ rơi đồ cấp 4-7
-    else:
-        return "Cổ thú", 0.30, (6, 9)   # Max là cấp 9, cấp 10 chỉ có ở Gacha
-
-async def calc_power(uid: int) -> int:
-    u = await get_user(uid) # Đảm bảo hàm này lấy đủ cột 'pet'
-    eq = await get_equipment(uid)
-
-    lv = u["level"]
-    pet_name = u.get("pet") # Lấy tên linh thú từ DB
-
-    # 1. Chỉ số cơ bản theo Level
-    atk = lv * 5  
-    hp = lv * 50  
-
-    # 2. Cộng chỉ số từ trang bị
-    for t, l in eq.items():
-        if t in ("Kiếm", "Nhẫn"):
-            atk += l * 15  
-        elif t in ("Giáp", "Tay", "Ủng"):
-            hp += l * 150  
-
-    # 3. CỘNG CHỈ SỐ TỪ LINH THÚ (MỚI)
-    # Truy xuất ATK từ bảng cấu hình PET_CONFIG
-    pet_atk_bonus = 0
-    if pet_name in PET_CONFIG:
-        pet_atk_bonus = PET_CONFIG[pet_name]["atk"]
-    
-    atk += pet_atk_bonus
-
-    # 4. Công thức Power: (ATK * 10) + HP
-    total_power = (atk * 10) + hp
-    
-    # Luck factor (Biến động ngẫu nhiên)
-    random_factor = random.randint(0, 100)
-    
-    return int(total_power + random_factor)
 def exp_needed(lv: int):
     return 40 + lv * 8 if lv <= 50 else 200 + lv * 25
 
@@ -218,247 +63,178 @@ def get_realm(lv: int):
             return f"{name} tầng {tầng}"
     return "Thiên Tiên viên mãn"
 
-async def add_exp(uid: int, amount: int):
-    u = await get_user(uid)
-    # Nếu đang ở mốc cấp 10, 20, 30... và đã đủ EXP để đột phá
-    if u["level"] % 10 == 0 and u["exp"] >= exp_needed(u["level"]):
-        return # Ngừng cộng thêm EXP
+def get_monster_data(lv: int):
+    if lv <= 10: return "Yêu thú", 0.15, (1, 2)
+    elif lv <= 30: return "Ma thú", 0.20, (2, 4)
+    elif lv <= 60: return "Linh thú", 0.25, (4, 7)
+    else: return "Cổ thú", 0.30, (6, 9)
 
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "UPDATE users SET exp = exp + ? WHERE user_id=?",
-            (amount, uid)
-        )
-        await db.commit()
+async def calc_power(uid: str) -> int:
+    uid = str(uid)
+    u = await users_col.find_one({"_id": uid})
+    if not u: return 0
+    eq = await eq_col.find_one({"_id": uid}) or {}
+    lv, pet_name = u.get("level", 1), u.get("pet")
+    atk, hp = lv * 5, lv * 50
+    for t in EQ_TYPES:
+        eq_lv = eq.get(t, 0)
+        if t in ("Kiếm", "Nhẫn"): atk += eq_lv * 15
+        else: hp += eq_lv * 150
+    if pet_name in PET_CONFIG: atk += PET_CONFIG[pet_name].get("atk", 0)
+    return int((atk * 10) + hp + random.randint(0, 100))
+
+async def add_exp(uid: str, amount: int):
+    uid = str(uid)
+    u = await users_col.find_one({"_id": uid})
+    if not u or (u["level"] % 10 == 0 and u["exp"] >= exp_needed(u["level"])): return
+    await users_col.update_one({"_id": uid}, {"$inc": {"exp": amount}})
 
 async def check_level_up(uid, channel, name):
-    u = await get_user(uid)
-    exp = u["exp"]
-    lv = u["level"]
-    leveled = False
-
-    # Thêm điều kiện lv % 10 != 0 để dừng lại ngay khi chạm mốc đột phá
-    while lv < MAX_LEVEL and exp >= exp_needed(lv) and lv % 10 != 0:
-        exp -= exp_needed(lv)
-        lv += 1
+    uid = str(uid)
+    u = await users_col.find_one({"_id": uid})
+    if not u: return
+    lv, exp, new_lv, leveled = u.get("level", 1), u.get("exp", 0), u.get("level", 1), False
+    while exp >= exp_needed(new_lv):
+        if new_lv % 10 == 0: break
+        exp -= exp_needed(new_lv)
+        new_lv += 1
         leveled = True
-        await channel.send(f"🎉 **{name} lên Lv {lv}!**\n🧘 {get_realm(lv)}")
-
     if leveled:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute(
-                "UPDATE users SET exp=?, level=? WHERE user_id=?",
-                (exp, lv, uid)
-            )
-            await db.commit()
-# ========== EQUIPMENT ==========
-async def get_equipment(uid: int) -> dict:
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("""
-            SELECT type, MAX(level)
-            FROM equipment
-            WHERE user_id=?
-            GROUP BY type
-        """, (uid,)) as cur:
-            rows = await cur.fetchall()
-            # VD: {"Kiếm": 5, "Giáp": 3}
-            return {r[0]: r[1] for r in rows}
+        await users_col.update_one({"_id": uid}, {"$set": {"level": new_lv, "exp": exp}})
+        embed = discord.Embed(title="✨ CẢNH GIỚI PHI THĂNG ✨", description=f"Chúc mừng đạo hữu **{name}** đã lên **Cấp {new_lv}**!\n🧘 **{get_realm(new_lv)}**", color=discord.Color.green())
+        if channel: await channel.send(embed=embed)
 
-
-async def save_equipment(uid: int, eq_type: str, lv: int) -> bool:
-    # 🔒 KHÓA CẤP TRANG BỊ
-    lv = min(lv, 10)
-
-    eq = await get_equipment(uid)
-
-    # Nếu đồ mới yếu hơn hoặc bằng → bỏ
-    if lv <= eq.get(eq_type, 0):
-        return False
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Xóa đồ cũ cùng loại
-        await db.execute(
-            "DELETE FROM equipment WHERE user_id=? AND type=?",
-            (uid, eq_type)
-        )
-
-        # Lưu đồ mới (auto trang bị)
-        await db.execute(
-            "INSERT INTO equipment (user_id, type, level) VALUES (?,?,?)",
-            (uid, eq_type, lv)
-        )
-        await db.commit()
-
-    return True
-def calc_power_from_data(lv, eq):
-    atk = lv * 2.2
-    hp = lv * 22
-    for t, l in eq.items():
-        if t in ["Kiếm", "Nhẫn"]:
-            atk += l * 6
-        else:
-            hp += l * 25
-    return atk * 1.6 + hp * 0.55 + random.randint(0, 80)
+# ========== VÒNG LẶP THIÊN Ý (MONGODB) ==========
+@tasks.loop(hours=4.8)
+async def thien_y_loop():
+    is_thien_y = random.choice([True, False])
+    percent = random.randint(5, 10)
+    if is_thien_y:
+        await users_col.update_many({}, {"$mul": {"exp": 1 + (percent / 100)}})
+        msg = f"Tất cả đạo hữu được ban phúc, tăng **{percent}%** EXP!"
+    else:
+        await users_col.update_many({}, {"$mul": {"exp": max(0, 1 - (percent / 100))}})
+        msg = f"Cảnh báo! Tâm ma quấy nhiễu, tổn hao **{percent}%** EXP!"
+    # (Đoạn này đạo hữu có thể thêm logic gửi tin nhắn vào kênh NOTIFY_CHANNELS nếu muốn)
 
 # ========== EVENTS ==========
 @bot.event
 async def on_ready():
-    # Bước 1: Tạo file và bảng dữ liệu ngay lập tức
-    await init_db()
-    
-    # Bước 2: Nâng cấp cột nếu cần (như cột pet)
-    await upgrade_db()
-
-    # Bước 3: Đồng bộ lệnh Slash (/)
     try:
         synced = await bot.tree.sync()
-        print(f"✅ Đã đồng bộ {len(synced)} lệnh Slash.")
-    except Exception as e:
-        print(f"❌ Lỗi đồng bộ lệnh: {e}")
+        print(f"✅ Đã đồng bộ {len(synced)} lệnh Slash. Bot sẵn sàng!")
+        if not thien_y_loop.is_running(): thien_y_loop.start()
+    except Exception as e: print(f"❌ Lỗi: {e}")
 
-    # Bước 4: Khởi động vòng lặp Thiên Ý sau khi DB đã sẵn sàng
-    if not thien_y_loop.is_running():
-        thien_y_loop.start()
-
-    print(f"🚀 Bot {bot.user} đã sẵn sàng trên Render!")
 @bot.event
 async def on_message(message):
-    # 1. Bỏ qua nếu tin nhắn từ bot khác hoặc chính nó
-    if message.author.bot:
-        return
-
-    uid = message.author.id
-    await create_user(uid)
-
-    # 2. Xử lý logic cộng EXP
-    now = datetime.now().timestamp()
-    
-    # Kiểm tra độ dài tin nhắn tối thiểu (MIN_MSG_LEN = 7)
-    if len(message.content.strip()) >= MIN_MSG_LEN:
-        # Kiểm tra thời gian chờ giữa 2 lần nhận EXP (MSG_COOLDOWN = 10s)
-        if now - last_msg_time.get(uid, 0) >= MSG_COOLDOWN:
-            last_msg_time[uid] = now
-            
-            # Lấy hệ số nhân của kênh từ danh sách CHANNEL_EXP_RATES
-            # Nếu không có trong danh sách, mặc định là 1.0
-            rate = CHANNEL_EXP_RATES.get(message.channel.id, 1.0)
-            final_exp = int(MSG_EXP * rate)
-            
-            # Thực hiện cộng EXP và kiểm tra lên cấp
-            await add_exp(uid, final_exp)
-            await check_level_up(uid, message.channel, message.author.display_name)
+    if message.author.bot: return
+    uid, now = str(message.author.id), datetime.now().timestamp()
+    if len(message.content.strip()) >= MIN_MSG_LEN and now - last_msg_time.get(uid, 0) >= MSG_COOLDOWN:
+        last_msg_time[uid] = now
+        rate = CHANNEL_EXP_RATES.get(message.channel.id, 1.0)
+        await users_col.update_one({"_id": uid}, {"$setOnInsert": {"level": 1, "exp": 0, "linh_thach": 10, "pet": None}}, upsert=True)
+        await add_exp(uid, int(MSG_EXP * rate))
+        await check_level_up(uid, message.channel, message.author.display_name)
     await bot.process_commands(message)
 
-# ========== SLASH COMMANDS ==========
-@bot.tree.command(name="check", description="Xem thông tin tu vi, trang bị và linh thú")
+# ========== LỆNH SLASH (/) ==========
+
+@bot.tree.command(name="check", description="Xem thông tin cá nhân")
 async def check(interaction: discord.Interaction):
     await interaction.response.defer()
-
-    uid = interaction.user.id
-    await create_user(uid)
-
-    u = await get_user(uid)
-    eq = await get_equipment(uid)
-    
-    # ✅ TÍNH TOÁN LỰC CHIẾN (Đã bao gồm Pet ở bước trước)
+    uid = str(interaction.user.id)
+    u = await users_col.find_one_and_update({"_id": uid}, {"$setOnInsert": {"level": 1, "exp": 0, "linh_thach": 10}}, upsert=True, return_document=True)
+    eq = await eq_col.find_one({"_id": uid}) or {}
     power = await calc_power(uid)
-
-    # 🐾 XỬ LÝ HIỂN THỊ LINH THÚ
     pet_name = u.get("pet")
-    if pet_name in PET_CONFIG:
-        pet_data = PET_CONFIG[pet_name]
-        pet_text = f"**{pet_name}**\n└ ⚔️ ATK: +{pet_data['atk']}\n└ ✨ {pet_data['effect']}"
-        embed_color = pet_data.get("color", 0x3498db) # Lấy màu theo pet hoặc mặc định xanh dương
-    else:
-        pet_text = "Chưa thu phục"
-        embed_color = 0x7f8c8d # Màu xám khi không có pet
-
-    # 🧰 XỬ LÝ TRANG BỊ
-    eq_text = ""
-    for t in EQ_TYPES:
-        if t in eq:
-            eq_text += f"• {t}: cấp {eq[t]}\n"
-        else:
-            eq_text += f"• {t}: ➖\n"
-
-    # 📜 TẠO EMBED CHUYÊN NGHIỆP
-    embed = discord.Embed(
-        title=f"📜 BẢNG TRẠNG THÁI: {interaction.user.display_name}",
-        description=f"**Cảnh giới:** {get_realm(u['level'])}",
-        color=embed_color
-    )
-    embed.set_thumbnail(url=interaction.user.display_avatar.url)
-
-    # Các thông số chính
-    embed.add_field(name="🔮 Tu vi", value=f"Cấp {u['level']} (EXP: {u['exp']})", inline=True)
-    embed.add_field(name="⚡ Lực chiến", value=f"**{power}**", inline=True)
-    embed.add_field(name="💎 Linh thạch", value=f"{u['linh_thach']}", inline=True)
-
-    # Phần Linh thú và Trang bị
-    embed.add_field(name="🐾 Linh thú trợ chiến", value=pet_text, inline=False)
-    embed.add_field(name="🧰 Trang bị đang mang", value=eq_text, inline=False)
-
-    # Footer hiển thị lượt đánh hôm nay
-    today = datetime.now().strftime("%Y-%m-%d")
-    atk_count = u.get("attack_count", 0) if u.get("last_attack") == today else 0
-    embed.set_footer(text=f"Lượt đánh hôm nay: {atk_count}/3")
-
+    pet_text = f"**{pet_name}**" if pet_name in PET_CONFIG else "Chưa thu phục"
+    eq_text = "\n".join([f"• {t}: cấp {eq.get(t, '➖')}" for t in EQ_TYPES])
+    
+    embed = discord.Embed(title=f"📜 TRẠNG THÁI: {interaction.user.display_name}", description=f"**Cảnh giới:** {get_realm(u['level'])}", color=0x3498db)
+    embed.add_field(name="🔮 Tu vi", value=f"Cấp {u['level']} (EXP: {u['exp']})")
+    embed.add_field(name="⚡ Lực chiến", value=f"**{power:,}**")
+    embed.add_field(name="💎 Linh thạch", value=f"{u.get('linh_thach', 0)}")
+    embed.add_field(name="🐾 Linh thú", value=pet_text, inline=False)
+    embed.add_field(name="🧰 Trang bị", value=eq_text, inline=False)
     await interaction.followup.send(embed=embed)
+
+@bot.tree.command(name="diemdanh", description="Điểm danh nhận quà")
+async def diemdanh(interaction: discord.Interaction):
+    await interaction.response.defer()
+    uid, today = str(interaction.user.id), datetime.now().strftime("%Y-%m-%d")
+    u = await users_col.find_one_and_update({"_id": uid}, {"$setOnInsert": {"level": 1, "exp": 0, "linh_thach": 10}}, upsert=True, return_document=True)
+    
+    if u.get("last_daily") == today: return await interaction.followup.send("❌ Hôm nay đã điểm danh rồi!")
+    
+    reward = exp_needed(u["level"])
+    await users_col.update_one({"_id": uid}, {"$set": {"last_daily": today}, "$inc": {"exp": reward, "linh_thach": 1}})
+    await check_level_up(uid, interaction.channel, interaction.user.display_name)
+    await interaction.followup.send(f"✅ Điểm danh thành công! +{reward} EXP, +1 Linh thạch.")
+
 @bot.tree.command(name="gacha", description="Gacha trang bị & Linh thú độc bản (Tốn 1 Linh thạch sau 3 lượt)")
 async def gacha(interaction: discord.Interaction):
     await interaction.response.defer()
-
-    uid = interaction.user.id
-    await create_user(uid)
-
+    uid = str(interaction.user.id)
     today = datetime.now().strftime("%Y-%m-%d")
-    u = await get_user(uid)
 
-    gacha_count = u["gacha_count"] if u["last_gacha_day"] == today else 0
-    linh_thach = u["linh_thach"]
+    # Lấy data user
+    u = await users_col.find_one({"_id": uid})
+    if not u:
+        # Khởi tạo nếu chưa có hồ sơ
+        u = {"_id": uid, "linh_thach": 10, "gacha_count": 0, "last_gacha_day": ""}
+        await users_col.insert_one(u)
+
+    gacha_count = u.get("gacha_count", 0) if u.get("last_gacha_day") == today else 0
+    linh_thach = u.get("linh_thach", 0)
     cost = 0 if gacha_count < 3 else 1
 
     # 1. KIỂM TRA ĐIỀU KIỆN
-    if cost > 0 and linh_thach < cost:
+    if linh_thach < cost:
         return await interaction.followup.send(f"❌ Đạo hữu không đủ **{cost} Linh thạch** để tiếp tục.")
 
-    # 2. LOGIC GACHA LINH THÚ (ĐỘC BẢN)
+    # 2. LOGIC GACHA LINH THÚ (ĐỘC BẢN - CHUYỂN SANG MONGODB)
     pet_msg = ""
-    # Chỉ cho quay Linh thú nếu người dùng CHƯA có linh thú
     if not u.get("pet"): 
         if random.random() <= 0.005: 
-            async with aiosqlite.connect(DB_PATH) as db:
-                # Tìm tất cả Linh thú đã có chủ
-                async with db.execute("SELECT DISTINCT pet FROM users WHERE pet IS NOT NULL") as cursor:
-                    owned_pets = [row[0] for row in await cursor.fetchall()]
-                
-                # Lọc danh sách Linh thú chưa ai sở hữu
-                available_pets = [p for p in PET_CONFIG.keys() if p not in owned_pets]
-                
-                if available_pets:
-                    pet_got = random.choice(available_pets)
-                    await db.execute("UPDATE users SET pet = ? WHERE user_id = ?", (pet_got, uid))
-                    await db.commit()
-                    pet_msg = f"\n🎊 **THIÊN CƠ!** Đạo hữu là người duy nhất thu phục được: **{pet_got}**!"
-                else:
-                    pet_msg = "\n⚠️ *Thiên hạ Linh thú đã có chủ hết, không còn con nào vô chủ để thu phục.*"
+            # Tìm danh sách pet ĐÃ CÓ CHỦ bằng lệnh distinct
+            owned_pets = await users_col.distinct("pet", {"pet": {"$ne": None}})
+            available_pets = [p for p in PET_CONFIG.keys() if p not in owned_pets]
+            
+            if available_pets:
+                pet_got = random.choice(available_pets)
+                # Cập nhật ngay lập tức vào MongoDB
+                await users_col.update_one({"_id": uid}, {"$set": {"pet": pet_got}})
+                pet_msg = f"\n🎊 **THIÊN CƠ!** Đạo hữu là người duy nhất thu phục được: **{pet_got}**!"
+            else:
+                pet_msg = "\n⚠️ *Thiên hạ Linh thú đã có chủ hết, không còn con nào vô chủ để thu phục.*"
 
-    # 3. LOGIC GACHA TRANG BỊ (Giữ nguyên)
+    # 3. LOGIC GACHA TRANG BỊ
     eq_type = random.choice(EQ_TYPES)
     lv = random.choices(range(1, 11), weights=[25, 20, 15, 10, 10, 8, 5, 3, 3, 1])[0]
-    saved = await save_equipment(uid, eq_type, lv)
-    msg = f"🎁 Nhận được **{eq_type} cấp {lv}**" if saved else f"🗑️ **{eq_type} cấp {lv}** quá yếu, đã phân rã"
+    
+    # Thay thế hàm save_equipment bằng logic trực tiếp
+    current_eq = await eq_col.find_one({"_id": uid}) or {}
+    old_lv = current_eq.get(eq_type, 0)
+    
+    if lv > old_lv:
+        await eq_col.update_one({"_id": uid}, {"$set": {eq_type: lv}}, upsert=True)
+        msg = f"🎁 Nhận được **{eq_type} cấp {lv}**"
+    else:
+        msg = f"🗑️ **{eq_type} cấp {lv}** quá yếu, đã phân rã"
 
-    # 4. CẬP NHẬT DATABASE
-    gacha_count += 1
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            UPDATE users SET gacha_count=?, last_gacha_day=?, linh_thach = linh_thach - ? WHERE user_id=?
-        """, (gacha_count, today, cost, uid))
-        await db.commit()
+    # 4. CẬP NHẬT DATABASE (Gộp chung các thay đổi để tối ưu)
+    new_gacha_count = gacha_count + 1
+    await users_col.update_one(
+        {"_id": uid},
+        {
+            "$set": {"gacha_count": new_gacha_count, "last_gacha_day": today},
+            "$inc": {"linh_thach": -cost}
+        }
+    )
 
     # 5. HIỂN THỊ
-    status = f"🎰 Lượt: **{gacha_count}/3** (Free)" if gacha_count <= 3 else f"💎 Phí: **{cost} Linh thạch**"
+    status = f"🎰 Lượt: **{new_gacha_count}/3** (Free)" if new_gacha_count <= 3 else f"💎 Phí: **{cost} Linh thạch**"
     embed = discord.Embed(
         title="🔮 KẾT QUẢ GACHA 🔮",
         description=f"{msg}{pet_msg}\n\n{status}",
@@ -466,40 +242,34 @@ async def gacha(interaction: discord.Interaction):
     )
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="solo", description="Thách đấu người chơi khác (Ẩn lực chiến, cược linh thạch)")
-async def solo(
-    interaction: discord.Interaction,
-    target: discord.Member,
-    linh_thach: int | None = None
-):
+async def solo(interaction: discord.Interaction, target: discord.Member, linh_thach: int | None = None):
     await interaction.response.defer()
+    uid = str(interaction.user.id)
+    tid = str(target.id)
 
-    if interaction.user.id == target.id:
+    if uid == tid:
         return await interaction.followup.send("❌ Không thể tự solo với chính mình!")
-
     if target.bot:
         return await interaction.followup.send("❌ Không thể thách đấu với linh thể (Bot)!")
 
-    # Đảm bảo user tồn tại trong hệ thống
-    await create_user(interaction.user.id)
-    await create_user(target.id)
-
     bet = linh_thach or 0
-    u1 = await get_user(interaction.user.id)
-    u2 = await get_user(target.id)
-
-    # 1. KIỂM TRA ĐIỀU KIỆN CƯỢC
     if bet < 0:
         return await interaction.followup.send("❌ Số linh thạch không hợp lệ!")
 
+    # Lấy dữ liệu 2 bên từ MongoDB
+    u1 = await users_col.find_one({"_id": uid})
+    u2 = await users_col.find_one({"_id": tid})
+
+    if not u1 or not u2:
+        return await interaction.followup.send("❌ Một trong hai đạo hữu chưa có hồ sơ tu tiên!")
+
     if bet > 0:
-        if u1["linh_thach"] < bet or u2["linh_thach"] < bet:
-            return await interaction.followup.send(f"❌ Một trong hai đạo hữu không đủ **{bet} linh thạch** để cược!")
+        if u1.get("linh_thach", 0) < bet or u2.get("linh_thach", 0) < bet:
+            return await interaction.followup.send(f"❌ Một trong hai không đủ **{bet} linh thạch** để cược!")
 
-    # 2. TÍNH TOÁN LỰC CHIẾN TRƯỚC (Để dùng khi bấm nút)
-    p1_power = await calc_power(interaction.user.id)
-    p2_power = await calc_power(target.id)
+    p1_power = await calc_power(uid)
+    p2_power = await calc_power(tid)
 
-    # 3. ĐỊNH NGHĨA VIEW XÁC NHẬN SOLO
     class SoloView(discord.ui.View):
         def __init__(self):
             super().__init__(timeout=60)
@@ -512,39 +282,33 @@ async def solo(
 
         @discord.ui.button(label="✅ Tiếp Chiến", style=discord.ButtonStyle.success)
         async def accept(self, i: discord.Interaction, button: discord.ui.Button):
-            # Kiểm tra lại linh thạch một lần nữa đề phòng đối phương đã tiêu hết
-            curr_u1 = await get_user(interaction.user.id)
-            curr_u2 = await get_user(target.id)
+            # Kiểm tra lại linh thạch trên Cloud trước khi đánh
+            curr_u1 = await users_col.find_one({"_id": uid})
+            curr_u2 = await users_col.find_one({"_id": tid})
             
             if bet > 0 and (curr_u1["linh_thach"] < bet or curr_u2["linh_thach"] < bet):
                 return await i.response.edit_message(content="❌ Trận đấu hủy bỏ! Một bên đã không còn đủ linh thạch.", view=None)
 
-            # --- LOGIC THẮNG BẠI THEO TỈ LỆ ---
             total_power = p1_power + p2_power
-            if total_power == 0: total_power = 1 # Tránh lỗi chia cho 0
+            if total_power == 0: total_power = 1
             
             win_chance = p1_power / total_power
             roll = random.random()
             
             if roll <= win_chance:
-                winner_id, winner_name = interaction.user.id, interaction.user.display_name
-                winner_pet = curr_u1.get("pet")
-                loser_name = target.display_name
+                winner_id, winner_name, winner_pet = uid, interaction.user.display_name, curr_u1.get("pet")
+                loser_id, loser_name = tid, target.display_name
             else:
-                winner_id, winner_name = target.id, target.display_name
-                winner_pet = curr_u2.get("pet")
-                loser_name = interaction.user.display_name
+                winner_id, winner_name, winner_pet = tid, target.display_name, curr_u2.get("pet")
+                loser_id, loser_name = uid, interaction.user.display_name
 
-            # --- XỬ LÝ CƯỢC LINH THẠCH ---
+            # XỬ LÝ CƯỢC TRÊN MONGODB
             if bet > 0:
-                async with aiosqlite.connect(DB_PATH) as db:
-                    # Trừ cược cả 2 bên
-                    await db.execute("UPDATE users SET linh_thach = linh_thach - ? WHERE user_id IN (?, ?)", (bet, interaction.user.id, target.id))
-                    # Cộng hũ cược cho người thắng
-                    await db.execute("UPDATE users SET linh_thach = linh_thach + ? WHERE user_id = ?", (bet * 2, winner_id))
-                    await db.commit()
+                # Trừ tiền cả 2
+                await users_col.update_many({"_id": {"$in": [uid, tid]}}, {"$inc": {"linh_thach": -bet}})
+                # Cộng hũ cho người thắng
+                await users_col.update_one({"_id": winner_id}, {"$inc": {"linh_thach": bet * 2}})
 
-            # --- HIỂN THỊ KẾT QUẢ ---
             p1_percent = round((p1_power / total_power) * 100, 1)
             p2_percent = round(100 - p1_percent, 1)
             pet_msg = f"\n🐾 Trợ lực từ linh thú **{winner_pet}** thật dũng mãnh!" if winner_pet else ""
@@ -552,13 +316,10 @@ async def solo(
             result_embed = discord.Embed(
                 title="⚔️ TRẬN THƯ HÙNG KẾT THÚC ⚔️",
                 description=(
-                    f"🔵 **{interaction.user.display_name}**: {p1_power:,} LC ({p1_percent}% cơ hội)\n"
-                    f"🔴 **{target.display_name}**: {p2_power:,} LC ({p2_percent}% cơ hội)\n"
-                    f"━━━━━━━━━━━━━━━━━━\n"
-                    f"🏆 Người thắng: **{winner_name}**\n"
-                    f"💀 Kẻ bại: {loser_name}\n\n"
-                    f"💰 Kết quả: " + (f"Thắng cược **{bet} Linh thạch**" if bet > 0 else "Vang danh thiên hạ") +
-                    f"{pet_msg}"
+                    f"🔵 **{interaction.user.display_name}**: {p1_power:,} LC ({p1_percent}%)\n"
+                    f"🔴 **{target.display_name}**: {p2_power:,} LC ({p2_percent}%)\n"
+                    f"🏆 Người thắng: **{winner_name}**\n💀 Kẻ bại: {loser_name}\n"
+                    f"💰 Kết quả: " + (f"Thắng cược **{bet} Linh thạch**" if bet > 0 else "Vang danh thiên hạ") + pet_msg
                 ),
                 color=discord.Color.gold()
             )
@@ -567,97 +328,79 @@ async def solo(
 
         @discord.ui.button(label="❌ Thủ Thế", style=discord.ButtonStyle.danger)
         async def decline(self, i: discord.Interaction, button: discord.ui.Button):
-            await i.response.edit_message(content=f"❌ **{target.display_name}** đã chọn cách thủ thế, từ chối giao tranh.", embed=None, view=None)
+            await i.response.edit_message(content=f"❌ **{target.display_name}** đã chọn cách thủ thế.", embed=None, view=None)
             self.stop()
 
-    # 4. GỬI CHIẾN THƯ (ẨN LỰC CHIẾN)
-    invite_msg = (
-        f"⚔️ **{interaction.user.display_name}** đã phát ra chiến thư thách đấu **{target.mention}**!\n"
-        + (f"💎 Mức cược: **{bet} Linh thạch**" if bet > 0 else "🎲 Trận đấu giao hữu (Không cược)")
-        + f"\n\n*Đạo hữu có dám tiếp chiến hay sẽ chọn con đường thoái lui?*"
-    )
+    invite_msg = f"⚔️ **{interaction.user.display_name}** thách đấu **{target.mention}**!\n" + \
+                 (f"💎 Cược: **{bet} Linh thạch**" if bet > 0 else "🎲 Giao hữu")
     await interaction.followup.send(content=invite_msg, view=SoloView())
 @bot.tree.command(name="dotpha", description="Đột phá cảnh giới (Lôi kiếp từ cấp 30)")
 async def dotpha(interaction: discord.Interaction):
     await interaction.response.defer()
+    uid = str(interaction.user.id)
+    
+    u = await users_col.find_one({"_id": uid})
+    if not u: return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ tu tiên!")
 
-    uid = interaction.user.id
-    await create_user(uid)
-    u = await get_user(uid)
+    lv = u.get("level", 1)
+    linh_thach = u.get("linh_thach", 0)
+    exp = u.get("exp", 0)
 
-    lv = u["level"]
-    linh_thach = u["linh_thach"]
-    exp = u["exp"]
-
-    # 1. Kiểm tra mốc level (10, 20, 30...)
     if lv % 10 != 0:
-        await interaction.followup.send(f"❌ Cần đạt mốc **10 cấp** để đột phá. Hiện tại: **Lv {lv}**")
-        return
+        return await interaction.followup.send(f"❌ Cần đạt mốc **10 cấp** để đột phá. Hiện tại: **Lv {lv}**")
 
-    # 2. Kiểm tra EXP
     needed = exp_needed(lv)
     if exp < needed:
-        await interaction.followup.send(f"❌ Chưa đủ EXP! (Cần {exp}/{needed})")
-        return
+        return await interaction.followup.send(f"❌ Chưa đủ EXP! (Cần {exp}/{needed})")
 
-    # 3. Linh thạch yêu cầu (Cập nhật theo mốc mới)
-    if lv < 30:
-        required_lt = 1
-    elif lv < 60:
-        required_lt = 3
-    elif lv < 90:
-        required_lt = 6
-    else:
-        required_lt = 12
+    # Tính linh thạch yêu cầu
+    required_lt = 1 if lv < 30 else (3 if lv < 60 else (6 if lv < 90 else 12))
 
     if linh_thach < required_lt:
-        await interaction.followup.send(f"❌ Cần **{required_lt} Linh thạch**. Hiện có: **{linh_thach}**")
-        return
+        return await interaction.followup.send(f"❌ Cần **{required_lt} Linh thạch**. Bạn có: **{linh_thach}**")
 
-    # 4. Tỉ lệ thành công
+    # Tỉ lệ thành công
     realm_index = lv // 10
     rate = max(10, 100 - realm_index * 8)
     success = random.randint(1, 100) <= rate
 
-    async with aiosqlite.connect(DB_PATH) as db:
-        if success:
-            # Thành công
-            await db.execute("UPDATE users SET level = level + 1, exp = 0, linh_thach = linh_thach - ? WHERE user_id = ?", (required_lt, uid))
-            quote = random.choice(KHAU_NGU)
-            embed = discord.Embed(
-                title="🔥 ĐỘT PHÁ THÀNH CÔNG 🔥",
-                description=f"*{quote}*\n\n🎉 Chúc mừng **{interaction.user.display_name}**!\n🧘 Cảnh giới: **{get_realm(lv + 1)}**\n💎 Tiêu hao: **{required_lt} Linh thạch**",
-                color=discord.Color.gold()
-            )
-            for ch_id in NOTIFY_CHANNELS:
-                channel = bot.get_channel(ch_id)
-                if channel: 
-                    try: await channel.send(embed=embed)
-                    except: pass
-        else:
-            # THẤT BẠI + LOGIC LÔI KIẾP MỚI (TỪ CẤP 30)
-            is_loi_kiep = False
-            tut_cap = 1
-            loi_kiep_msg = ""
-            
-            # Nếu cấp >= 30, có 25% xác suất gặp Lôi Kiếp khi thất bại
-            if lv >= 30:
-                if random.randint(1, 100) <= 25:
-                    is_loi_kiep = True
-                    tut_cap = random.randint(2, 3) # Tụt 2-3 cấp
-                    loi_kiep_msg = "⚡ **LÔI KIẾP BẤT NGỜ!** Thiên địa chấn động, đạo hữu bị đánh văng tu vi!"
+    if success:
+        await users_col.update_one(
+            {"_id": uid},
+            {"$set": {"level": lv + 1, "exp": 0}, "$inc": {"linh_thach": -required_lt}}
+        )
+        quote = random.choice(KHAU_NGU)
+        embed = discord.Embed(
+            title="🔥 ĐỘT PHÁ THÀNH CÔNG 🔥",
+            description=f"*{quote}*\n\n🎉 **{interaction.user.display_name}** đã lên **{get_realm(lv + 1)}**!",
+            color=discord.Color.gold()
+        )
+        # Thông báo kênh chung
+        for ch_id in NOTIFY_CHANNELS:
+            channel = bot.get_channel(ch_id)
+            if channel: await channel.send(embed=embed)
+    else:
+        # THẤT BẠI + LOGIC LÔI KIẾP
+        tut_cap = 1
+        loi_kiep_msg = ""
+        if lv >= 30 and random.randint(1, 100) <= 25:
+            tut_cap = random.randint(2, 3)
+            loi_kiep_msg = "⚡ **LÔI KIẾP BẤT NGỜ!** Đạo hữu bị đánh văng tu vi!"
 
-            await db.execute("UPDATE users SET level = MAX(1, level - ?), linh_thach = linh_thach - ? WHERE user_id = ?", (tut_cap, required_lt, uid))
-            
-            embed = discord.Embed(
-                title="💥 ĐỘT PHÁ THẤT BẠI 💥",
-                description=f"😔 **{interaction.user.display_name}** thất bại!\n{loi_kiep_msg}\n\n📉 Tu vi giảm: **{tut_cap} cấp**\n💸 Mất: **{required_lt} Linh thạch**",
-                color=discord.Color.red()
-            )
-        await db.commit()
+        # Cập nhật tụt cấp (Không để level thấp hơn 1)
+        new_lv = max(1, lv - tut_cap)
+        await users_col.update_one(
+            {"_id": uid},
+            {"$set": {"level": new_lv}, "$inc": {"linh_thach": -required_lt}}
+        )
+        
+        embed = discord.Embed(
+            title="💥 ĐỘT PHÁ THẤT BẠI 💥",
+            description=f"😔 **{interaction.user.display_name}** thất bại!\n{loi_kiep_msg}\n📉 Giảm: **{tut_cap} cấp**\n💸 Mất: **{required_lt} Linh thạch**",
+            color=discord.Color.red()
+        )
 
     await interaction.followup.send(embed=embed)
-
 @bot.tree.command(name="huongdan", description="Cẩm nang tu tiên toàn tập")
 async def huongdan(interaction: discord.Interaction):
     # Tạo Embed chính
@@ -725,22 +468,17 @@ async def bxh(interaction: discord.Interaction):
     await interaction.response.defer()
 
     try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            # Lấy Top 10 dựa trên Level và EXP
-            async with db.execute("""
-                SELECT user_id, level, exp, pet 
-                FROM users 
-                ORDER BY level DESC, exp DESC 
-                LIMIT 10
-            """) as cursor:
-                rows = await cursor.fetchall()
+        # 1. Lấy Top 10 dựa trên Level và EXP từ MongoDB
+        # .sort([("level", -1), ("exp", -1)]) tương đương với ORDER BY level DESC, exp DESC
+        cursor = users_col.find().sort([("level", -1), ("exp", -1)]).limit(10)
+        rows = await cursor.to_list(length=10)
 
         if not rows:
             return await interaction.followup.send("📜 Hiện tại thiên hạ chưa có ai ghi danh.")
 
-        # ✅ Tối ưu: Tính lực chiến song song cho cả 10 người bằng hàm calc_power chuẩn
-        # Điều này giúp số liệu khớp hoàn toàn với lệnh /check
-        tasks = [calc_power(row[0]) for row in rows]
+        # 2. ✅ Tính lực chiến song song cho cả 10 người
+        # Lưu ý: Truyền _id (dạng string) vào hàm calc_power
+        tasks = [calc_power(user["_id"]) for user in rows]
         powers = await asyncio.gather(*tasks)
 
         embed = discord.Embed(
@@ -752,10 +490,12 @@ async def bxh(interaction: discord.Interaction):
         titles = {1: "🥇 **Thánh Nhân**", 2: "🥈 **Chí Tôn**", 3: "🥉 **Đại Đế**"}
         leaderboard_text = ""
 
-        for i, row in enumerate(rows):
-            uid, lv, exp, pet = row
-            power = powers[i] # Lấy lực chiến đã tính từ calc_power
+        for i, user in enumerate(rows):
+            uid = int(user["_id"]) # Chuyển lại về int để dùng get_member của discord.py
+            lv = user.get("level", 1)
+            power = powers[i]
             
+            # Tìm tên người chơi trong server
             member = interaction.guild.get_member(uid)
             name = member.display_name if member else f"Ẩn sĩ ({uid})"
             
@@ -777,45 +517,49 @@ async def bxh(interaction: discord.Interaction):
         await interaction.followup.send("❌ Có lỗi xảy ra khi tính toán thiên cơ, vui lòng thử lại sau.")
 @bot.tree.command(name="resetday", description="ADMIN: Reset ngày")
 async def resetday(interaction: discord.Interaction):
-
+    # Kiểm tra quyền ADMIN (Giữ nguyên logic của đạo hữu)
     if interaction.user.id != ADMIN_ID:
-        await interaction.response.send_message(
-            "❌ Bạn không có quyền.",
-            ephemeral=True
-        )
+        await interaction.response.send_message("❌ Bạn không có quyền.", ephemeral=True)
         return
 
     await interaction.response.defer(ephemeral=True)
 
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            UPDATE users
-            SET
-                gacha_count = 0,
-                last_gacha_day = NULL,
-                last_daily = NULL,
-                attack_count = 0,
-                last_attack = NULL
-        """)
-        await db.commit()
+    # Cập nhật toàn bộ server trên MongoDB
+    await users_col.update_many(
+        {}, # Filter trống = chọn tất cả
+        {
+            "$set": {
+                "gacha_count": 0,
+                "last_gacha_day": None,
+                "last_daily": None,
+                "attack_count": 0,
+                "last_attack": None
+            }
+        }
+    )
 
-    await interaction.followup.send("✅ Reset ngày thành công")
+    await interaction.followup.send("✅ Reset ngày thành công trên hệ thống Cloud.")
 
 class ConfirmPhongSinh(discord.ui.View):
     def __init__(self, pet_name, uid):
-        super().__init__(timeout=30) # Nút tồn tại trong 30 giây
+        super().__init__(timeout=30)
         self.pet_name = pet_name
-        self.uid = uid
+        self.uid = str(uid) # Ép kiểu string cho MongoDB
         self.value = None
 
     @discord.ui.button(label="Xác nhận Phóng sinh", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.uid:
+        if str(interaction.user.id) != self.uid:
             return await interaction.response.send_message("❌ Đây không phải lễ phóng sinh của đạo hữu!", ephemeral=True)
         
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("UPDATE users SET pet = NULL, linh_thach = linh_thach + 1 WHERE user_id = ?", (self.uid,))
-            await db.commit()
+        # Cập nhật MongoDB: Xóa pet và cộng 1 Linh thạch
+        await users_col.update_one(
+            {"_id": self.uid},
+            {
+                "$set": {"pet": None},
+                "$inc": {"linh_thach": 1}
+            }
+        )
         
         self.value = True
         self.stop()
@@ -833,14 +577,16 @@ class ConfirmPhongSinh(discord.ui.View):
 
 @bot.tree.command(name="phongsinh", description="Giải phóng Linh thú (Cần xác nhận)")
 async def phongsinh(interaction: discord.Interaction):
-    uid = interaction.user.id
-    u = await get_user(uid)
-    pet_name = u.get("pet")
-
-    if not pet_name:
+    uid = str(interaction.user.id)
+    
+    # Lấy dữ liệu từ MongoDB
+    u = await users_col.find_one({"_id": uid})
+    if not u or not u.get("pet"):
         return await interaction.response.send_message("❌ Đạo hữu hiện không có Linh thú nào.", ephemeral=True)
 
+    pet_name = u.get("pet")
     view = ConfirmPhongSinh(pet_name, uid)
+    
     embed = discord.Embed(
         title="⚠️ XÁC NHẬN PHÓNG SINH",
         description=f"Đạo hữu chắc chắn muốn trả **{pet_name}** về với thiên nhiên?\n\n*Hành động này không thể hoàn tác, đạo hữu sẽ nhận lại 1 Linh thạch.*",
@@ -852,169 +598,122 @@ async def phongsinh(interaction: discord.Interaction):
 async def attack(interaction: discord.Interaction):
     await interaction.response.defer()
     
-    uid = interaction.user.id
-    await create_user(uid)
-    u = await get_user(uid)
-
-    # 1. KIỂM TRA LƯỢT ĐÁNH (Reset mỗi ngày)
+    uid = str(interaction.user.id)
     today = datetime.now().strftime("%Y-%m-%d")
-    attack_count = u["attack_count"] if u["last_attack"] == today else 0
-    
-    if attack_count >= 3:
-        return await interaction.followup.send("❌ Đạo hữu đã cạn kiệt linh lực. Hãy tịnh dưỡng đến ngày mai hoặc chờ cơ duyên hồi phục!")
 
-    # 2. LẤY DỮ LIỆU LINH THÚ & QUÁI VẬT
+    # 1. Lấy và khởi tạo User (thay cho create_user/get_user)
+    u = await users_col.find_one_and_update(
+        {"_id": uid},
+        {"$setOnInsert": {
+            "level": 1, "exp": 0, "linh_thach": 10, "pet": None,
+            "attack_count": 0, "last_attack": ""
+        }},
+        upsert=True,
+        return_document=True
+    )
+
+    # Kiểm tra lượt đánh
+    attack_count = u.get("attack_count", 0) if u.get("last_attack") == today else 0
+    if attack_count >= 3:
+        return await interaction.followup.send("❌ Đạo hữu đã cạn kiệt linh lực. Hãy tịnh dưỡng đến ngày mai!")
+
+    # 2. Dữ liệu Linh thú & Quái vật (Giữ nguyên logic của đạo hữu)
     pet_name = u.get("pet")
     pet_data = PET_CONFIG.get(pet_name, {"atk": 0, "effect": "Không", "exp_mult": 1.0, "lt_chance": 30})
-    
-    # Lấy dữ liệu quái phù hợp với Level người chơi
-    # Giả sử hàm get_monster_data(lv) trả về: (Tên quái, tỉ lệ rơi đồ, [min_lv_đồ, max_lv_đồ])
     monster, drop_rate, eq_range = get_monster_data(u["level"])
     
-    # 3. TÍNH TOÁN CHỈ SỐ CHIẾN ĐẤU
+    # 3. Tính toán chỉ số
     total_atk = (u["level"] * 10) + pet_data.get("atk", 0)
-    
-    # Logic cộng EXP: Buff 15% nếu là Thôn Phệ Thú
-    base_exp = exp_needed(u["level"]) // 5  # Mặc định nhận 20% exp cấp hiện tại
+    base_exp = exp_needed(u["level"]) // 5
     exp_gain = int(base_exp * pet_data.get("exp_mult", 1.0))
     
-    # Logic rơi Linh thạch: Buff tỉ lệ nếu có pet đặc thù
     lt_chance = pet_data.get("lt_chance", 30) 
     lt_gain = random.randint(1, 5) if random.randint(1, 100) <= lt_chance else 0
 
-    # 4. KIỂM TRA CHẶN EXP (Bình cảnh đột phá)
+    # 4. Kiểm tra bình cảnh (Chặn EXP tại cấp 10, 20...)
     can_gain_exp = True
     if u["level"] % 10 == 0:
         if u["exp"] >= exp_needed(u["level"]):
             can_gain_exp = False
             exp_gain = 0
 
-    # 5. LOGIC RƠI TRANG BỊ
+    # 5. Logic rơi trang bị (Ghi trực tiếp vào eq_col)
     drop_msg = ""
     final_drop_rate = drop_rate + pet_data.get("drop_buff", 0)
     if random.random() <= final_drop_rate:
         eq_type = random.choice(EQ_TYPES)
         eq_lv = random.randint(*eq_range)
-        saved = await save_equipment(uid, eq_type, eq_lv)
-        if saved:
+        
+        # Logic save_equipment trên MongoDB
+        current_eq = await eq_col.find_one({"_id": uid}) or {}
+        if eq_lv > current_eq.get(eq_type, 0):
+            await eq_col.update_one({"_id": uid}, {"$set": {eq_type: eq_lv}}, upsert=True)
             drop_msg = f"\n🎁 **VẬN MAY!** Nhận được: `{eq_type} Cấp {eq_lv}`"
         else:
-            drop_msg = f"\n🗑️ Đánh rơi `{eq_type} Cấp {eq_lv}` nhưng phẩm chất quá thấp, đã phân rã."
+            drop_msg = f"\n🗑️ Đánh rơi `{eq_type} Cấp {eq_lv}` nhưng phẩm chất quá thấp."
 
-    # 6. LOGIC HỒI LƯỢT (Đặc kỹ Linh thú)
-    actual_count = attack_count + 1
+    # 6. Logic hồi lượt (Thôn Phệ Thú)
+    actual_count_inc = 1
     refund_msg = ""
-    if pet_name == "Thôn Phệ Thú" and random.randint(1, 100) <= 20: # 20% hồi lượt
-        actual_count = attack_count
-        refund_msg = "\n🌀 **Thôn Phệ Thú** hấp thụ linh khí quái vật, giúp bạn không tốn thể lực (+1 lượt)!"
+    if pet_name == "Thôn Phệ Thú" and random.randint(1, 100) <= 20:
+        actual_count_inc = 0
+        refund_msg = "\n🌀 **Thôn Phệ Thú** hấp thụ linh khí, giúp bạn không tốn thể lực!"
 
-    # 7. CẬP NHẬT CƠ SỞ DỮ LIỆU
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            UPDATE users 
-            SET exp = exp + ?, 
-                attack_count = ?, 
-                last_attack = ?, 
-                linh_thach = linh_thach + ?
-            WHERE user_id = ?
-        """, (exp_gain, actual_count, today, lt_gain, uid))
-        await db.commit()
+    # 7. CẬP NHẬT DATABASE (Sử dụng $inc và $set)
+    await users_col.update_one(
+        {"_id": uid},
+        {
+            "$inc": {"exp": exp_gain, "linh_thach": lt_gain, "attack_count": actual_count_inc},
+            "$set": {"last_attack": today}
+        }
+    )
 
-    # 8. HIỂN THỊ KẾT QUẢ
+    # 8. Hiển thị (Giữ nguyên giao diện của đạo hữu)
     embed = discord.Embed(
         title="⚔️ TRẬN CHIẾN KẾT THÚC",
         description=f"Đạo hữu vung kiếm tiêu diệt **{monster}**!",
         color=discord.Color.green() if exp_gain > 0 else discord.Color.orange()
     )
-    
-    exp_info = f"📈 Kinh nghiệm: **+{exp_gain} EXP**" if can_gain_exp else "⚠️ **BÌNH CẢNH!** Hãy dùng `/dotpha` để tiếp tục nhận EXP."
+    exp_info = f"📈 Kinh nghiệm: **+{exp_gain} EXP**" if can_gain_exp else "⚠️ **BÌNH CẢNH!** Hãy `/dotpha` ngay."
     lt_info = f"\n💎 Linh thạch: **+{lt_gain}**" if lt_gain > 0 else ""
-    pet_info = f"\n🐾 **Linh thú:** {pet_name} trợ chiến ({pet_data['effect']})" if pet_name else ""
     
     embed.add_field(name="Chiến lợi phẩm", value=f"{exp_info}{lt_info}{drop_msg}{refund_msg}", inline=False)
-    if pet_info:
-        embed.add_field(name="Sức mạnh linh thú", value=pet_info, inline=False)
-        
-    embed.set_footer(text=f"Lực chiến: {total_atk} | Lượt đánh còn lại: {3 - actual_count}")
+    embed.set_footer(text=f"Lực chiến: {total_atk} | Lượt đánh còn lại: {3 - (attack_count + actual_count_inc)}")
     
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="add", description="[ADMIN] Ban thưởng Linh thạch cho tu sĩ")
 @app_commands.describe(target="Tu sĩ được ban thưởng", so_luong="Số lượng linh thạch")
-async def add(
-    interaction: discord.Interaction, 
-    target: discord.Member, 
-    so_luong: int
-):
-    # 1. Kiểm tra quyền Admin
+async def add(interaction: discord.Interaction, target: discord.Member, so_luong: int):
+    # 1. Kiểm tra quyền Admin (Sử dụng ADMIN_ID đã khai báo của đạo hữu)
     if interaction.user.id != ADMIN_ID:
-        return await interaction.response.send_message(
-            "❌ **THIÊN PHẠT!** Đạo hữu không có quyền năng điều khiển linh thạch của trời đất.", 
-            ephemeral=True
-        )
+        return await interaction.response.send_message("❌ **THIÊN PHẠT!** Bạn không có quyền năng này.", ephemeral=True)
 
-    # 2. Kiểm tra số lượng hợp lệ
     if so_luong <= 0:
-        return await interaction.response.send_message("❌ Số lượng linh thạch phải lớn hơn 0!", ephemeral=True)
+        return await interaction.response.send_message("❌ Số lượng phải lớn hơn 0!", ephemeral=True)
 
     await interaction.response.defer()
-    
-    # 3. Đảm bảo người nhận có trong DB
-    await create_user(target.id)
+    tid = str(target.id)
 
-    # 4. Cập nhật Linh thạch
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "UPDATE users SET linh_thach = linh_thach + ? WHERE user_id = ?", 
-            (so_luong, target.id)
-        )
-        await db.commit()
+    # 2. Cập nhật trực tiếp (Nếu chưa có user thì tự tạo hồ sơ mới)
+    await users_col.update_one(
+        {"_id": tid},
+        {"$inc": {"linh_thach": so_luong}},
+        upsert=True
+    )
 
-    # 5. Hiển thị thông báo rực rỡ
+    # 3. Hiển thị thông báo (Giữ nguyên rực rỡ)
     embed = discord.Embed(
         title="✨ THIÊN BAN LINH VẬT ✨",
         description=(
             f"Bậc đại năng **{interaction.user.display_name}** đã giáng lâm!\n"
-            f"Ban thưởng cho **{target.mention}** **{so_luong:,} Linh thạch**.\n\n"
-            f"*Chúc đạo hữu sớm ngày đắc đạo!*"
+            f"Ban thưởng cho **{target.mention}** **{so_luong:,} Linh thạch**."
         ),
         color=discord.Color.gold()
     )
-    embed.set_thumbnail(url="https://i.imgur.com/39A72Pj.png") # Ảnh linh thạch lấp lánh
+    embed.set_thumbnail(url="https://i.imgur.com/39A72Pj.png")
     
     await interaction.followup.send(embed=embed)
-@bot.tree.command(name="diemdanh")
-async def diemdanh(interaction: discord.Interaction):
-    await interaction.response.defer()
-    uid = interaction.user.id
-    await create_user(uid)
-
-    today = datetime.now().strftime("%Y-%m-%d")
-    u = await get_user(uid)
-
-    if u["last_daily"] == today:
-        await interaction.followup.send("❌ Hôm nay đã điểm danh.")
-        return
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            UPDATE users
-            SET last_daily=?,
-                exp = exp + ?,
-                linh_thach = linh_thach + 1
-            WHERE user_id=?
-        """, (today, exp_needed(u["level"]), uid))
-        await db.commit()
-
-    await check_level_up(uid, interaction.channel, interaction.user.display_name)
-    await interaction.followup.send("✅ Điểm danh thành công (+EXP, +1 Linh Thạch)")
-
 
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
-
-
-
-
-
-
