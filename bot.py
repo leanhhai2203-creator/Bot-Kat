@@ -1,3 +1,4 @@
+from keep_alive import keep_alive
 import discord
 from discord.ext import commands, tasks
 import aiosqlite
@@ -1008,7 +1009,8 @@ async def diemdanh(interaction: discord.Interaction):
     await interaction.followup.send("✅ Điểm danh thành công (+EXP, +1 Linh Thạch)")
 
 
+keep_alive()
+bot.run("TOKEN")
 
-bot.run(TOKEN)
 
 
