@@ -302,13 +302,24 @@ def calc_power_from_data(lv, eq):
 # ========== EVENTS ==========
 @bot.event
 async def on_ready():
+    # Bước 1: Tạo file và bảng dữ liệu ngay lập tức
+    await init_db()
+    
+    # Bước 2: Nâng cấp cột nếu cần (như cột pet)
+    await upgrade_db()
+
+    # Bước 3: Đồng bộ lệnh Slash (/)
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Đã đồng bộ {len(synced)} lệnh Slash.")
+    except Exception as e:
+        print(f"❌ Lỗi đồng bộ lệnh: {e}")
+
+    # Bước 4: Khởi động vòng lặp Thiên Ý sau khi DB đã sẵn sàng
     if not thien_y_loop.is_running():
         thien_y_loop.start()
-    print("Thiên Ý đã bắt đầu vận hành!")
-    await init_db()
-    await upgrade_db()
-    await bot.tree.sync()
-    print("✅ Bot online – DB ready – Slash synced")
+
+    print(f"🚀 Bot {bot.user} đã sẵn sàng trên Render!")
 @bot.event
 async def on_message(message):
     # 1. Bỏ qua nếu tin nhắn từ bot khác hoặc chính nó
@@ -999,4 +1010,5 @@ async def diemdanh(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
