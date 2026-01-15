@@ -1010,7 +1010,9 @@ async def diemdanh(interaction: discord.Interaction):
 
 
 keep_alive()
-bot.run(TOKEN)
+token = os.getenv("DISCORD_TOKEN")
+bot.run(token)
+
 
 
 
