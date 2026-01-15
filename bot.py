@@ -6,7 +6,8 @@ from datetime import datetime
 from discord import app_commands
 
 # ========== CONFIG ==========
-TOKEN = "DISCORD_TOKEN"
+import os
+TOKEN = os.getenv('DISCORD_TOKEN')
 INTENTS = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=INTENTS)
 
@@ -998,3 +999,4 @@ async def diemdanh(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
