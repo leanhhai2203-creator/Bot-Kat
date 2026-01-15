@@ -2,4 +2,5 @@ discord.py
 motor
 dnspython
 keep_alive
+flask
 
