@@ -1,4 +1,5 @@
 discord.py
-aiosqlite
-Flask
+motor
+dnspython
+keep_alive
 
