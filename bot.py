@@ -468,26 +468,32 @@ import asyncio
 async def bxh(interaction: discord.Interaction):
     await interaction.response.defer()
     
-    # 1. Lấy dữ liệu từ MongoDB: Sắp xếp theo Level giảm dần, nếu Level bằng nhau thì xét EXP
-    # to_list(length=10) để lấy 10 người đứng đầu
+    # 1. Lấy Top 10 cao thủ từ MongoDB
     top_users = await users_col.find().sort([("level", -1), ("exp", -1)]).limit(10).to_list(length=10)
     
     if not top_users:
-        return await interaction.followup.send("⚠️ Hiện tại chưa có tu sĩ nào ghi danh trên bảng xếp hạng.")
+        return await interaction.followup.send("⚠️ Chưa có tu sĩ nào ghi danh trên bảng vàng.")
 
     description = ""
     for i, user in enumerate(top_users):
-        # Lấy dữ liệu từ Dictionary (MongoDB trả về dict)
-        uid = user.get("_id") # UID lưu dạng string
+        uid = int(user.get("_id")) # Chuyển ID sang số nguyên
         lv = user.get("level", 1)
         exp = user.get("exp", 0)
-        pet = user.get("pet", "Không có")
+        pet = user.get("pet", "Không")
         
+        # --- PHẦN SỬA: LẤY TÊN THAY VÌ ID ---
+        member = interaction.guild.get_member(uid)
+        if member:
+            # Lấy tên hiển thị trong server (Nickname)
+            name_display = f"**{member.display_name}**"
+        else:
+            # Nếu không tìm thấy trong server thì dùng Mention để Discord tự hiện tên
+            name_display = f"<@{uid}>"
+            
         # Biểu tượng cho Top 3
         medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"**#{i+1}**"
         
-        # Tạo dòng thông tin cho từng người
-        description += f"{medal} <@{uid}> - **Cấp {lv}** ({exp} EXP) | 🐾: {pet}\n"
+        description += f"{medal} {name_display} - **Cấp {lv}** ({exp} EXP) | 🐾: {pet}\n"
 
     # 2. Tạo giao diện Embed
     embed = discord.Embed(
@@ -497,8 +503,8 @@ async def bxh(interaction: discord.Interaction):
         timestamp=datetime.now()
     )
     
-    embed.set_footer(text="Bảng xếp hạng cập nhật theo thời gian thực")
-    embed.set_thumbnail(url="https://i.imgur.com/vHInX9T.png") # Hình ảnh minh họa bảng vàng
+    embed.set_footer(text="Cập nhật theo thời gian thực")
+    embed.set_thumbnail(url="https://i.imgur.com/vHInX9T.png") 
 
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="resetday", description="ADMIN: Reset ngày")
@@ -703,4 +709,5 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
