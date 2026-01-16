@@ -29,9 +29,9 @@ last_msg_time = {}
 # Các kênh nhận thông báo quan trọng
 NOTIFY_CHANNELS = [1455081842473697362, 1455837230332641280, 1454793019160006783, 1454793109094268948, 1454506037779369986] 
 CHANNEL_EXP_RATES = {
-    1455081842473697362: 0.2, 1455837230332641280: 0.2,
-    1454793019160006783: 0.2, 1454793109094268948: 0.2,
-    1454506037779369986: 1.5,
+    1455081842473697362: 0.3, 1455837230332641280: 0.3,
+    1454793019160006783: 0.3, 1454793109094268948: 0.3,
+    1454506037779369986: 1.5, 1461017212365181160: 1.2
 }
 
 # --- CẤU HÌNH CẢNH GIỚI & LINH THÚ ---
@@ -133,7 +133,7 @@ async def on_message(message):
     uid, now = str(message.author.id), datetime.now().timestamp()
     if len(message.content.strip()) >= MIN_MSG_LEN and now - last_msg_time.get(uid, 0) >= MSG_COOLDOWN:
         last_msg_time[uid] = now
-        rate = CHANNEL_EXP_RATES.get(message.channel.id, 1.0)
+        rate = CHANNEL_EXP_RATES.get(message.channel.id, 0.1)
         await users_col.update_one({"_id": uid}, {"$setOnInsert": {"level": 1, "exp": 0, "linh_thach": 10, "pet": None}}, upsert=True)
         await add_exp(uid, int(MSG_EXP * rate))
         await check_level_up(uid, message.channel, message.author.display_name)
@@ -709,5 +709,6 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
