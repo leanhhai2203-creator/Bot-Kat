@@ -667,23 +667,27 @@ async def attack(interaction: discord.Interaction):
             await eq_col.update_one({"_id": uid}, {"$set": {eq_type: eq_lv}}, upsert=True)
             drop_msg = f"\n🎁 **VẬN MAY!** Nhận được: `{eq_type} Cấp {eq_lv}`"
 
-    # 7. Logic hồi lượt (Thôn Phệ Thú)
+   # 7. TÍNH TOÁN SỐ LƯỢT MỚI (Xử lý hồi lượt từ Thôn Phệ Thú)
     actual_count_inc = 1
     refund_msg = ""
     if pet_name == "Thôn Phệ Thú" and random.randint(1, 100) <= 20:
         actual_count_inc = 0
-        refund_msg = "\n🌀 **Thôn Phệ Thú** giúp không tốn thể lực!"
+        refund_msg = "\n🌀 **Thôn Phệ Thú** hấp thụ linh khí, giúp bạn không tốn thể lực!"
 
-    # 8. CẬP NHẬT DATABASE (SỬA LỖI TẠI ĐÂY)
-    # Dùng $set cho attack_count thay vì $inc để đảm bảo reset được ngày mới
-    new_count = current_attack_count + actual_count_inc
+    # CHỐT CHẶN CUỐI CÙNG: Tính con số chính xác để ghi đè vào Database
+    final_count_to_save = current_attack_count + actual_count_inc
+
+    # 8. CẬP NHẬT DATABASE (Sử dụng $set để ép số lượt đúng theo logic reset)
     await users_col.update_one(
         {"_id": uid},
         {
-            "$inc": {"exp": exp_gain, "linh_thach": lt_gain},
+            "$inc": {
+                "exp": exp_gain, 
+                "linh_thach": lt_gain
+            },
             "$set": {
                 "last_attack": today, 
-                "attack_count": new_count
+                "attack_count": final_count_to_save  # ÉP DỮ LIỆU GHI ĐÈ, KHÔNG CỘNG DỒN SAI
             }
         }
     )
@@ -731,6 +735,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
