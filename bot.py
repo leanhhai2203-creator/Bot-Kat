@@ -186,14 +186,43 @@ async def on_ready():
 async def on_message(message):
     if message.author.bot: return
     uid, now = str(message.author.id), datetime.now().timestamp()
+    
     if len(message.content.strip()) >= MIN_MSG_LEN and now - last_msg_time.get(uid, 0) >= MSG_COOLDOWN:
         last_msg_time[uid] = now
-        rate = CHANNEL_EXP_RATES.get(message.channel.id, 0.1)
-        await users_col.update_one({"_id": uid}, {"$setOnInsert": {"level": 1, "exp": 0, "linh_thach": 10, "pet": None}}, upsert=True)
-        await add_exp(uid, int(MSG_EXP * rate))
-        await check_level_up(uid, message.channel, message.author.display_name)
-    await bot.process_commands(message)
+        
+        # 1. Lấy dữ liệu người dùng để kiểm tra Linh thú
+        user_data = await users_col.find_one({"_id": uid})
+        
+        # Nếu chưa có dữ liệu, khởi tạo (upsert)
+        if not user_data:
+            await users_col.update_one(
+                {"_id": uid}, 
+                {"$setOnInsert": {"level": 1, "exp": 0, "linh_thach": 10, "pet": None}}, 
+                upsert=True
+            )
+            user_data = {"level": 1, "exp": 0, "pet": None}
 
+        # 2. Tính EXP cơ bản từ chat
+        rate = CHANNEL_EXP_RATES.get(message.channel.id, 0.1)
+        base_exp = int(MSG_EXP * rate)
+        
+        # 3. LOGIC THÔN PHỆ THÚ: Nếu có Pet thì cộng thêm
+        pet_bonus = 0
+        if user_data.get("pet") == "Thôn Phệ Thú": # Kiểm tra tên Pet chính xác trong DB
+            if random.random() < 0.30: # 30% tỉ lệ Pet kích hoạt khi chat
+                pet_bonus = random.randint(5, 15)
+                # Thêm hiệu ứng reaction để chủ nhân biết Pet vừa giúp sức
+                try: await message.add_reaction("🐾")
+                except: pass
+
+        # 4. Thực hiện cộng tổng EXP (Base + Pet Bonus)
+        total_gain = base_exp + pet_bonus
+        await add_exp(uid, total_gain)
+        
+        # 5. Kiểm tra lên cấp
+        await check_level_up(uid, message.channel, message.author.display_name)
+
+    await bot.process_commands(message)
 # ========== LỆNH SLASH (/) ==========
 
 @bot.tree.command(name="check", description="Xem thông tin cá nhân")
@@ -937,6 +966,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
