@@ -390,74 +390,7 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
     invite_msg = f"⚔️ **{interaction.user.display_name}** thách đấu **{target.mention}**!\n" + \
                  (f"💎 Cược: **{bet} Linh thạch**" if bet > 0 else "🎲 Giao hữu")
     await interaction.followup.send(content=invite_msg, view=SoloView())
-@bot.tree.command(name="dotpha", description="Đột phá cảnh giới (Lôi kiếp từ cấp 30)")
-async def dotpha(interaction: discord.Interaction):
-    await interaction.response.defer()
-    uid = str(interaction.user.id)
-    
-    u = await users_col.find_one({"_id": uid})
-    if not u: 
-        return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ tu tiên!")
 
-    lv = u.get("level", 1)
-    linh_thach = u.get("linh_thach", 0)
-    exp = u.get("exp", 0)
-
-    # 1. Kiểm tra điều kiện (Chỉ cho phép đột phá tại mốc 10, 20, 30...)
-    if lv % 10 != 0:
-        return await interaction.followup.send(f"❌ Cần đạt đỉnh phong (cấp 10, 20...) để đột phá. Hiện tại: **Cấp {lv}**")
-
-    needed = exp_needed(lv)
-    if exp < needed:
-        return await interaction.followup.send(f"❌ Tu vi chưa đủ! (Cần {exp}/{needed} EXP)")
-
-    # 2. Tính linh thạch yêu cầu
-    required_lt = 1 if lv < 30 else (3 if lv < 60 else (6 if lv < 90 else 12))
-    if linh_thach < required_lt:
-        return await interaction.followup.send(f"❌ Cần **{required_lt} Linh thạch**. Đạo hữu chỉ có: **{linh_thach}**")
-
-    # 3. Tỉ lệ thành công (Giảm dần theo cảnh giới)
-    realm_index = lv // 10
-    rate = max(10, 100 - (realm_index * 8))
-    success = random.randint(1, 100) <= rate
-
-    if success:
-        # THÀNH CÔNG: Lên 1 cấp và TRỪ HẾT EXP DƯ (Ép tu luyện lại từ đầu cảnh giới mới)
-        await users_col.update_one(
-            {"_id": uid},
-            {
-                "$set": {"level": lv + 1, "exp": 0}, 
-                "$inc": {"linh_thach": -required_lt}
-            }
-        )
-        
-        quote = random.choice(KHAU_NGU) if 'KHAU_NGU' in globals() else "Thiên địa chứng giám, ta đã đột phá!"
-        embed = discord.Embed(
-            title="🔥 ĐỘT PHÁ THÀNH CÔNG 🔥",
-            description=f"*{quote}*\n\n🎉 **{interaction.user.display_name}** đã phi thăng lên **{get_realm(lv + 1)}**!",
-            color=discord.Color.gold()
-        )
-        
-        # Gửi thông báo an toàn (không làm treo lệnh)
-        await interaction.followup.send(embed=embed)
-        
-        # Thông báo kênh chung (dùng try-except để tránh lỗi channel làm treo Bot)
-        for ch_id in NOTIFY_CHANNELS:
-            try:
-                channel = bot.get_channel(ch_id)
-                if channel: await channel.send(embed=embed)
-            except: continue
-            
-    else:
-        # THẤT BẠI: Logic Lôi Kiếp
-        tut_cap = 1
-        loi_kiep_msg = ""
-        if lv >= 30 and random.randint(1, 100) <= 25:
-            tut_cap = random.randint(2, 3)
-            loi_kiep_msg = "\n⚡ **LÔI KIẾP BẤT NGỜ!** Đạo hữu bị đánh văng tu vi!"
-
-        new_lv = max(1, lv - tut_cap)
-        # Khi thất bại: Trừ linh thạch, giảm cấp, giữ nguyên EXP để làm lại
 @bot.tree.command(name="dotpha", description="Đột phá cảnh giới (Lôi kiếp từ cấp 30)")
 async def dotpha(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -522,8 +455,8 @@ async def dotpha(interaction: discord.Interaction):
         base_tut_cap = 1
         loi_kiep_msg = ""
         
-        # Giữ nguyên tỉ lệ 25% xuất hiện Lôi Kiếp cấp cao
-        if lv >= 30 and random.randint(1, 100) <= 25:
+        # Giữ nguyên tỉ lệ 30% xuất hiện Lôi Kiếp cấp cao
+        if lv >= 30 and random.randint(1, 100) <= 30:
             base_tut_cap = random.randint(2, 3)
             loi_kiep_msg = "\n⚡ **LÔI KIẾP BẤT NGỜ!** Đạo hữu bị đánh văng tu vi!"
 
@@ -993,6 +926,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
