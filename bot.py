@@ -499,12 +499,11 @@ async def huongdan(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed)
 import asyncio
-
 @bot.tree.command(name="bxh", description="Xem bảng xếp hạng các đại năng tu tiên")
 async def bxh(interaction: discord.Interaction):
     await interaction.response.defer()
     
-    # 1. Lấy Top 10 cao thủ từ MongoDB
+    # 1. Lấy Top 10 cao thủ từ MongoDB (Sắp xếp theo cấp độ và EXP giảm dần)
     top_users = await users_col.find().sort([("level", -1), ("exp", -1)]).limit(10).to_list(length=10)
     
     if not top_users:
@@ -512,34 +511,41 @@ async def bxh(interaction: discord.Interaction):
 
     description = ""
     for i, user in enumerate(top_users):
-        uid = int(user.get("_id")) # Chuyển ID sang số nguyên
-        lv = user.get("level", 1)
-        exp = user.get("exp", 0)
+        uid = user.get("_id") # Lấy ID người dùng từ DB
+        lv = user.get("level", 1) # Lấy cấp độ hiện tại
+        
+        # Làm tròn EXP để tránh hiện số thập phân như 131.1672
+        exp = int(user.get("exp", 0)) 
         pet = user.get("pet", "Không")
         
-        # --- PHẦN SỬA: LẤY TÊN THAY VÌ ID ---
-        member = interaction.guild.get_member(uid)
+        # Gọi hàm get_realm để xác định danh hiệu cảnh giới từ cấp độ
+        # Đảm bảo hàm get_realm(lv) đã có sẵn trong code của đạo hữu
+        realm_name = get_realm(lv) 
+        
+        # --- LẤY TÊN HIỂN THỊ TRONG SERVER ---
+        # Chuyển uid sang int để Discord nhận diện
+        member = interaction.guild.get_member(int(uid)) if uid.isdigit() else None
         if member:
-            # Lấy tên hiển thị trong server (Nickname)
             name_display = f"**{member.display_name}**"
         else:
-            # Nếu không tìm thấy trong server thì dùng Mention để Discord tự hiện tên
-            name_display = f"<@{uid}>"
+            name_display = f"<@{uid}>" # Nếu không ở trong server thì hiện Mention
             
-        # Biểu tượng cho Top 3
+        # Biểu tượng huy chương cho Top 3
         medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"**#{i+1}**"
         
-        description += f"{medal} {name_display} - **Cấp {lv}** ({exp} EXP) | 🐾: {pet}\n"
+        # Định dạng hiển thị: Cảnh giới nằm ngay dưới tên để tạo vẻ uy nghiêm
+        description += f"{medal} {name_display}\n└─ *{realm_name}* • Cấp {lv} ({exp} EXP) | 🐾: {pet}\n\n"
 
     # 2. Tạo giao diện Embed
     embed = discord.Embed(
-        title="🏆 BẢNG XẾP HẠNG TU TIÊN 🏆",
+        title="🏆 BẢNG XẾP HẠNG CAO THỦ TU TIÊN 🏆",
         description=description,
         color=discord.Color.gold(),
-        timestamp=datetime.now()
+        timestamp=datetime.now() # Cập nhật theo thời gian thực
     )
     
-    embed.set_footer(text="Cập nhật theo thời gian thực")
+    embed.set_footer(text="Khổ luyện thành tài - Danh toại bảng vàng")
+    # Đạo hữu có thể thay đổi link ảnh thumbnail dưới đây nếu muốn
     embed.set_thumbnail(url="https://i.imgur.com/vHInX9T.png") 
 
     await interaction.followup.send(embed=embed)
@@ -827,6 +833,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
