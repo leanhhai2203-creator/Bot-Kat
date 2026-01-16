@@ -816,18 +816,26 @@ class ConfirmTransfer(discord.ui.View):
             
         await interaction.response.edit_message(content="🚫 **Giao dịch đã bị hủy bỏ.**", view=None)
         self.stop()
-@bot.tree.command(name="loiphat", description="Admin: Thi triển thiên phạt giáng xuống Top 5")
-@app_commands.checks.has_permissions(administrator=True)
+
+@bot.tree.command(name="loiphat", description="[ADMIN] Thi triển thiên phạt giáng xuống Top 5")
 async def loiphat(interaction: discord.Interaction):
+    # 1. Kiểm tra quyền Admin bằng ID đích danh
+    if interaction.user.id != ADMIN_ID:
+        return await interaction.response.send_message(
+            "❌ **THIÊN PHẠT!** Bạn không có quyền năng này.", 
+            ephemeral=True
+        )
+
+    # Nếu đúng là Admin, bắt đầu thực hiện
     await interaction.response.defer()
     
-    # 1. Lấy Top 5 cao thủ
+    # 2. Lấy danh sách Top 5 cao thủ
     top_5 = await users_col.find().sort([("level", -1), ("exp", -1)]).limit(5).to_list(length=5)
     
     if len(top_5) < 3:
         return await interaction.followup.send("⚠️ Linh khí server chưa đủ mạnh, chưa thể triệu hồi thiên lôi!")
 
-    # 2. Chọn ngẫu nhiên 3 nạn nhân và 1 câu thần chú
+    # 3. Chọn ngẫu nhiên 3 nạn nhân và thần chú
     victims = random.sample(top_5, k=3)
     than_chu = random.choice(THAN_CHU_THIEN_PHAT)
     
@@ -838,30 +846,25 @@ async def loiphat(interaction: discord.Interaction):
         uid = user.get("_id")
         current_exp = user.get("exp", 0)
         
-        # Hao tổn từ 100 đến 500 EXP
+        # Hao tổn ngẫu nhiên 100-500 EXP
         lost_exp = random.randint(100, 500)
         new_exp = max(0, current_exp - lost_exp)
         
-        # Cập nhật DB
+        # Cập nhật Database
         await users_col.update_one({"_id": uid}, {"$set": {"exp": new_exp}})
         
         report_msg += f"⚡ **<@{uid}>** bị lôi đình đánh trúng!\n   └─ 📉 Hao tổn: **-{lost_exp} EXP**\n\n"
 
-    # 3. Tạo Embed uy nghiêm
+    # 4. Tạo Embed uy nghiêm
     embed = discord.Embed(
         title="⛈️ THIÊN PHẠT BẢNG VÀNG ⛈️",
         description=report_msg,
-        color=discord.Color.from_rgb(255, 255, 0) # Màu vàng sấm sét
+        color=discord.Color.from_rgb(255, 255, 0)
     )
-    # Ảnh GIF sấm sét cực ngầu
     embed.set_image(url="https://i.imgur.com/K6Y0X9E.gif") 
-    embed.set_footer(text="Cửu Thiên Huyền Lôi - Thuận ta thì sống, nghịch ta thì hao tu vi!")
+    embed.set_footer(text=f"Người thực thi: {interaction.user.display_name}")
     
     await interaction.followup.send(embed=embed)
-@loiphat.error
-async def loiphat_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
-    if isinstance(error, app_commands.MissingPermissions):
-        await interaction.response.send_message("❌ Phàm nhân mà dám động vào thiên lôi? Hãy lui ra!", ephemeral=True)
 @bot.tree.command(name="pay", description="Chuyển linh thạch cho đạo hữu khác")
 @app_commands.describe(member="Người nhận linh thạch", amount="Số lượng linh thạch muốn chuyển")
 async def pay(interaction: discord.Interaction, member: discord.Member, amount: int):
@@ -924,6 +927,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
