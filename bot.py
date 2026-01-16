@@ -612,9 +612,10 @@ async def attack(interaction: discord.Interaction):
     await interaction.response.defer()
     
     uid = str(interaction.user.id)
-    today = datetime.now().strftime("%Y-%m-%d")
+    # Lấy giờ UTC mặc định của hệ thống Render
+    today = datetime.utcnow().strftime("%Y-%m-%d")
 
-    # 1. Lấy và khởi tạo User (thay cho create_user/get_user)
+    # 1. Lấy và khởi tạo User
     u = await users_col.find_one_and_update(
         {"_id": uid},
         {"$setOnInsert": {
@@ -625,17 +626,23 @@ async def attack(interaction: discord.Interaction):
         return_document=True
     )
 
-    # Kiểm tra lượt đánh
-    attack_count = u.get("attack_count", 0) if u.get("last_attack") == today else 0
-    if attack_count >= 3:
-        return await interaction.followup.send("❌ Đạo hữu đã cạn kiệt linh lực. Hãy tịnh dưỡng đến ngày mai!")
+    # 2. Kiểm tra ngày để reset lượt đánh
+    last_attack_day = u.get("last_attack", "")
+    current_attack_count = u.get("attack_count", 0)
 
-    # 2. Dữ liệu Linh thú & Quái vật (Giữ nguyên logic của đạo hữu)
+    # Nếu ngày trong DB khác ngày UTC hiện tại -> Reset lượt về 0
+    if last_attack_day != today:
+        current_attack_count = 0
+
+    if current_attack_count >= 3:
+        return await interaction.followup.send(f"❌ Đạo hữu đã hết lượt (Reset lúc 00:00 UTC).")
+
+    # 3. Dữ liệu Linh thú & Quái vật (Giữ nguyên các giá trị của đạo hữu)
     pet_name = u.get("pet")
     pet_data = PET_CONFIG.get(pet_name, {"atk": 0, "effect": "Không", "exp_mult": 1.0, "lt_chance": 30})
     monster, drop_rate, eq_range = get_monster_data(u["level"])
     
-    # 3. Tính toán chỉ số
+    # 4. Tính toán chỉ số
     total_atk = (u["level"] * 10) + pet_data.get("atk", 0)
     base_exp = exp_needed(u["level"]) // 5
     exp_gain = int(base_exp * pet_data.get("exp_mult", 1.0))
@@ -643,55 +650,49 @@ async def attack(interaction: discord.Interaction):
     lt_chance = pet_data.get("lt_chance", 30) 
     lt_gain = random.randint(1, 5) if random.randint(1, 100) <= lt_chance else 0
 
-    # 4. Kiểm tra bình cảnh (Chặn EXP tại cấp 10, 20...)
+    # 5. Kiểm tra bình cảnh (Chặn EXP)
     can_gain_exp = True
-    if u["level"] % 10 == 0:
-        if u["exp"] >= exp_needed(u["level"]):
-            can_gain_exp = False
-            exp_gain = 0
+    if u["level"] % 10 == 0 and u["exp"] >= exp_needed(u["level"]):
+        can_gain_exp = False
+        exp_gain = 0
 
-    # 5. Logic rơi trang bị (Ghi trực tiếp vào eq_col)
+    # 6. Logic rơi trang bị
     drop_msg = ""
     final_drop_rate = drop_rate + pet_data.get("drop_buff", 0)
     if random.random() <= final_drop_rate:
         eq_type = random.choice(EQ_TYPES)
         eq_lv = random.randint(*eq_range)
-        
-        # Logic save_equipment trên MongoDB
         current_eq = await eq_col.find_one({"_id": uid}) or {}
         if eq_lv > current_eq.get(eq_type, 0):
             await eq_col.update_one({"_id": uid}, {"$set": {eq_type: eq_lv}}, upsert=True)
             drop_msg = f"\n🎁 **VẬN MAY!** Nhận được: `{eq_type} Cấp {eq_lv}`"
-        else:
-            drop_msg = f"\n🗑️ Đánh rơi `{eq_type} Cấp {eq_lv}` nhưng phẩm chất quá thấp."
 
-    # 6. Logic hồi lượt (Thôn Phệ Thú)
+    # 7. Logic hồi lượt (Thôn Phệ Thú)
     actual_count_inc = 1
     refund_msg = ""
     if pet_name == "Thôn Phệ Thú" and random.randint(1, 100) <= 20:
         actual_count_inc = 0
-        refund_msg = "\n🌀 **Thôn Phệ Thú** hấp thụ linh khí, giúp bạn không tốn thể lực!"
+        refund_msg = "\n🌀 **Thôn Phệ Thú** giúp không tốn thể lực!"
 
-    # 7. CẬP NHẬT DATABASE (Sử dụng $inc và $set)
+    # 8. CẬP NHẬT DATABASE (SỬA LỖI TẠI ĐÂY)
+    # Dùng $set cho attack_count thay vì $inc để đảm bảo reset được ngày mới
+    new_count = current_attack_count + actual_count_inc
     await users_col.update_one(
         {"_id": uid},
         {
-            "$inc": {"exp": exp_gain, "linh_thach": lt_gain, "attack_count": actual_count_inc},
-            "$set": {"last_attack": today}
+            "$inc": {"exp": exp_gain, "linh_thach": lt_gain},
+            "$set": {
+                "last_attack": today, 
+                "attack_count": new_count
+            }
         }
     )
 
-    # 8. Hiển thị (Giữ nguyên giao diện của đạo hữu)
-    embed = discord.Embed(
-        title="⚔️ TRẬN CHIẾN KẾT THÚC",
-        description=f"Đạo hữu vung kiếm tiêu diệt **{monster}**!",
-        color=discord.Color.green() if exp_gain > 0 else discord.Color.orange()
-    )
-    exp_info = f"📈 Kinh nghiệm: **+{exp_gain} EXP**" if can_gain_exp else "⚠️ **BÌNH CẢNH!** Hãy `/dotpha` ngay."
-    lt_info = f"\n💎 Linh thạch: **+{lt_gain}**" if lt_gain > 0 else ""
-    
-    embed.add_field(name="Chiến lợi phẩm", value=f"{exp_info}{lt_info}{drop_msg}{refund_msg}", inline=False)
-    embed.set_footer(text=f"Lực chiến: {total_atk} | Lượt đánh còn lại: {3 - (attack_count + actual_count_inc)}")
+    # 9. Hiển thị
+    embed = discord.Embed(title="⚔️ CHIẾN BÁO", color=discord.Color.green())
+    exp_info = f"📈 +{exp_gain} EXP" if can_gain_exp else "⚠️ **BÌNH CẢNH!**"
+    embed.add_field(name="Kết quả", value=f"{exp_info} | 💎 +{lt_gain} LT{drop_msg}{refund_msg}")
+    embed.set_footer(text=f"Lượt còn lại: {3 - new_count}/3 (Giờ UTC: {today})")
     
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="add", description="[ADMIN] Ban thưởng Linh thạch cho tu sĩ")
@@ -730,6 +731,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
