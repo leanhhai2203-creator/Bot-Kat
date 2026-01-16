@@ -25,7 +25,7 @@ MSG_EXP = 10
 MIN_MSG_LEN = 7
 MSG_COOLDOWN = 20
 last_msg_time = {}
-
+last_msg_content = {} 
 # Các kênh nhận thông báo quan trọng
 NOTIFY_CHANNELS = [1455081842473697362, 1455837230332641280, 1454793019160006783, 1454793109094268948, 1454506037779369986] 
 CHANNEL_EXP_RATES = {
@@ -185,43 +185,48 @@ async def on_ready():
 @bot.event
 async def on_message(message):
     if message.author.bot: return
-    uid, now = str(message.author.id), datetime.now().timestamp()
     
-    if len(message.content.strip()) >= MIN_MSG_LEN and now - last_msg_time.get(uid, 0) >= MSG_COOLDOWN:
+    uid = str(message.author.id)
+    now = datetime.now().timestamp()
+    content = message.content.strip().lower()
+
+    # 1. CHỐNG TRÙNG LẶP: Nếu nhắn giống hệt câu trước thì hủy
+    if content == last_msg_content.get(uid):
+        return 
+
+    # 2. KIỂM TRA ĐỘ DÀI & COOLDOWN
+    if len(content) >= MIN_MSG_LEN and now - last_msg_time.get(uid, 0) >= MSG_COOLDOWN:
         last_msg_time[uid] = now
+        last_msg_content[uid] = content # Lưu lại câu vừa nhắn
         
-        # 1. Lấy dữ liệu người dùng để kiểm tra Linh thú
+        # 3. LẤY DỮ LIỆU TỪ DB ĐỂ KIỂM TRA PET
         user_data = await users_col.find_one({"_id": uid})
         
-        # Nếu chưa có dữ liệu, khởi tạo (upsert)
+        # Nếu chưa có thì khởi tạo
         if not user_data:
-            await users_col.update_one(
-                {"_id": uid}, 
-                {"$setOnInsert": {"level": 1, "exp": 0, "linh_thach": 10, "pet": None}}, 
-                upsert=True
-            )
-            user_data = {"level": 1, "exp": 0, "pet": None}
+            user_data = {"level": 1, "exp": 0, "linh_thach": 10, "pet": None}
+            await users_col.insert_one({"_id": uid, **user_data})
 
-        # 2. Tính EXP cơ bản từ chat
+        # 4. TÍNH TOÁN EXP
         rate = CHANNEL_EXP_RATES.get(message.channel.id, 0.1)
         base_exp = int(MSG_EXP * rate)
         
-        # 3. LOGIC THÔN PHỆ THÚ: Nếu có Pet thì cộng thêm
+        # --- LOGIC CỘNG CHỈ SỐ PET ---
         pet_bonus = 0
-        if user_data.get("pet") == "Thôn Phệ Thú": # Kiểm tra tên Pet chính xác trong DB
-            if random.random() < 0.30: # 30% tỉ lệ Pet kích hoạt khi chat
+        if user_data.get("pet") == "Thôn Phệ Thú":
+            # Tỷ lệ 30% Pet giúp sức để tạo cảm giác may mắn
+            if random.random() < 0.30:
                 pet_bonus = random.randint(5, 15)
-                # Thêm hiệu ứng reaction để chủ nhân biết Pet vừa giúp sức
-                try: await message.add_reaction("🐾")
+                try: await message.add_reaction("🐾") # Hiện icon để biết Pet vừa cộng
                 except: pass
+        # -----------------------------
 
-        # 4. Thực hiện cộng tổng EXP (Base + Pet Bonus)
         total_gain = base_exp + pet_bonus
-        await add_exp(uid, total_gain)
         
-        # 5. Kiểm tra lên cấp
+        # 5. CẬP NHẬT DATABASE & CHECK LEVEL
+        await add_exp(uid, total_gain)
         await check_level_up(uid, message.channel, message.author.display_name)
-
+        
     await bot.process_commands(message)
 # ========== LỆNH SLASH (/) ==========
 
@@ -966,6 +971,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
