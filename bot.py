@@ -817,54 +817,64 @@ class ConfirmTransfer(discord.ui.View):
         await interaction.response.edit_message(content="🚫 **Giao dịch đã bị hủy bỏ.**", view=None)
         self.stop()
 
-@bot.tree.command(name="loiphat", description="[ADMIN] Thi triển thiên phạt giáng xuống Top 5")
+@bot.tree.command(name="loiphat", description="[ADMIN] Thiên phạt: Top 1 (500-1000 EXP) & 2 vị trong Top 2-5 (100-500 EXP)")
 async def loiphat(interaction: discord.Interaction):
-    # 1. Kiểm tra quyền Admin bằng ID đích danh
+    # 1. Kiểm tra quyền Admin
     if interaction.user.id != ADMIN_ID:
         return await interaction.response.send_message(
             "❌ **THIÊN PHẠT!** Bạn không có quyền năng này.", 
             ephemeral=True
         )
 
-    # Nếu đúng là Admin, bắt đầu thực hiện
     await interaction.response.defer()
     
     # 2. Lấy danh sách Top 5 cao thủ
     top_5 = await users_col.find().sort([("level", -1), ("exp", -1)]).limit(5).to_list(length=5)
     
     if len(top_5) < 3:
-        return await interaction.followup.send("⚠️ Linh khí server chưa đủ mạnh, chưa thể triệu hồi thiên lôi!")
+        return await interaction.followup.send("⚠️ Linh khí server chưa đủ mạnh (cần ít nhất 3 người trong BXH)!")
 
-    # 3. Chọn ngẫu nhiên 3 nạn nhân và thần chú
-    victims = random.sample(top_5, k=3)
-    than_chu = random.choice(THAN_CHU_THIEN_PHAT)
+    # --- LOGIC MỚI: CHỌN MỤC TIÊU ---
+    # Top 1 chắc chắn bị đánh
+    top_1 = top_5[0]
+    # Chọn ngẫu nhiên 2 người từ danh sách còn lại (Top 2 đến Top 5)
+    others = top_5[1:] 
+    victims_others = random.sample(others, k=min(2, len(others)))
     
+    than_chu = random.choice(THAN_CHU_THIEN_PHAT)
     report_msg = f"✨ **KHẨU LỆNH:** *\"{than_chu}\"*\n"
     report_msg += "─" * 15 + "\n\n"
+
+    # 3. XỬ LÝ TOP 1 (Sét đánh cực nặng: 500-1000 EXP)
+    t1_uid = top_1.get("_id")
+    t1_exp = top_1.get("exp", 0)
+    t1_lost = random.randint(500, 1000)
+    t1_new_exp = max(0, t1_exp - t1_lost)
     
-    for user in victims:
+    await users_col.update_one({"_id": t1_uid}, {"$set": {"exp": t1_new_exp}})
+    report_msg += f"🔥 **ĐẠI NẠN TOP 1 - <@{t1_uid}>** bị thiên lôi truy sát!\n   └─ 📉 Hao tổn cực nặng: **-{t1_lost} EXP**\n\n"
+
+    # 4. XỬ LÝ 2 NGƯỜI CÒN LẠI (Sét đánh thường: 100-500 EXP)
+    for user in victims_others:
         uid = user.get("_id")
         current_exp = user.get("exp", 0)
-        
-        # Hao tổn ngẫu nhiên 100-500 EXP
         lost_exp = random.randint(100, 500)
         new_exp = max(0, current_exp - lost_exp)
         
-        # Cập nhật Database
         await users_col.update_one({"_id": uid}, {"$set": {"exp": new_exp}})
-        
         report_msg += f"⚡ **<@{uid}>** bị lôi đình đánh trúng!\n   └─ 📉 Hao tổn: **-{lost_exp} EXP**\n\n"
 
-    # 4. Tạo Embed uy nghiêm
+    # 5. Gửi Embed kết quả
     embed = discord.Embed(
         title="⛈️ THIÊN PHẠT BẢNG VÀNG ⛈️",
         description=report_msg,
-        color=discord.Color.from_rgb(255, 255, 0)
+        color=discord.Color.from_rgb(255, 0, 0) # Màu đỏ cảnh báo
     )
     embed.set_image(url="https://i.imgur.com/K6Y0X9E.gif") 
-    embed.set_footer(text=f"Người thực thi: {interaction.user.display_name}")
+    embed.set_footer(text=f"Thiên đạo công minh - Người thi triển: {interaction.user.display_name}")
     
     await interaction.followup.send(embed=embed)
+
 @bot.tree.command(name="pay", description="Chuyển linh thạch cho đạo hữu khác")
 @app_commands.describe(member="Người nhận linh thạch", amount="Số lượng linh thạch muốn chuyển")
 async def pay(interaction: discord.Interaction, member: discord.Member, amount: int):
@@ -927,6 +937,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
