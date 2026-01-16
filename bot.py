@@ -720,6 +720,77 @@ async def attack(interaction: discord.Interaction):
     
     # Gọi hàm check level để cập nhật tu vi ngay lập tức
     await check_level_up(uid, interaction.channel, interaction.user.display_name)
+# --- LỆNH CHUYỂN LINH THẠCH CÓ XÁC NHẬN ---
+
+class ConfirmTransfer(discord.ui.View):
+    def __init__(self, sender, receiver, amount):
+        super().__init__(timeout=30)  # Nút bấm tồn tại trong 30 giây
+        self.sender = sender
+        self.receiver = receiver
+        self.amount = amount
+
+    @discord.ui.button(label="Xác Nhận", style=discord.ButtonStyle.green, emoji="✅")
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Chỉ người gửi mới có quyền nhấn xác nhận
+        if interaction.user.id != self.sender.id:
+            return await interaction.response.send_message("❌ Đây không phải giao dịch của bạn!", ephemeral=True)
+        
+        # Kiểm tra và trừ tiền người gửi (đảm bảo linh_thach >= số tiền chuyển)
+        res1 = await users_col.update_one(
+            {"_id": str(self.sender.id), "linh_thach": {"$gte": self.amount}},
+            {"$inc": {"linh_thach": -self.amount}}
+        )
+        
+        if res1.modified_count > 0:
+            # Cộng tiền cho người nhận
+            await users_col.update_one(
+                {"_id": str(self.receiver.id)},
+                {"$inc": {"linh_thach": self.amount}},
+                upsert=True
+            )
+            
+            # Cập nhật thông báo thành công và xóa nút bấm
+            await interaction.response.edit_message(
+                content=f"✅ **Giao dịch thành công!**\nĐạo hữu **{self.sender.display_name}** đã chuyển `{self.amount}` Linh thạch cho **{self.receiver.display_name}**.",
+                view=None
+            )
+        else:
+            await interaction.edit_original_response(content="❌ **Thất bại!** Bạn không đủ linh thạch để thực hiện giao dịch này.", view=None)
+        self.stop()
+
+    @discord.ui.button(label="Hủy Bỏ", style=discord.ButtonStyle.red, emoji="✖️")
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.sender.id:
+            return await interaction.response.send_message("❌ Bạn không có quyền hủy!", ephemeral=True)
+            
+        await interaction.response.edit_message(content="🚫 **Giao dịch đã bị hủy bỏ.**", view=None)
+        self.stop()
+
+@bot.tree.command(name="pay", description="Chuyển linh thạch cho đạo hữu khác")
+@app_commands.describe(member="Người nhận linh thạch", amount="Số lượng linh thạch muốn chuyển")
+async def pay(interaction: discord.Interaction, member: discord.Member, amount: int):
+    # Tránh các lỗi cơ bản
+    if amount <= 0:
+        return await interaction.response.send_message("❌ Số lượng chuyển phải lớn hơn 0!", ephemeral=True)
+    if member.id == interaction.user.id:
+        return await interaction.response.send_message("❌ Đạo hữu không thể tự chuyển cho chính mình!", ephemeral=True)
+    if member.bot:
+        return await interaction.response.send_message("❌ Không thể chuyển linh thạch cho thực thể nhân tạo (Bot)!", ephemeral=True)
+
+    uid = str(interaction.user.id)
+    u = await users_col.find_one({"_id": uid})
+    
+    # Kiểm tra số dư trước khi hiện nút
+    current_lt = u.get("linh_thach", 0) if u else 0
+    if current_lt < amount:
+        return await interaction.response.send_message(f"❌ Bạn không đủ linh thạch (Hiện có: `{current_lt}`)", ephemeral=True)
+
+    # Khởi tạo giao diện xác nhận
+    view = ConfirmTransfer(interaction.user, member, amount)
+    await interaction.response.send_message(
+        f"📜 **XÁC NHẬN GIAO DỊCH**\nĐạo hữu có chắc muốn chuyển **{amount} Linh thạch** cho **{member.mention}** không?\n*(Nút bấm sẽ hết hạn sau 30 giây)*",
+        view=view
+    )
 @bot.tree.command(name="add", description="[ADMIN] Ban thưởng Linh thạch cho tu sĩ")
 @app_commands.describe(target="Tu sĩ được ban thưởng", so_luong="Số lượng linh thạch")
 async def add(interaction: discord.Interaction, target: discord.Member, so_luong: int):
@@ -756,6 +827,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
