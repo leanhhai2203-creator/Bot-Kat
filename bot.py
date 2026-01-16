@@ -692,7 +692,7 @@ async def attack(interaction: discord.Interaction):
     # CHỐT CHẶN CUỐI CÙNG: Tính con số chính xác để ghi đè vào Database
     final_count_to_save = current_attack_count + actual_count_inc
 
-    # 8. CẬP NHẬT DATABASE (Sử dụng $set để ép số lượt đúng theo logic reset)
+    # 8. CẬP NHẬT DATABASE
     await users_col.update_one(
         {"_id": uid},
         {
@@ -702,18 +702,24 @@ async def attack(interaction: discord.Interaction):
             },
             "$set": {
                 "last_attack": today, 
-                "attack_count": final_count_to_save  # ÉP DỮ LIỆU GHI ĐÈ, KHÔNG CỘNG DỒN SAI
+                "attack_count": final_count_to_save 
             }
         }
     )
 
-    # 9. Hiển thị
+    # 9. Hiển thị (Đã sửa biến new_count thành final_count_to_save)
     embed = discord.Embed(title="⚔️ CHIẾN BÁO", color=discord.Color.green())
     exp_info = f"📈 +{exp_gain} EXP" if can_gain_exp else "⚠️ **BÌNH CẢNH!**"
+    
     embed.add_field(name="Kết quả", value=f"{exp_info} | 💎 +{lt_gain} LT{drop_msg}{refund_msg}")
-    embed.set_footer(text=f"Lượt còn lại: {3 - new_count}/3 (Giờ UTC: {today})")
+    
+    # Sửa biến tại đây để không bị treo lệnh
+    embed.set_footer(text=f"Lượt còn lại: {3 - final_count_to_save}/3 | Giờ UTC: {today}")
     
     await interaction.followup.send(embed=embed)
+    
+    # Gọi hàm check level để cập nhật tu vi ngay lập tức
+    await check_level_up(uid, interaction.channel, interaction.user.display_name)
 @bot.tree.command(name="add", description="[ADMIN] Ban thưởng Linh thạch cho tu sĩ")
 @app_commands.describe(target="Tu sĩ được ban thưởng", so_luong="Số lượng linh thạch")
 async def add(interaction: discord.Interaction, target: discord.Member, so_luong: int):
@@ -750,6 +756,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
