@@ -44,11 +44,36 @@ REALMS = [
 
 EQ_TYPES = ["Kiếm", "Nhẫn", "Giáp", "Tay", "Ủng"]
 PET_CONFIG = {
-    "Tiểu Hỏa Phượng": {"atk": 50, "effect": "Tăng 10% rơi đồ", "color": 0xe74c3c},
-    "Băng Tinh Hổ": {"atk": 45, "effect": "Tăng 5% tỉ lệ đột phá", "color": 0x3498db},
-    "Thôn Phệ Thú": {"atk": 40, "effect": "Tăng 15% EXP","exp_mult": 1.15, "color": 0x9b59b6},
-    "Huyền Quy": {"atk": 30, "effect": "Giảm 50% rủi ro Lôi Kiếp", "color": 0x2ecc71},
-    "Hóa Hình Hồ Ly": {"atk": 35, "effect": "X2 tỉ lệ rơi Linh Thạch", "color": 0xff99cc}
+    "Tiểu Hỏa Phượng": {
+        "atk": 70, 
+        "drop_buff": 0.1,  # Thêm dòng này để thực sự tăng 10% rơi đồ
+        "effect": "Tăng 10% rơi đồ", 
+        "color": 0xe74c3c
+    },
+    "Băng Tinh Hổ": {
+        "atk": 60, 
+        "break_buff": 5,   # Cần thêm logic này vào lệnh /dotpha
+        "effect": "Tăng 5% tỉ lệ đột phá", 
+        "color": 0x3498db
+    },
+    "Thôn Phệ Thú": {
+        "atk": 55, 
+        "exp_mult": 1.15,  # Đã chuẩn
+        "effect": "Tăng 15% EXP", 
+        "color": 0x9b59b6
+    },
+    "Huyền Quy": {
+        "atk": 55, 
+        "risk_reduce": 0.5, # Cần thêm logic này vào lệnh /dotpha
+        "effect": "Giảm 50% rủi ro Lôi Kiếp", 
+        "color": 0x2ecc71
+    },
+    "Hóa Hình Hồ Ly": {
+        "atk": 60, 
+        "lt_chance": 60,   # Tăng tỉ lệ nhận Linh Thạch lên (ví dụ từ 30% lên 60%)
+        "effect": "X2 tỉ lệ rơi Linh Thạch", 
+        "color": 0xff99cc
+    }
 }
 
 # ========== UTIL FUNCTIONS (THUẦN MONGODB) ==========
@@ -424,6 +449,84 @@ async def dotpha(interaction: discord.Interaction):
 
         new_lv = max(1, lv - tut_cap)
         # Khi thất bại: Trừ linh thạch, giảm cấp, giữ nguyên EXP để làm lại
+@bot.tree.command(name="dotpha", description="Đột phá cảnh giới (Lôi kiếp từ cấp 30)")
+async def dotpha(interaction: discord.Interaction):
+    await interaction.response.defer()
+    uid = str(interaction.user.id)
+    
+    u = await users_col.find_one({"_id": uid})
+    if not u: 
+        return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ tu tiên!")
+
+    lv = u.get("level", 1)
+    linh_thach = u.get("linh_thach", 0)
+    exp = u.get("exp", 0)
+    pet_name = u.get("pet", "Không")
+
+    # 1. LẤY CHỈ SỐ PET (Nếu có) - KHÔNG LÀM THAY ĐỔI CÔNG THỨC GỐC
+    pet_data = PET_CONFIG.get(pet_name, {})
+    break_buff = pet_data.get("break_buff", 0)    # Mặc định = 0 nếu pet không có buff này
+    risk_reduce = pet_data.get("risk_reduce", 0)  # Mặc định = 0 nếu pet không có buff này
+
+    # 2. KIỂM TRA ĐIỀU KIỆN (Giữ nguyên code cũ)
+    if lv % 10 != 0:
+        return await interaction.followup.send(f"❌ Cần đạt đỉnh phong (cấp 10, 20...) để đột phá. Hiện tại: **Cấp {lv}**")
+
+    needed = exp_needed(lv)
+    if exp < needed:
+        return await interaction.followup.send(f"❌ Tu vi chưa đủ! (Cần {int(exp)}/{needed} EXP)")
+
+    # 3. TÍNH LINH THẠCH YÊU CẦU (Giữ nguyên các mốc 1, 3, 6, 12)
+    required_lt = 1 if lv < 30 else (3 if lv < 60 else (6 if lv < 90 else 12))
+    if linh_thach < required_lt:
+        return await interaction.followup.send(f"❌ Cần **{required_lt} Linh thạch**. Đạo hữu chỉ có: **{linh_thach}**")
+
+    # 4. TỈ LỆ THÀNH CÔNG (Giữ nguyên công thức: 100 - realm*8)
+    realm_index = lv // 10
+    base_rate = max(10, 100 - (realm_index * 8))
+    final_rate = base_rate + break_buff # Chỉ cộng thêm, không làm giảm tỉ lệ gốc
+    
+    success = random.randint(1, 100) <= final_rate
+
+    if success:
+        # THÀNH CÔNG (Giữ nguyên: Reset EXP về 0)
+        await users_col.update_one(
+            {"_id": uid},
+            {
+                "$set": {"level": lv + 1, "exp": 0}, 
+                "$inc": {"linh_thach": -required_lt}
+            }
+        )
+        
+        pet_msg = f"\n✨ Nhờ có **{pet_name}** trợ lực (+{break_buff}%), đạo hữu đã thuận lợi thăng cấp!" if break_buff > 0 else ""
+        quote = random.choice(KHAU_NGU) if 'KHAU_NGU' in globals() else "Thiên địa chứng giám, ta đã đột phá!"
+        
+        embed = discord.Embed(
+            title="🔥 ĐỘT PHÁ THÀNH CÔNG 🔥",
+            description=f"*{quote}*\n{pet_msg}\n🎉 **{interaction.user.display_name}** đã phi thăng lên **{get_realm(lv + 1)}**!",
+            color=discord.Color.gold()
+        )
+        await interaction.followup.send(embed=embed)
+            
+    else:
+        # THẤT BẠI (Giữ nguyên logic tụt cấp và Lôi Kiếp cấp 30)
+        base_tut_cap = 1
+        loi_kiep_msg = ""
+        
+        # Giữ nguyên tỉ lệ 25% xuất hiện Lôi Kiếp cấp cao
+        if lv >= 30 and random.randint(1, 100) <= 25:
+            base_tut_cap = random.randint(2, 3)
+            loi_kiep_msg = "\n⚡ **LÔI KIẾP BẤT NGỜ!** Đạo hữu bị đánh văng tu vi!"
+
+        # ÁP DỤNG GIẢM RỦI RO (Chỉ kích hoạt nếu có Pet như Huyền Quy)
+        if risk_reduce > 0 and base_tut_cap > 1:
+            tut_cap = max(1, int(base_tut_cap * (1 - risk_reduce)))
+            pet_risk_msg = f"\n🐢 **{pet_name}** đã bảo vệ đạo hữu khỏi lôi kiếp cường đại!"
+        else:
+            tut_cap = base_tut_cap
+            pet_risk_msg = ""
+
+        new_lv = max(1, lv - tut_cap)
         await users_col.update_one(
             {"_id": uid},
             {
@@ -434,7 +537,7 @@ async def dotpha(interaction: discord.Interaction):
         
         fail_embed = discord.Embed(
             title="💥 ĐỘT PHÁ THẤT BẠI 💥",
-            description=f"😔 **{interaction.user.display_name}** đã gục ngã trước thiên kiếp!\n{loi_kiep_msg}\n📉 Khấu trừ: **{tut_cap} cấp**\n💸 Tổn hao: **{required_lt} Linh thạch**",
+            description=f"😔 **{interaction.user.display_name}** đã gục ngã trước thiên kiếp!{loi_kiep_msg}{pet_risk_msg}\n\n📉 Khấu trừ: **{tut_cap} cấp**\n💸 Tổn hao: **{required_lt} Linh thạch**",
             color=discord.Color.red()
         )
         await interaction.followup.send(embed=fail_embed)
@@ -833,6 +936,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
