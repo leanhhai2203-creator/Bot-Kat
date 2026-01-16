@@ -93,17 +93,38 @@ async def check_level_up(uid, channel, name):
     uid = str(uid)
     u = await users_col.find_one({"_id": uid})
     if not u: return
-    lv, exp, new_lv, leveled = u.get("level", 1), u.get("exp", 0), u.get("level", 1), False
-    while exp >= exp_needed(new_lv) and new_lv < 100: # THÊM: and new_lv < 100
+    
+    lv, exp = u.get("level", 1), u.get("exp", 0)
+    new_lv = lv
+    leveled = False
+
+    # Vòng lặp kiểm tra tăng cấp
+    while exp >= exp_needed(new_lv):
+        # CHỐT CHẶN: Nếu cấp hiện tại là 10, 20, 30... thì DỪNG LẠI không cho lên tiếp
         if new_lv % 10 == 0:
-            break 
+            break
+            
         exp -= exp_needed(new_lv)
         new_lv += 1
         leveled = True
+        
+        # Giới hạn cấp độ tối đa nếu cần (ví dụ 100)
+        if new_lv >= 100: break
+
     if leveled:
-        await users_col.update_one({"_id": uid}, {"$set": {"level": new_lv, "exp": exp}})
-        embed = discord.Embed(title="✨ CẢNH GIỚI PHI THĂNG ✨", description=f"Chúc mừng đạo hữu **{name}** đã lên **Cấp {new_lv}**!\n🧘 **{get_realm(new_lv)}**", color=discord.Color.green())
+        await users_col.update_one(
+            {"_id": uid}, 
+            {"$set": {"level": new_lv, "exp": exp}}
+        )
+        embed = discord.Embed(
+            title="✨ CẢNH GIỚI PHI THĂNG ✨", 
+            description=f"Chúc mừng đạo hữu **{name}** đã lên **Cấp {new_lv}**!\n🧘 **{get_realm(new_lv)}**", 
+            color=discord.Color.green()
+        )
         if channel: await channel.send(embed=embed)
+    else:
+        # Nếu không tăng cấp (do kẹt mốc 10) thì vẫn phải cập nhật lại lượng EXP dư
+        await users_col.update_one({"_id": uid}, {"$set": {"exp": exp}})
 
 # ========== VÒNG LẶP THIÊN Ý (MONGODB) ==========
 @tasks.loop(hours=4.8)
@@ -709,6 +730,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
