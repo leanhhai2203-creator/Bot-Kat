@@ -816,7 +816,6 @@ class ConfirmTransfer(discord.ui.View):
             
         await interaction.response.edit_message(content="🚫 **Giao dịch đã bị hủy bỏ.**", view=None)
         self.stop()
-
 @bot.tree.command(name="loiphat", description="Admin: Thi triển thiên phạt giáng xuống Top 5")
 @app_commands.checks.has_permissions(administrator=True)
 async def loiphat(interaction: discord.Interaction):
@@ -859,7 +858,6 @@ async def loiphat(interaction: discord.Interaction):
     embed.set_footer(text="Cửu Thiên Huyền Lôi - Thuận ta thì sống, nghịch ta thì hao tu vi!")
     
     await interaction.followup.send(embed=embed)
-
 @loiphat.error
 async def loiphat_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingPermissions):
@@ -926,6 +924,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
