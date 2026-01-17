@@ -55,33 +55,38 @@ EQ_TYPES = ["Kiếm", "Nhẫn", "Giáp", "Tay", "Ủng"]
 PET_CONFIG = {
     "Tiểu Hỏa Phượng": {
         "atk": 70, 
-        "drop_buff": 0.1,  # Thêm dòng này để thực sự tăng 10% rơi đồ
+        "drop_buff": 0.1, 
         "effect": "Tăng 10% rơi đồ", 
-        "color": 0xe74c3c
+        "color": 0xe74c3c,
+        "icon": "🔥"
     },
     "Băng Tinh Hổ": {
         "atk": 60, 
-        "break_buff": 5,   # Cần thêm logic này vào lệnh /dotpha
+        "break_buff": 5, 
         "effect": "Tăng 5% tỉ lệ đột phá", 
-        "color": 0x3498db
+        "color": 0x3498db,
+        "icon": "❄️"
     },
     "Thôn Phệ Thú": {
         "atk": 55, 
-        "exp_mult": 1.15,  # Đã chuẩn
+        "exp_mult": 1.15, 
         "effect": "Tăng 15% EXP", 
-        "color": 0x9b59b6
+        "color": 0x9b59b6,
+        "icon": "🐾"
     },
     "Huyền Quy": {
         "atk": 55, 
-        "risk_reduce": 0.5, # Cần thêm logic này vào lệnh /dotpha
+        "risk_reduce": 0.5, 
         "effect": "Giảm 50% rủi ro Lôi Kiếp", 
-        "color": 0x2ecc71
+        "color": 0x2ecc71,
+        "icon": "🐢"
     },
     "Hóa Hình Hồ Ly": {
-        "atk": 60, 
-        "lt_chance": 60,   # Tăng tỉ lệ nhận Linh Thạch lên (ví dụ từ 30% lên 60%)
-        "effect": "X2 tỉ lệ rơi Linh Thạch", 
-        "color": 0xff99cc
+        "atk": 65,
+        "lt_buff": 0.2, # Tăng 20% Linh thạch nhận được
+        "effect": "Tăng 20% Linh Thạch",
+        "color": 0xff99cc,
+        "icon": "🦊"
     }
 }
 
@@ -181,7 +186,6 @@ async def on_ready():
         print(f"✅ Đã đồng bộ {len(synced)} lệnh Slash. Bot sẵn sàng!")
         if not thien_y_loop.is_running(): thien_y_loop.start()
     except Exception as e: print(f"❌ Lỗi: {e}")
-
 @bot.event
 async def on_message(message):
     if message.author.bot: return
@@ -190,36 +194,43 @@ async def on_message(message):
     now = datetime.now().timestamp()
     content = message.content.strip().lower()
 
-    # 1. CHỐNG TRÙNG LẶP: Nếu nhắn giống hệt câu trước thì hủy
+    # 1. CHỐNG TRÙNG LẶP
     if content == last_msg_content.get(uid):
         return 
 
     # 2. KIỂM TRA ĐỘ DÀI & COOLDOWN
     if len(content) >= MIN_MSG_LEN and now - last_msg_time.get(uid, 0) >= MSG_COOLDOWN:
         last_msg_time[uid] = now
-        last_msg_content[uid] = content # Lưu lại câu vừa nhắn
+        last_msg_content[uid] = content
         
-        # 3. LẤY DỮ LIỆU TỪ DB ĐỂ KIỂM TRA PET
+        # 3. LẤY DỮ LIỆU TỪ DB
         user_data = await users_col.find_one({"_id": uid})
-        
-        # Nếu chưa có thì khởi tạo
         if not user_data:
             user_data = {"level": 1, "exp": 0, "linh_thach": 10, "pet": None}
             await users_col.insert_one({"_id": uid, **user_data})
 
-        # 4. TÍNH TOÁN EXP
+        # 4. TÍNH TOÁN EXP CƠ BẢN
         rate = CHANNEL_EXP_RATES.get(message.channel.id, 0.1)
         base_exp = int(MSG_EXP * rate)
-        
-        # --- LOGIC CỘNG CHỈ SỐ PET ---
         pet_bonus = 0
-        if user_data.get("pet") == "Thôn Phệ Thú":
-            # Tỷ lệ 30% Pet giúp sức để tạo cảm giác may mắn
-            if random.random() < 0.30:
+        
+        # --- LOGIC THẢ ICON THEO PET & CỘNG THÊM EXP ---
+        user_pet = user_data.get("pet")
+        
+        if user_pet in PET_ICONS:
+            # A. Luôn thả icon của Pet đó nếu tin nhắn hợp lệ
+            try:
+                await message.add_reaction(PET_ICONS[user_pet])
+            except:
+                pass
+
+            # B. Riêng Thôn Phệ Thú có tỷ lệ cộng thêm EXP (Bonus)
+            if user_pet == "Thôn Phệ Thú" and random.random() < 0.30:
                 pet_bonus = random.randint(5, 15)
-                try: await message.add_reaction("🐾") # Hiện icon để biết Pet vừa cộng
+                # Nếu muốn Pet giúp sức thì thả thêm 1 icon lấp lánh
+                try: await message.add_reaction("✨")
                 except: pass
-        # -----------------------------
+        # ----------------------------------------------
 
         total_gain = base_exp + pet_bonus
         
@@ -971,6 +982,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
