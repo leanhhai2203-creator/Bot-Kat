@@ -1145,70 +1145,76 @@ class ConfirmTransfer(discord.ui.View):
         await interaction.response.edit_message(content="🚫 **Giao dịch đã bị hủy bỏ.**", view=None)
         self.stop()
 
+# Đảm bảo Class ShopView nằm NGOÀI hoặc TRONG lệnh nhưng phải nhận tham số
+class ShopView(discord.ui.View):
+    def __init__(self, uid, users_col, config):
+        super().__init__(timeout=60)
+        self.uid = uid
+        self.users_col = users_col
+        self.config = config
+
+    @discord.ui.select(placeholder="Chọn Thần Khí muốn mua...")
+    async def select_callback(self, interaction: discord.Interaction, select: discord.ui.Select):
+        selected_tk = select.values[0]
+        
+        # 1. Kiểm tra lại xem món đồ đã bị ai mua mất chưa
+        is_taken = await self.users_col.find_one({"than_khi": selected_tk})
+        if is_taken:
+            return await interaction.response.send_message(f"⌛ Chậm mất rồi! **{selected_tk}** vừa có chủ nhân.", ephemeral=True)
+        
+        # 2. Kiểm tra linh thạch
+        u = await self.users_col.find_one({"_id": self.uid})
+        if not u or u.get("linh_thach", 0) < 50:
+            return await interaction.response.send_message("❌ Đạo hữu không đủ 50 Linh thạch!", ephemeral=True)
+
+        # 3. Thực hiện giao dịch
+        await self.users_col.update_one(
+            {"_id": self.uid},
+            {
+                "$set": {"than_khi": selected_tk},
+                "$inc": {"linh_thach": -50}
+            }
+        )
+        
+        # 4. Phản hồi thành công
+        tk_data = self.config[selected_tk]
+        embed = discord.Embed(
+            title="🔥 GIAO DỊCH THÀNH CÔNG 🔥",
+            description=f"Chúc mừng đạo hữu nhận được **{selected_tk}**!\n\n*\"{tk_data['desc']}\"*",
+            color=tk_data['color']
+        )
+        # Sử dụng interaction.response vì select_callback chưa được defer
+        await interaction.response.send_message(embed=embed)
+        self.stop()
 
 @bot.tree.command(name="shop", description="Cửa hàng Thần Khí Thượng Cổ (50 Linh thạch/món)")
 async def shop(interaction: discord.Interaction):
     await interaction.response.defer()
     uid = str(interaction.user.id)
     
-    # 1. Lấy danh sách Thần Khí đã có chủ
+    # 1. Lọc thần khí chưa có chủ
     owned_tk = await users_col.distinct("than_khi", {"than_khi": {"$ne": None}})
-    
-    # 2. Lọc ra những Thần Khí còn trong kho (chưa ai sở hữu)
     available_tk = [name for name in THAN_KHI_CONFIG.keys() if name not in owned_tk]
     
     if not available_tk:
-        return await interaction.followup.send("🏮 Cửa hàng hiện đã trống rỗng. Tất cả Thần Khí đều đã tìm được chủ nhân!")
+        return await interaction.followup.send("🏮 Cửa hàng hiện đã trống rỗng!")
 
-    # 3. Kiểm tra xem người dùng đã có Thần Khí chưa
+    # 2. Kiểm tra xem người dùng đã có Thần Khí chưa
     user_data = await users_col.find_one({"_id": uid})
-    if user_data.get("than_khi"):
-        return await interaction.followup.send("⚠️ Đạo hữu đã sở hữu một món Thần Khí, không thể tham lam thu thập thêm!")
+    if user_data and user_data.get("than_khi"):
+        return await interaction.followup.send("⚠️ Đạo hữu đã sở hữu Thần Khí, không thể mua thêm!")
 
-    # 4. Tạo Select Menu để chọn mua
-    options = [
-        SelectOption(label=name, description=f"Giá: 50 Linh thạch - {THAN_KHI_CONFIG[name]['desc'][:50]}...") 
-        for name in available_tk[:25] # Discord giới hạn 25 option
-    ]
+    # 3. Khởi tạo View và truyền dữ liệu vào
+    view = ShopView(uid, users_col, THAN_KHI_CONFIG)
+    
+    # 4. Cập nhật options cho select menu trong view
+    for name in available_tk[:25]:
+        view.children[0].add_option(
+            label=name, 
+            description=f"Giá: 50 Linh thạch - {THAN_KHI_CONFIG[name]['desc'][:50]}..."
+        )
 
-    class ShopView(View):
-        def __init__(self):
-            super().__init__(timeout=60)
-            
-        @discord.ui.select(placeholder="Chọn Thần Khí muốn mua...", options=options)
-        async def select_callback(self, interaction: discord.Interaction, select: Select):
-            selected_tk = select.values[0]
-            
-            # Kiểm tra lại một lần nữa xem trong lúc chọn có ai mua mất chưa
-            is_taken = await users_col.find_one({"than_khi": selected_tk})
-            if is_taken:
-                return await interaction.response.send_message(f"⌛ Chậm mất rồi! **{selected_tk}** vừa được một vị đại năng khác mua mất.", ephemeral=True)
-            
-            # Kiểm tra linh thạch
-            u = await users_col.find_one({"_id": uid})
-            if u.get("linh_thach", 0) < 50:
-                return await interaction.response.send_message("❌ Đạo hữu không đủ 50 Linh thạch!", ephemeral=True)
-
-            # Thực hiện giao dịch
-            await users_col.update_one(
-                {"_id": uid},
-                {
-                    "$set": {"than_khi": selected_tk},
-                    "$inc": {"linh_thach": -50}
-                }
-            )
-            
-            embed = discord.Embed(
-                title="🔥 GIAO DỊCH THÀNH CÔNG 🔥",
-                description=f"Chúc mừng đạo hữu đã nhận được **{selected_tk}**!\n\n*\"{THAN_KHI_CONFIG[selected_tk]['desc']}\"*",
-                color=THAN_KHI_CONFIG[selected_tk]['color']
-            )
-            await interaction.response.send_message(embed=embed)
-            self.stop()
-
-    view = ShopView()
-    await interaction.followup.send("🏛️ **LINH BẢO CÁC** 🏛️\nNơi trao đổi những món thần vật thượng cổ còn sót lại.", view=view)
-
+    await interaction.followup.send("🏛️ **LINH BẢO CÁC** 🏛️\nNơi trao đổi những món thần vật thượng cổ.", view=view)
 @bot.tree.command(name="captcha", description="Lệnh chấp pháp của riêng Admin để kiểm tra tu sĩ")
 async def captcha(interaction: discord.Interaction, target: discord.Member):
     # 1. Kiểm tra ID người dùng
@@ -1463,6 +1469,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
