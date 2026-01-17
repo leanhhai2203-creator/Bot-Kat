@@ -1590,17 +1590,26 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member):
             
             if is_win:
                 gift = random.randint(10, 15)
+                # Cập nhật vào DB
                 await users_col.update_many({"_id": {"$in": [uid1, uid2]}}, {"$inc": {"linh_thach": gift}})
-                embed.description = "🎉 **THẮNG!** Ma Thần đã bị phong ấn. Hai vị nhận linh thạch."
+                
+                embed.description = "🎉 **CHIẾN THẮNG!**\nMa Thần đã bị phong ấn, linh khí tiêu tán hóa thành linh thạch ban thưởng cho hai vị."
+                embed.add_field(name="🎁 Phần Thưởng", value=f"Mỗi đạo hữu nhận được: **{gift}** 💎 Linh Thạch", inline=False)
                 embed.color = discord.Color.green()
+                embed.set_footer(text="Uy danh của hai vị đã vang xa khắp bờ cõi!")
             else:
+                # Phạt trừ 500 EXP
+                loss_exp = 500
                 for tid in [uid1, uid2]:
-                    await users_col.update_one({"_id": tid}, {"$inc": {"exp": -500}})
+                    await users_col.update_one({"_id": tid}, {"$inc": {"exp": -loss_exp}})
                     await users_col.update_one({"_id": tid, "exp": {"$lt": 0}}, {"$set": {"exp": 0}})
-                embed.description = "💀 **THẤT BẠI!** Ma Thần quá mạnh, tu vi bị tổn hại nghiêm trọng."
+                
+                embed.description = "💀 **THẤT BẠI!**\nMa Thần quá mạnh, chiêu thức phản phệ khiến kinh mạch tổn thương nghiêm trọng."
+                embed.add_field(name="⚠️ Tổn Thất", value=f"Mỗi đạo hữu bị tổn hao: **{loss_exp}** ✨ EXP", inline=False)
                 embed.color = discord.Color.red()
+                embed.set_footer(text="Hãy tu luyện thêm và quay lại phục thù!")
 
-            await interaction.followup.send(embed=embed)
+            await interaction.followup.send(content=f"{interaction.user.mention} {member.mention}", embed=embed)
         
         else:
             # Nếu hết thời gian hoặc từ chối
@@ -1710,6 +1719,7 @@ async def pet_show(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
