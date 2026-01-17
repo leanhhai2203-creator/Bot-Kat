@@ -149,26 +149,34 @@ async def add_exp(uid: str, amount: int):
     # 1. Lấy dữ liệu để kiểm tra điều kiện cấp độ
     u = await users_col.find_one({"_id": uid})
     
-    # 2. Nếu là người mới hoàn toàn (chưa có trong DB) -> Tạo mới với EXP khởi điểm
+    # 2. Nếu là người mới hoàn toàn -> Tạo mới
     if not u:
         await users_col.insert_one({
             "_id": uid, 
             "level": 1, 
             "exp": amount, 
-            "linh_thach": 10, 
+            "linh_thach": 1, 
             "pet": None
         })
         return
 
-    # 3. Logic Cảnh giới: Nếu đang ở cấp 10, 20... và đã đầy EXP thì không cộng thêm
-    # Điều này ép tu sĩ phải dùng lệnh /dotpha
+    # 3. Logic Cảnh giới: Kiểm tra mốc 10, 20, 30...
     current_lv = u.get("level", 1)
+    current_exp = u.get("exp", 0)
+
     if current_lv % 10 == 0:
         needed = exp_needed(current_lv)
-        if u.get("exp", 0) >= needed:
+        # Nếu đã đầy hoặc vượt quá EXP cần thiết thì không cộng thêm
+        if current_exp >= needed:
             return # Đã chạm đỉnh cảnh giới, phải đột phá!
+        
+        # Nếu chưa đầy, chỉ cho phép cộng thêm vừa đủ đến mốc 'needed'
+        # Tránh việc rã đồ nhận quá nhiều EXP làm tràn mốc khi chưa đột phá
+        if current_exp + amount > needed:
+            amount = needed - current_exp
 
-    # 4. Nếu không vướng cảnh giới, tiến hành cộng EXP an toàn
+    # 4. Nếu không vướng cảnh giới hoặc chưa đầy bình, tiến hành cộng EXP
+    # Sử dụng $inc để đảm bảo tính toán chính xác trên Database
     await users_col.update_one(
         {"_id": uid}, 
         {"$inc": {"exp": amount}}
@@ -179,13 +187,14 @@ async def check_level_up(uid, channel, name):
     u = await users_col.find_one({"_id": uid})
     if not u: return
     
-    lv, exp = u.get("level", 1), u.get("exp", 0)
+    lv = u.get("level", 1)
+    exp = u.get("exp", 0)
     new_lv = lv
     leveled = False
 
-    # Vòng lặp kiểm tra tăng cấp
+    # Vòng lặp kiểm tra thăng cấp
     while exp >= exp_needed(new_lv):
-        # CHỐT CHẶN: Nếu cấp hiện tại là 10, 20, 30... thì DỪNG LẠI không cho lên tiếp
+        # CHỐT CHẶN: Nếu đang ở đỉnh phong 10, 20, 30... thì không cho lên 11, 21, 31...
         if new_lv % 10 == 0:
             break
             
@@ -193,24 +202,28 @@ async def check_level_up(uid, channel, name):
         new_lv += 1
         leveled = True
         
-        # Giới hạn cấp độ tối đa nếu cần (ví dụ 100)
-        if new_lv >= 100: break
+        if new_lv >= 100: 
+            break
 
+    # Chỉ cập nhật Database nếu thực sự có sự thay đổi về Cấp độ hoặc EXP dư trong vòng lặp
     if leveled:
         await users_col.update_one(
             {"_id": uid}, 
             {"$set": {"level": new_lv, "exp": exp}}
         )
+        
+        realm_name = get_realm(new_lv)
         embed = discord.Embed(
             title="✨ CẢNH GIỚI PHI THĂNG ✨", 
-            description=f"Chúc mừng đạo hữu **{name}** đã lên **Cấp {new_lv}**!\n🧘 **{get_realm(new_lv)}**", 
+            description=f"Chúc mừng đạo hữu **{name}** đã lên **Cấp {new_lv}**!\n🧘 Cảnh giới: **{realm_name}**", 
             color=discord.Color.green()
         )
-        if channel: await channel.send(embed=embed)
-    else:
-        # Nếu không tăng cấp (do kẹt mốc 10) thì vẫn phải cập nhật lại lượng EXP dư
-        await users_col.update_one({"_id": uid}, {"$set": {"exp": exp}})
-
+        if channel: 
+            try:
+                await channel.send(embed=embed)
+            except:
+                pass # Tránh treo bot nếu channel bị xóa hoặc thiếu quyền
+    # Không cần phần 'else' cập nhật exp nếu đạo hữu đã dùng $inc trong hàm add_exp
 # ========== VÒNG LẶP THIÊN Ý (MONGODB) ==========
 @tasks.loop(hours=4.8)
 async def thien_y_loop():
@@ -443,69 +456,86 @@ async def gacha(interaction: discord.Interaction):
     uid = str(interaction.user.id)
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # Lấy data user
-    u = await users_col.find_one({"_id": uid})
-    if not u:
-        # Khởi tạo nếu chưa có hồ sơ
-        u = {"_id": uid, "linh_thach": 10, "gacha_count": 0, "last_gacha_day": ""}
-        await users_col.insert_one(u)
+    try:
+        # 1. LẤY DỮ LIỆU USER
+        u = await users_col.find_one({"_id": uid})
+        if not u:
+            # Khởi tạo nếu chưa có hồ sơ
+            u = {"_id": uid, "level": 1, "exp": 0, "linh_thach": 10, "gacha_count": 0, "last_gacha_day": ""}
+            await users_col.insert_one(u)
 
-    gacha_count = u.get("gacha_count", 0) if u.get("last_gacha_day") == today else 0
-    linh_thach = u.get("linh_thach", 0)
-    cost = 0 if gacha_count < 3 else 1
+        gacha_count = u.get("gacha_count", 0) if u.get("last_gacha_day") == today else 0
+        linh_thach = u.get("linh_thach", 0)
+        cost = 0 if gacha_count < 3 else 1
 
-    # 1. KIỂM TRA ĐIỀU KIỆN
-    if linh_thach < cost:
-        return await interaction.followup.send(f"❌ Đạo hữu không đủ **{cost} Linh thạch** để tiếp tục.")
+        # KIỂM TRA ĐIỀU KIỆN LINH THẠCH
+        if linh_thach < cost:
+            return await interaction.followup.send(f"❌ Đạo hữu không đủ **{cost} Linh thạch** để tiếp tục.")
 
-    # 2. LOGIC GACHA LINH THÚ (ĐỘC BẢN - CHUYỂN SANG MONGODB)
-    pet_msg = ""
-    if not u.get("pet"): 
-        if random.random() <= 0.005: 
-            # Tìm danh sách pet ĐÃ CÓ CHỦ bằng lệnh distinct
-            owned_pets = await users_col.distinct("pet", {"pet": {"$ne": None}})
-            available_pets = [p for p in PET_CONFIG.keys() if p not in owned_pets]
-            
-            if available_pets:
-                pet_got = random.choice(available_pets)
-                # Cập nhật ngay lập tức vào MongoDB
-                await users_col.update_one({"_id": uid}, {"$set": {"pet": pet_got}})
-                pet_msg = f"\n🎊 **THIÊN CƠ!** Đạo hữu là người duy nhất thu phục được: **{pet_got}**!"
-            else:
-                pet_msg = "\n⚠️ *Thiên hạ Linh thú đã có chủ hết, không còn con nào vô chủ để thu phục.*"
+        # 2. LOGIC GACHA LINH THÚ (GIỮ NGUYÊN)
+        pet_msg = ""
+        if not u.get("pet"): 
+            if random.random() <= 0.005: 
+                owned_pets = await users_col.distinct("pet", {"pet": {"$ne": None}})
+                available_pets = [p for p in PET_CONFIG.keys() if p not in owned_pets]
+                
+                if available_pets:
+                    pet_got = random.choice(available_pets)
+                    await users_col.update_one({"_id": uid}, {"$set": {"pet": pet_got}})
+                    pet_msg = f"\n🎊 **THIÊN CƠ!** Đạo hữu là người duy nhất thu phục được: **{pet_got}**!"
+                else:
+                    pet_msg = "\n⚠️ *Thiên hạ Linh thú đã có chủ hết, không còn con nào để thu phục.*"
 
-    # 3. LOGIC GACHA TRANG BỊ
-    eq_type = random.choice(EQ_TYPES)
-    lv = random.choices(range(1, 11), weights=[25, 20, 15, 10, 10, 8, 5, 3, 3, 1])[0]
-    
-    # Thay thế hàm save_equipment bằng logic trực tiếp
-    current_eq = await eq_col.find_one({"_id": uid}) or {}
-    old_lv = current_eq.get(eq_type, 0)
-    
-    if lv > old_lv:
-        await eq_col.update_one({"_id": uid}, {"$set": {eq_type: lv}}, upsert=True)
-        msg = f"🎁 Nhận được **{eq_type} cấp {lv}**"
-    else:
-        msg = f"🗑️ **{eq_type} cấp {lv}** quá yếu, đã phân rã"
+        # 3. LOGIC GACHA TRANG BỊ & PHÂN RÃ
+        eq_type = random.choice(EQ_TYPES)
+        # Giữ nguyên tỉ lệ rơi đồ cấp 1-10
+        lv = random.choices(range(1, 11), weights=[25, 20, 15, 10, 10, 8, 5, 3, 3, 1])[0]
+        
+        current_eq = await eq_col.find_one({"_id": uid}) or {}
+        old_lv = current_eq.get(eq_type, 0)
+        
+        exp_bonus = 0
+        if lv > old_lv:
+            # Nhận đồ mạnh hơn
+            await eq_col.update_one({"_id": uid}, {"$set": {eq_type: lv}}, upsert=True)
+            msg = f"🎁 Nhận được **{eq_type} cấp {lv}** (Đã trang bị)"
+        else:
+            # Phân rã đồ yếu hơn hoặc bằng món đang mặc
+            exp_bonus = lv * 100
+            msg = f"🗑️ **{eq_type} cấp {lv}** quá yếu, đã phân rã thành **{exp_bonus} EXP**"
 
-    # 4. CẬP NHẬT DATABASE (Gộp chung các thay đổi để tối ưu)
-    new_gacha_count = gacha_count + 1
-    await users_col.update_one(
-        {"_id": uid},
-        {
-            "$set": {"gacha_count": new_gacha_count, "last_gacha_day": today},
-            "$inc": {"linh_thach": -cost}
-        }
-    )
+        # 4. CẬP NHẬT DATABASE TỔNG HỢP
+        new_gacha_count = gacha_count + 1
+        
+        # Cập nhật lượt quay và trừ linh thạch
+        await users_col.update_one(
+            {"_id": uid},
+            {
+                "$set": {"gacha_count": new_gacha_count, "last_gacha_day": today},
+                "$inc": {"linh_thach": -cost}
+            }
+        )
 
-    # 5. HIỂN THỊ
-    status = f"🎰 Lượt: **{new_gacha_count}/3** (Free)" if new_gacha_count <= 3 else f"💎 Phí: **{cost} Linh thạch**"
-    embed = discord.Embed(
-        title="🔮 KẾT QUẢ GACHA 🔮",
-        description=f"{msg}{pet_msg}\n\n{status}",
-        color=discord.Color.gold() if "🎊" in pet_msg else discord.Color.blue()
-    )
-    await interaction.followup.send(embed=embed)
+        # Xử lý cộng EXP và Check Level Up nếu có phân rã
+        if exp_bonus > 0:
+            await add_exp(uid, exp_bonus) # Sử dụng hàm add_exp có logic chặn mốc 10
+            await check_level_up(uid, interaction.channel, interaction.user.display_name)
+
+        # 5. HIỂN THỊ KẾT QUẢ
+        status = f"🎰 Lượt: **{new_gacha_count}/3** (Free)" if new_gacha_count <= 3 else f"💎 Phí: **{cost} Linh thạch**"
+        
+        embed = discord.Embed(
+            title="🔮 KẾT QUẢ GACHA 🔮",
+            description=f"{msg}{pet_msg}\n\n{status}",
+            color=discord.Color.gold() if ("🎊" in pet_msg or lv >= 9) else discord.Color.blue()
+        )
+        embed.set_footer(text=f"Số dư: {linh_thach - cost} Linh thạch")
+        
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        print(f"❌ Lỗi Gacha: {e}")
+        await interaction.followup.send("⚠️ Pháp trận Gacha đang bị nhiễu loạn, hãy thử lại sau!")
 @bot.tree.command(name="solo", description="Thách đấu người chơi khác (Ẩn lực chiến, cược linh thạch)")
 async def solo(interaction: discord.Interaction, target: discord.Member, linh_thach: int | None = None):
     await interaction.response.defer()
@@ -1281,6 +1311,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
