@@ -383,72 +383,97 @@ async def on_message(message):
     
     await bot.process_commands(message)
 # ========== LỆNH SLASH (/) ==========
-
 @bot.tree.command(name="check", description="Xem hồ sơ tu tiên & thuộc tính bản thân")
 async def info(interaction: discord.Interaction):
     await interaction.response.defer()
     uid = str(interaction.user.id)
     
-    # 1. LẤY DỮ LIỆU TỪ MONGODB
+    # 1. LẤY DỮ LIỆU
     u = await users_col.find_one({"_id": uid})
     if not u:
-        return await interaction.followup.send("⚠️ Đạo hữu chưa bước chân vào con đường tu tiên. Hãy chat hoặc gacha để khởi đầu!")
+        return await interaction.followup.send("⚠️ Đạo hữu chưa bước chân vào con đường tu tiên!")
 
     eq = await eq_col.find_one({"_id": uid}) or {}
 
-    # 2. TRÍCH XUẤT THÔNG TIN CƠ BẢN
+    # 2. XỬ LÝ DANH HIỆU TOP 1, 2, 3
+    all_users = await users_col.find().sort([("level", -1), ("exp", -1)]).to_list(length=10)
+    rank = 0
+    for i, user in enumerate(all_users):
+        if user["_id"] == uid:
+            rank = i + 1
+            break
+    
+    danh_hieu = "Tiên Nhân"
+    if rank == 1: danh_hieu = "🏆 Đệ Nhất Chí Tôn"
+    elif rank == 2: danh_hieu = "🥈 Vạn Cổ Nhị Đế"
+    elif rank == 3: danh_hieu = "🥉 Tam Thế Đại Tiên"
+
+    # 3. THÔNG SỐ CƠ BẢN
     level = u.get("level", 1)
     current_exp = u.get("exp", 0)
-    # Giả sử hàm exp_needed(level) của đạo hữu tính lượng EXP để lên cấp tiếp theo
     needed_exp = exp_needed(level) 
-    
-    than_khi_name = u.get("than_khi")
     linh_thach = u.get("linh_thach", 0)
+    than_khi_name = u.get("than_khi")
+    pet_name = u.get("pet")
 
-    # 3. TÍNH TOÁN CHỈ SỐ CHIẾN ĐẤU
-    base_atk = level * 10
-    total_hp = level * 100
+    # Chỉ số gốc (level * 5 theo ý đạo hữu)
+    base_atk = level * 5
+    base_hp = level * 50
     
-    # Xử lý hiển thị Vũ khí & Chỉ số ATK
+    embed_color = discord.Color.blue()
+    
+    # 4. LOGIC THAY THẾ KIẾM BẰNG THẦN KHÍ
     if than_khi_name:
+        # Nếu có Thần Khí: Hiển thị Thần Khí, bỏ qua Kiếm
         tk_data = THAN_KHI_CONFIG[than_khi_name]
-        weapon_label = "🌟 Thần Khí"
-        weapon_value = f"**{than_khi_name}**"
-        weapon_desc = f"*{tk_data['desc']}*"
-        total_atk = base_atk + 200 # Atk thần khí cố định 200
+        weapon_display = f"🌟 **{than_khi_name}**"
+        atk_bonus = 200
         embed_color = tk_data["color"]
+        weapon_desc = tk_data['desc']
     else:
+        # Nếu không có: Hiển thị Kiếm thường
         kiem_lv = eq.get("Kiếm", 0)
-        weapon_label = "⚔️ Kiếm"
-        weapon_value = f"Cấp {kiem_lv}" if kiem_lv > 0 else "Vô nhận kiếm"
-        weapon_desc = "Vũ khí phàm trần, chưa nhiễm linh khí."
-        total_atk = base_atk + (kiem_lv * 10)
-        embed_color = discord.Color.blue()
+        weapon_display = f"⚔️ Kiếm Cấp {kiem_lv}" if kiem_lv > 0 else "⚔️ Vô nhận kiếm"
+        atk_bonus = kiem_lv * 15
+        weapon_desc = "Vũ khí phàm trần."
 
-    # 4. KHỞI TẠO EMBED
-    embed = discord.Embed(
-        title=f"HỒ SƠ TU TIÊN - {interaction.user.display_name}",
-        color=embed_color
-    )
+    # 5. XỬ LÝ LINH THÚ
+    pet_display = "Chưa thu phục"
+    if pet_name and pet_name in PET_CONFIG:
+        pet_data = PET_CONFIG[pet_name]
+        pet_display = f"🐾 **{pet_name}**"
+        if not than_khi_name: # Ưu tiên màu thần khí trước, sau đó mới tới màu pet
+            embed_color = pet_data.get("color", discord.Color.green())
+
+    # 6. KHỞI TẠO EMBED
+    embed = discord.Embed(title=f"HỒ SƠ TU TIÊN: {interaction.user.display_name}", color=embed_color)
     embed.set_thumbnail(url=interaction.user.display_avatar.url)
 
-    # Hiển thị Cảnh giới & EXP (Ví dụ: 80/100)
+    # Thông tin cảnh giới & danh hiệu
+    embed.add_field(name="🎖️ Danh Hiệu", value=f"**{danh_hieu}**", inline=True)
     embed.add_field(name="📜 Cảnh Giới", value=f"Cấp {level}", inline=True)
-    embed.add_field(name="✨ Linh Lực (EXP)", value=f"`{current_exp} / {needed_exp}`", inline=True)
     embed.add_field(name="💎 Linh Thạch", value=f"{linh_thach} viên", inline=True)
-
-    # Hiển thị slot Vũ khí (Thần Khí hoặc Kiếm)
-    embed.add_field(name=weapon_label, value=weapon_value, inline=True)
     
-    # Hiển thị các trang bị khác nếu có (Giáp, Nhẫn...)
-    giap_lv = eq.get("Giáp", 0)
-    embed.add_field(name="🛡️ Giáp", value=f"Cấp {giap_lv}" if giap_lv > 0 else "Vải thô", inline=True)
+    # Thanh linh lực
+    embed.add_field(name="✨ Linh Lực (EXP)", value=f"`{current_exp} / {needed_exp}`", inline=False)
 
-    # Hiển thị Tổng chỉ số
-    embed.add_field(name="📊 Thuộc Tính", value=f"⚔️ Công kích: **{total_atk}**\n❤️ Sinh mệnh: **{total_hp}**", inline=False)
+    # HIỂN THỊ 5 TRANG BỊ
+    trang_bi_str = (
+        f"Vũ khí: {weapon_display}\n"
+        f"🛡️ Giáp: Cấp {eq.get('Giáp', 0)}\n"
+        f"💍 Nhẫn: Cấp {eq.get('Nhẫn', 0)}\n"
+        f"📿 Dây Chuyền: Cấp {eq.get('Dây Chuyền', 0)}\n"
+        f"👟 Giày: Cấp {eq.get('Giày', 0)}"
+    )
+    embed.add_field(name="📦 Trang Bị", value=trang_bi_str, inline=True)
+    embed.add_field(name="🦄 Linh Thú", value=pet_display, inline=True)
+
+    # TỔNG CHỈ SỐ
+    total_atk = base_atk + atk_bonus + (eq.get("Nhẫn", 0) * 15)
+    total_hp = base_hp + (eq.get("Giáp", 0) * 150)
+    embed.add_field(name="📊 Tổng Thuộc Tính", value=f"⚔️ Công: **{total_atk}** | ❤️ Máu: **{total_hp}**", inline=False)
     
-    # Hiển thị Miêu tả (chỉ hiện khi có Thần Khí hoặc miêu tả trừu tượng)
-    embed.add_field(name="📖 Khí Vật Chí", value=weapon_desc, inline=False)
+    embed.set_footer(text=f"Khí Vật Chí: {weapon_desc}")
 
     await interaction.followup.send(embed=embed)
 
@@ -1473,6 +1498,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
