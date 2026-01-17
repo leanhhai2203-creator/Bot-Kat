@@ -3,13 +3,11 @@ import os
 import discord
 from discord.ext import commands, tasks
 import random
-from datetime import datetime
 from discord import app_commands
 import motor.motor_asyncio
 import asyncio
 import time
-import datetime
-
+from datetime import datetime, timedelta
 # ========== KẾT NỐI MONGODB ==========
 MONGO_URI = os.getenv("MONGO_URI") 
 cluster = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
@@ -1159,31 +1157,39 @@ async def loiphat(interaction: discord.Interaction):
     
     await interaction.followup.send(embed=embed)
 
-@bot.tree.command(name="ban_exp", description="Cấm túc tu sĩ, không cho nhận EXP trong 6 tiếng")
+
+@bot.tree.command(name="ban_exp", description="Cấm túc tu sĩ: Không cho nhận EXP trong 6 tiếng")
 async def ban_exp(interaction: discord.Interaction, target: discord.Member):
-    # 1. Kiểm tra ID Admin (Cách 2)
+    # 1. Kiểm tra quyền Admin tối thượng
     if interaction.user.id != ADMIN_ID:
-        return await interaction.response.send_message(
-            "⛔ Ngươi không có quyền thực thi lệnh cấm túc này!", 
-            ephemeral=True
+        return await interaction.response.send_message("⛔ Ngươi không đủ quyền hạn để thi triển pháp thuật này!", ephemeral=True)
+
+    await interaction.response.defer()
+
+    try:
+        # 2. Tính toán thời gian hết hạn (dạng timestamp số)
+        # 6 tiếng = 6 * 3600 giây
+        ban_duration = 6 * 3600 
+        expire_timestamp = time.time() + ban_duration
+        
+        # 3. Cập nhật vào Database
+        await users_col.update_one(
+            {"_id": str(target.id)},
+            {"$set": {"ban_exp_until": expire_timestamp}},
+            upsert=True
         )
 
-    # 2. Tính toán thời gian: Hiện tại + 6 tiếng
-    ban_duration = datetime.timedelta(hours=6)
-    expire_time = datetime.datetime.now() + ban_duration
-    
-    # 3. Cập nhật vào Database (Trường ban_exp_until)
-    await users_col.update_one(
-        {"_id": str(target.id)},
-        {"$set": {"ban_exp_until": expire_time}},
-        upsert=True
-    )
-
-    await interaction.response.send_message(
-        f"🚫 **THIẾT LUẬT CHẤP PHÁP** 🚫\n"
-        f"Tu sĩ {target.mention} đã bị cấm túc nhận linh khí (EXP) trong **6 tiếng**.\n"
-        f"Thời hạn đến: `{expire_time.strftime('%H:%M:%S %d/%m/%Y')}`"
-    )
+        # 4. Hiển thị thời gian hết hạn cho tu sĩ dễ nhìn
+        expire_dt = datetime.fromtimestamp(expire_timestamp).strftime('%H:%M:%S %d/%m/%Y')
+        
+        await interaction.followup.send(
+            f"🚫 **THIẾT LUẬT CHẤP PHÁP** 🚫\n"
+            f"Tu sĩ {target.mention} đã bị phong tỏa linh mạch (Cấm EXP) trong **6 tiếng**.\n"
+            f"Thời hạn giải ấn: `{expire_dt}`"
+        )
+    except Exception as e:
+        print(f"❌ Lỗi lệnh ban_exp: {e}")
+        await interaction.followup.send("⚠️ Pháp trận gặp lỗi khi thực thi lệnh cấm.")
 @bot.tree.command(name="unban_exp", description="Đại xá thiên hạ: Gỡ bỏ lệnh cấm EXP cho tu sĩ")
 async def unban_exp(interaction: discord.Interaction, target: discord.Member):
     # 1. Kiểm tra quyền Admin tối thượng (Cách 2)
@@ -1275,6 +1281,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
