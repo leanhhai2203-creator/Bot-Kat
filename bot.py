@@ -1492,106 +1492,107 @@ class BossInviteView(discord.ui.View):
         super().__init__(timeout=60)
         self.invited_id = invited_id
         self.accepted = None
+# 1. Hàm tính Boss Power mới - Buff cực mạnh
+async def get_mega_boss_power():
+    # Boss Lv 100: Atk gốc 500, HP gốc 5000
+    # Đồ 10: Kiếm (150) + Nhẫn (150) = 300 Atk | Giáp+Tay+Ủng = 4500 HP
+    # Buff thêm "Ma Khí": Boss được cộng thêm 50% chỉ số để tăng độ khó
+    atk_boss = (500 + 300) * 1.5 # 1200 Atk
+    hp_boss = (5000 + 4500) * 1.5 # 14250 HP
+    
+    # Lực chiến = (Atk * 10) + HP
+    power = (atk_boss * 10) + hp_boss + random.randint(500, 1000)
+    return int(power) # Kết quả khoảng ~26,500 Power
 
-    @discord.ui.button(label="Đồng Ý", style=discord.ButtonStyle.success, emoji="⚔️")
-    async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.invited_id:
-            return await interaction.response.send_message("Không phải lượt của đạo hữu!", ephemeral=True)
-        self.accepted = True
-        self.stop()
-        # Dùng response.defer() để tránh treo sau khi bấm nút
-        await interaction.response.defer()
-
-    @discord.ui.button(label="Từ Chối", style=discord.ButtonStyle.danger, emoji="🏃")
-    async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.invited_id:
-            return await interaction.response.send_message("Không phải lượt của đạo hữu!", ephemeral=True)
-        self.accepted = False
-        self.stop()
-        await interaction.response.send_message("Lời mời đã bị từ chối.")
-
-# 2. Lệnh Boss
-@bot.tree.command(name="boss", description="Săn Boss cùng đạo hữu")
+@bot.tree.command(name="boss", description="Mời đạo hữu săn Boss (Chỉ 1 lần/ngày)")
 async def boss_hunt(interaction: discord.Interaction, member: discord.Member):
-    print(f"---> Bắt đầu lệnh Boss: {interaction.user.name} mời {member.name}")
+    # PHẢN HỒI NGAY ĐỂ CHỐNG LAG
     await interaction.response.defer()
     
     uid1, uid2 = str(interaction.user.id), str(member.id)
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # Kiểm tra điều kiện
+    # 1. KIỂM TRA ĐIỀU KIỆN CHẶN LỖI LƯỢT ĐÁNH
     if uid1 == uid2:
         return await interaction.followup.send("❌ Đạo hữu không thể tự mời chính mình!")
+    if member.bot:
+        return await interaction.followup.send("❌ Bot không có linh hồn để tham chiến!")
 
-    print("Đang truy vấn Database...")
     u1 = await users_col.find_one({"_id": uid1})
     u2 = await users_col.find_one({"_id": uid2})
-    
+
     if not u1 or not u2:
-        print("Lỗi: Không tìm thấy hồ sơ tu tiên.")
-        return await interaction.followup.send("⚠️ Một trong hai người chưa có hồ sơ!")
+        return await interaction.followup.send("⚠️ Một trong hai vị chưa có hồ sơ tu tiên!")
 
+    # CHẶN NGAY TẠI ĐÂY
     if u1.get("last_boss") == today:
-        return await interaction.followup.send("❌ Đạo hữu đã hết lượt hôm nay!")
+        return await interaction.followup.send("❌ Đạo hữu đã hết lượt săn Boss hôm nay!")
+    if u2.get("last_boss") == today:
+        return await interaction.followup.send(f"❌ **{member.display_name}** đã hết lượt săn Boss hôm nay! Không thể nhận lời mời.")
 
-    boss_p = 17500 + random.randint(0, 100)
-    view = BossInviteView(member.id)
+    # 2. TÍNH POWER BOSS
+    boss_p = await get_mega_boss_power()
     
-    print("Gửi lời mời thành công, đang chờ bấm nút...")
+    # 3. GỬI LỜI MỜI
+    view = BossInviteView(member.id)
     msg = await interaction.followup.send(
-        f"⚔️ **{interaction.user.display_name}** mời **{member.mention}** thảo phạt Yêu Ma!\n👾 Boss Power: `{boss_p:,}`", 
+        f"⚔️ **{interaction.user.display_name}** mời **{member.mention}** thảo phạt Đại Ma Đầu!\n"
+        f"👿 **Lực Chiến Boss:** `{boss_p:,}`\n*(Tỉ lệ thắng phụ thuộc vào tổng Lực chiến hai vị)*", 
         view=view
     )
 
     await view.wait()
 
     if view.accepted is True:
-        print("Người chơi đã bấm ĐỒNG Ý. Bắt đầu tính toán...")
-        
-        # BƯỚC CỐT LÕI: TÍNH POWER (Dễ bị treo ở đây)
-        try:
-            print(f"Tính Power cho {uid1}...")
-            p1 = await calc_power(uid1)
-            print(f"Power 1: {p1}")
-            
-            print(f"Tính Power cho {uid2}...")
-            p2 = await calc_power(uid2)
-            print(f"Power 2: {p2}")
-        except Exception as e:
-            print(f"❌ LỖI TẠI HÀM CALC_POWER: {e}")
-            return await interaction.followup.send("⚠️ Lỗi hệ thống khi tính lực chiến!")
+        # KIỂM TRA LẠI LƯỢT ĐÁNH MỘT LẦN NỮA (Chống trường hợp người chơi bấm nút chậm)
+        # Truy vấn lại để lấy dữ liệu mới nhất
+        u2_check = await users_col.find_one({"_id": uid2})
+        if u2_check.get("last_boss") == today:
+            return await interaction.followup.send(f"⚠️ **{member.display_name}** vừa mới đánh Boss xong, lời mời này vô hiệu!")
 
-        # Tính kết quả
+        # 4. TÍNH TOÁN LỰC CHIẾN TỔ ĐỘI
+        try:
+            p1 = await calc_power(uid1)
+            p2 = await calc_power(uid2)
+        except Exception as e:
+            print(f"Lỗi calc_power: {e}")
+            return await interaction.followup.send("⚠️ Linh lực hỗn loạn (Lỗi tính Power), không thể chiến đấu!")
+
         total_p = p1 + p2
         win_rate = total_p / boss_p
-        is_win = random.random() < win_rate
-
-        print(f"Kết quả trận đấu: {'THẮNG' if is_win else 'THUA'}")
-
-        # Cập nhật DB
+        
+        # Cập nhật lượt đánh NGAY LẬP TỨC TRƯỚC KHI HIỆN KẾT QUẢ
         await users_col.update_many({"_id": {"$in": [uid1, uid2]}}, {"$set": {"last_boss": today}})
 
-        embed = discord.Embed(title="⚔️ CHIẾN BÁO", color=discord.Color.gold())
+        # 5. KẾT QUẢ
+        is_win = random.random() < win_rate
+        embed = discord.Embed(title="⚔️ CHIẾN BÁO DIỆT BOSS", color=discord.Color.gold())
+        embed.add_field(name="👥 Tổ Đội", value=f"{interaction.user.mention}: `{p1:,}`\n{member.mention}: `{p2:,}`", inline=True)
+        embed.add_field(name="👾 Boss", value=f"Lực chiến: `{boss_p:,}`", inline=True)
+        embed.add_field(name="📈 Tỷ lệ thắng", value=f"{min(win_rate*100, 100):.2f}%", inline=False)
+
         if is_win:
             gift = random.randint(10, 15)
             await users_col.update_many({"_id": {"$in": [uid1, uid2]}}, {"$inc": {"linh_thach": gift}})
-            embed.description = f"🎉 **THẮNG!** Nhận `{gift}` Linh Thạch."
+            embed.description = "🎊 **CHIẾN THẮNG!** Hai vị đã phối hợp nhuần nhuyễn tiêu diệt Ma Đầu."
+            embed.add_field(name="🎁 Phần thưởng", value=f"Mỗi người nhận `{gift}` Linh Thạch")
             embed.color = discord.Color.green()
         else:
-            # Trừ 500 EXP
+            # Phạt trừ 500 EXP
             for tid in [uid1, uid2]:
                 await users_col.update_one({"_id": tid}, {"$inc": {"exp": -500}})
                 await users_col.update_one({"_id": tid, "exp": {"$lt": 0}}, {"$set": {"exp": 0}})
-            embed.description = "💀 **THUA!** Bị phản phệ trừ `500` EXP."
+            
+            embed.description = "💀 **THẤT BẠI!** Ma Đầu quá mạnh, hai vị bị trọng thương tổn hao tu vi."
+            embed.add_field(name="⚠️ Phạt", value="Mỗi người bị trừ `500` EXP")
             embed.color = discord.Color.red()
 
         await interaction.followup.send(embed=embed)
-    else:
-        print("Lời mời thất bại (Từ chối hoặc Hết hạn).")
 
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
