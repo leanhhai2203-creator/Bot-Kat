@@ -404,7 +404,7 @@ def get_canghioi_detail(lv):
     
     return f"Lv.{lv} - {current_stage} tầng {tang}"
 
-@bot.tree.command(name="check", description="Xem hồ sơ tu tiên & thuộc tính bản thân")
+@bot.tree.command(name="check", description="Xem hồ sơ tu tiên & trang bị bản thân")
 async def info(interaction: discord.Interaction):
     await interaction.response.defer()
     uid = str(interaction.user.id)
@@ -415,36 +415,23 @@ async def info(interaction: discord.Interaction):
 
     eq = await eq_col.find_one({"_id": uid}) or {}
 
-    # 1. TÍNH TOÁN CHỈ SỐ CHÍNH XÁC (lv * 5 theo ý đạo hữu)
+    # 1. THÔNG TIN CƠ BẢN
     level = u.get("level", 1)
-    base_atk = level * 5
-    base_hp = level * 50
-    
     than_khi_name = u.get("than_khi")
     
-    # Tính ATK Vũ Khí (Thần Khí ưu tiên Kiếm)
+    # Thiết lập màu sắc và hiển thị Vũ khí (Thần khí đè Kiếm)
     if than_khi_name:
         tk_data = THAN_KHI_CONFIG[than_khi_name]
         weapon_display = f"🌟 **{than_khi_name}**"
-        atk_weapon = 200 # Thần khí cộng 200
         embed_color = tk_data["color"]
+        weapon_desc = tk_data['desc']
     else:
         kiem_lv = eq.get("Kiếm", 0)
         weapon_display = f"⚔️ Kiếm Cấp {kiem_lv}" if kiem_lv > 0 else "⚔️ Vô nhận kiếm"
-        atk_weapon = kiem_lv * 15 # Kiếm thường cộng lv * 15
         embed_color = discord.Color.blue()
+        weapon_desc = "Vũ khí phàm trần."
 
-    # Tính các trang bị còn lại
-    nhan_lv = eq.get("Nhẫn", 0)
-    giap_lv = eq.get("Giáp", 0)
-    day_chuyen_lv = eq.get("Dây Chuyền", 0)
-    giay_lv = eq.get("Giày", 0)
-
-    # CÔNG THỨC CHÍNH XÁC
-    total_atk = base_atk + atk_weapon + (nhan_lv * 15)
-    total_hp = base_hp + (giap_lv * 150) + (day_chuyen_lv * 50) + (giay_lv * 30)
-
-    # 2. XỬ LÝ DANH HIỆU
+    # 2. XỬ LÝ DANH HIỆU & THỨ HẠNG
     all_users = await users_col.find().sort([("level", -1), ("exp", -1)]).to_list(length=10)
     rank = next((i + 1 for i, user in enumerate(all_users) if user["_id"] == uid), 0)
     
@@ -457,20 +444,21 @@ async def info(interaction: discord.Interaction):
     embed = discord.Embed(title=f"📜 HỒ SƠ TU TIÊN: {interaction.user.display_name}", color=embed_color)
     embed.set_thumbnail(url=interaction.user.display_avatar.url)
 
-    # Cảnh giới theo đúng định dạng đạo hữu yêu cầu
+    # Hiển thị Cảnh giới chi tiết (Lv.X - Tên Cảnh Giới tầng Y)
     embed.add_field(name="📜 Cảnh Giới", value=f"**{get_canghioi_detail(level)}**", inline=False)
     
+    # Các thông tin tài sản và danh hiệu
     embed.add_field(name="🎖️ Danh Hiệu", value=danh_hieu, inline=True)
     embed.add_field(name="💎 Linh Thạch", value=f"{u.get('linh_thach', 0)} viên", inline=True)
     embed.add_field(name="✨ Linh Lực", value=f"`{u.get('exp', 0)} / {exp_needed(level)}`", inline=True)
 
-    # Hiển thị 5 Trang bị
+    # Hiển thị 5 TRANG BỊ (Đảm bảo lấy đủ thông tin Dây Chuyền & Giày)
     trang_bi_str = (
         f"Vũ khí: {weapon_display}\n"
-        f"🛡️ Giáp: Cấp {giap_lv}\n"
-        f"💍 Nhẫn: Cấp {nhan_lv}\n"
-        f"📿 Dây Chuyền: Cấp {day_chuyen_lv}\n"
-        f"👟 Giày: Cấp {giay_lv}"
+        f"🛡️ Giáp: Cấp {eq.get('Giáp', 0)}\n"
+        f"💍 Nhẫn: Cấp {eq.get('Nhẫn', 0)}\n"
+        f"📿 Dây Chuyền: Cấp {eq.get('Dây Chuyền', 0)}\n"
+        f"👟 Giày: Cấp {eq.get('Giày', 0)}"
     )
     embed.add_field(name="📦 Trang Bị Khảm Nạm", value=trang_bi_str, inline=True)
 
@@ -478,14 +466,13 @@ async def info(interaction: discord.Interaction):
     pet_name = u.get("pet")
     embed.add_field(name="🦄 Linh Thú", value=f"🐾 **{pet_name}**" if pet_name else "Chưa có", inline=True)
 
-    # Hiển thị chỉ số tính toán chính xác
-    embed.add_field(name="📊 Thuộc Tính Chiến Đấu", value=f"⚔️ Công kích: **{total_atk}**\n❤️ Sinh mệnh: **{total_hp}**", inline=False)
-    
+    # Footer hiện miêu tả thần khí nếu có
     if than_khi_name:
-        embed.set_footer(text=f"Khí Vật Chí: {THAN_KHI_CONFIG[than_khi_name]['desc']}")
+        embed.set_footer(text=f"Khí Vật Chí: {weapon_desc}")
+    else:
+        embed.set_footer(text="Con đường tu tiên còn dài, đạo hữu hãy cố gắng!")
 
     await interaction.followup.send(embed=embed)
-
 @bot.tree.command(name="diemdanh", description="Điểm danh nhận cơ duyên thăng 1 cấp")
 async def diemdanh(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -1507,6 +1494,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
