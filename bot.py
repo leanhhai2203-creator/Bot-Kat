@@ -744,7 +744,7 @@ async def bxh(interaction: discord.Interaction):
     
     embed.set_footer(text="Khổ luyện thành tài - Danh toại bảng vàng")
     # Đạo hữu có thể thay đổi link ảnh thumbnail dưới đây nếu muốn
-    embed.set_thumbnail(url="https://i.imgur.com/vHInX9T.png") 
+    embed.set_thumbnail(url="https://drive.google.com/file/d/1zFcRXTBQ9cqEgkPRExXZ4qtm8DSlpTlA/view?usp=drivesdk")
 
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="resetday", description="ADMIN: Reset ngày")
@@ -1090,6 +1090,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
