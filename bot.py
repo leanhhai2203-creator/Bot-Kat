@@ -1716,66 +1716,114 @@ async def pet_show(interaction: discord.Interaction):
     embed_res.set_footer(text="Khí thế chấn động bát hoang!")
 
     await interaction.followup.send(content=f"📡 **Thông cáo thiên hạ:**", embed=embed_res)
-
-@bot.tree.command(name="thankhi", description="Thị uy Thần Khí thượng cổ và xem báu vật thất lạc")
+@bot.tree.command(name="thankhi", description="Thị uy Thần Khí và kiểm tra báu vật thất lạc")
 async def show_thankhi(interaction: discord.Interaction):
-    # Khai báo defer để tránh treo bot
+    # 1. Phản hồi ngay để tránh trạng thái "bot đang suy nghĩ"
     await interaction.response.defer()
     
     uid = str(interaction.user.id)
     
+    # 2. Toàn bộ Chân Ngôn và Mô Tả (Nằm trực tiếp trong lệnh)
+    # Đây là nguồn dữ liệu chuẩn cho 10 đại thần khí
+    DATA = {
+        "Hiên Viên Kiếm": {
+            "quote": "『 THÁNH ĐẠO PHỤC HƯNG - VẠN KIẾM QUY TÔNG 』",
+            "desc": "Ý chí của thánh đạo ngưng tụ thành hình, nơi ánh sáng và công lý giao thoa giữa cõi hư vô.",
+            "color": 0xFFD700, "icon": "⚔️"
+        },
+        "Thần Nông Đỉnh": {
+            "quote": "『 SINH LINH VẠN ĐẠI - NHẤT ĐỈNH TRƯỜNG SINH 』",
+            "desc": "Sự tĩnh lặng của vạn vật trước lúc khai sinh, là hơi thở của sự sống ẩn mình trong vòng xoáy luân hồi.",
+            "color": 0x2ECC71, "icon": "🧪"
+        },
+        "Hạo Thiên Tháp": {
+            "quote": "『 THÁP TRẤN BÁT HOANG - YÊU MA PHỤC DIỆT 』",
+            "desc": "Một điểm tựa giữa dòng thời gian vô tận, nơi trật tự ngự trị và bóng tối buộc phải cúi đầu.",
+            "color": 0x3498DB, "icon": "🗼"
+        },
+        "Đông Hoàng Chung": {
+            "quote": "『 CHUÔNG VANG CỬU GIỚI - CHẤN NHIẾP THIÊN THẦN 』",
+            "desc": "Tiếng vọng từ thuở sơ khai tan vào hư không, là dư chấn của một thực tại vĩnh hằng không thể lay chuyển.",
+            "color": 0xE67E22, "icon": "🔔"
+        },
+        "Phục Hy Cầm": {
+            "quote": "『 CẦM TẤU HUYỀN CƠ - LOẠN THẾ BÌNH AN 』",
+            "desc": "Giai điệu của những vì sao lạc lối, sợi dây liên kết giữa tâm thức và nhịp đập của vũ trụ.",
+            "color": 0x9B59B6, "icon": "🪕"
+        },
+        "Bàn Cổ Phủ": {
+            "quote": "『 KHAI THIÊN LẬP ĐỊA - PHÁ VỠ HỒNG MÔNG 』",
+            "desc": "Ranh giới mỏng manh giữa tồn tại và hư diệt, là vết rách đầu tiên trên bức màn của bóng đêm vĩnh cửu.",
+            "color": 0x7E5109, "icon": "🪓"
+        },
+        "Luyện Yêu Hồ": {
+            "quote": "『 THU NẠP CÀN KHÔN - LUYỆN HÓA VẠN QUỶ 』",
+            "desc": "Cõi mộng nằm gọn trong lòng bàn tay, nơi thực và ảo đan xen thành một vòng lặp không có điểm dừng.",
+            "color": 0x1ABC9C, "icon": "🏺"
+        },
+        "Côn Lôn Kính": {
+            "quote": "『 KÍNH CHIẾU LUÂN HỒI - THẤU TẬN CHÂN TÂM 』",
+            "desc": "Ánh nhìn phản chiếu từ một chiều không gian khác, soi rọi những sự thật bị chôn vùi dưới lớp bụi ký ức.",
+            "color": 0xECF0F1, "icon": "🪞"
+        },
+        "Nữ Oa Thạch": {
+            "quote": "『 NGŨ SẮC VÁ TRỜI - TÁI TẠO NHÂN GIAN 』",
+            "desc": "Mảnh vỡ của bầu trời vỡ nát, mang trong mình hơi ấm từ bàn tay cứu rỗi thuở hồng hoang.",
+            "color": 0xE91E63, "icon": "💎"
+        },
+        "Không Đồng Ấn": {
+            "quote": "『 ĐẾ VƯƠNG VĨNH HẰNG - KHÍ VẬN VÔ CƯƠNG 』",
+            "desc": "Khối đá vĩnh cửu mang sức mạnh của sự trường tồn, ấn chứng cho sự hưng thịnh của vạn đại.",
+            "color": 0xBDC3C7, "icon": "📜"
+        }
+    }
+
     try:
-        # 1. Truy vấn Database lấy thông tin người dùng
+        # 3. Lấy thông tin từ Database
         u = await users_col.find_one({"_id": uid})
         current_tk = u.get("than_khi") if u else None
 
-        # 2. Quét Database tìm những thần khí ĐÃ có chủ
-        owned_than_khi = []
-        async for user in users_col.find({"than_khi": {"$exists": True, "$ne": None}}):
-            tk_in_db = user.get("than_khi")
-            if tk_in_db:
-                owned_than_khi.append(tk_in_db)
+        # 4. Tìm những thần khí CHƯA có chủ
+        # Quét nhanh DB để xem những món nào đã bị cầm
+        owned_docs = await users_col.find({"than_khi": {"$exists": True, "$ne": None}}).to_list(length=100)
+        owned_names = [d.get("than_khi") for d in owned_docs]
         
-        # Lọc ra danh sách thần khí CHƯA có chủ
-        available_than_khi = [tk for tk in ALL_THAN_KHI if tk not in owned_than_khi]
+        available = [tk for tk in DATA.keys() if tk not in owned_names]
 
-        # 3. Tạo Embed hiển thị chính
-        embed = discord.Embed(title="📜 THẦN KHÍ MINH BẢNG", color=0x2F3136)
-        
-        # Kiểm tra nếu tu sĩ đang sở hữu thần khí hợp lệ trong config
-        if current_tk in THAN_KHI_CONFIG:
-            data = THAN_KHI_CONFIG[current_tk]
-            
-            embed.title = f"{data['icon']} THẦN KHÍ THỊ UY: {current_tk.upper()}"
-            embed.description = (
-                f"## {data['quote']}\n"  # Khẩu ngữ riêng (Hiện to)
-                f"*{data['desc']}*\n\n"   # Mô tả chi tiết (In nghiêng)
-                f"**⚡ Công lực gia trì:** `+{data['atk']} ATK`"
-            )
-            embed.color = data['color']
-            embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        # 5. Xây dựng Embed hiển thị
+        embed = discord.Embed(color=0x2F3136)
+
+        if current_tk in DATA:
+            tk_info = DATA[current_tk]
+            embed.title = f"{tk_info['icon']} THỊ UY: {current_tk.upper()}"
+            # Khẩu ngữ (Quote) hiện to nhất và ngầu nhất
+            embed.description = f"## {tk_info['quote']}\n\n*{tk_info['desc']}*"
+            embed.color = tk_info['color']
+            embed.set_author(name=f"Chủ nhân: {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
             embed.set_thumbnail(url=interaction.user.display_avatar.url)
-            embed.set_footer(text="Hào quang vạn trượng - Khí trấn sơn hà!")
         else:
-            embed.description = "🥀 Đạo hữu hiện tại chưa có duyên sở hữu Thần Khí thượng cổ."
-            embed.color = discord.Color.light_gray()
+            embed.title = "📜 THẦN KHÍ MINH BẢNG"
+            embed.description = "🥀 Đạo hữu hiện chưa sở hữu Thần khí Thượng cổ.\n*Cơ duyên là do trời định, cưỡng cầu vô ích.*"
 
-        # 4. Thêm Field danh sách thần khí chưa xuất thế
-        if available_than_khi:
-            list_str = "\n".join([f"🔸 **{tk}**" for tk in available_than_khi])
-            embed.add_field(name="🏛️ Thần Khí Thất Lạc (Chưa có chủ):", value=list_str, inline=False)
+        # 6. Danh sách báu vật thất lạc
+        if available:
+            list_str = "\n".join([f"✨ **{tk}**" for tk in available])
+            embed.add_field(name="🏛️ Thần Khí Thất Lạc (Vô chủ):", value=list_str, inline=False)
         else:
-            embed.add_field(name="🏛️ Thần Khí:", value="✅ Toàn bộ Thần Khí đã tìm được chủ nhân.", inline=False)
+            embed.add_field(name="🏛️ Thần Khí:", value="✅ Lục đạo thái bình, báu vật đã tìm được minh chủ.", inline=False)
 
-        # 5. Gửi thông cáo
-        await interaction.followup.send(content=f"🔔 **Thông cáo lục đạo:**", embed=embed)
+        embed.set_footer(text="Thiên địa đồng thọ • Khí trấn sơn hà")
+        
+        # 7. Gửi kết quả (Thoát khỏi trạng thái "đang suy nghĩ")
+        await interaction.followup.send(content=f"🔔 **Thông cáo thiên hạ:**", embed=embed)
 
     except Exception as e:
-        print(f"❌ Lỗi lệnh thankhi: {e}")
-        await interaction.follow
+        print(f"❌ Lỗi: {e}")
+        await interaction.followup.send(f"⚠️ Pháp trận nhiễu loạn, hãy thử lại sau!")
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
