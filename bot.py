@@ -55,35 +55,35 @@ THAN_CHU_THIEN_PHAT = [
 EQ_TYPES = ["Kiếm", "Nhẫn", "Giáp", "Tay", "Ủng"]
 PET_CONFIG = {
     "Tiểu Hỏa Phượng": {
-        "atk": 70, 
+        "atk": 120, 
         "drop_buff": 0.1, 
         "effect": "Tăng 10% rơi đồ", 
         "color": 0xe74c3c,
         "icon": "🔥"
     },
     "Băng Tinh Hổ": {
-        "atk": 60, 
+        "atk": 100, 
         "break_buff": 5, 
         "effect": "Tăng 5% tỉ lệ đột phá", 
         "color": 0x3498db,
         "icon": "❄️"
     },
     "Thôn Phệ Thú": {
-        "atk": 55, 
+        "atk": 100, 
         "exp_mult": 1.15, 
         "effect": "Tăng 15% EXP", 
         "color": 0x9b59b6,
         "icon": "🐾"
     },
     "Huyền Quy": {
-        "atk": 55, 
+        "atk": 95, 
         "risk_reduce": 0.5, 
         "effect": "Giảm 50% rủi ro Lôi Kiếp", 
         "color": 0x2ecc71,
         "icon": "🐢"
     },
     "Hóa Hình Hồ Ly": {
-        "atk": 65,
+        "atk": 130,
         "lt_buff": 0.2, # Tăng 20% Linh thạch nhận được
         "effect": "Tăng 20% Linh Thạch",
         "color": 0xff99cc,
@@ -1092,6 +1092,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
