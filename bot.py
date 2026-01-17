@@ -206,7 +206,7 @@ async def update_server_avg():
     global server_avg_lv
     try:
         # Chỉ lấy Top 10 cao thủ hàng đầu server
-        top_players = await users_col.find().sort([("level", -1)]).limit(10).to_list(length=10)
+        top_players = await users_col.find().sort([("level", -1)]).limit(15).to_list(length=15)
         if top_players:
             total_lv = sum(p.get("level", 1) for p in top_players)
             server_avg_lv = total_lv / len(top_players)
@@ -1047,6 +1047,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
