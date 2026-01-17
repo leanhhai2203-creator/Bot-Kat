@@ -367,65 +367,78 @@ async def check(interaction: discord.Interaction):
     embed.add_field(name="🐾 Linh thú", value=pet_text, inline=False)
     embed.add_field(name="🧰 Trang bị", value=eq_text, inline=False)
     await interaction.followup.send(embed=embed)
+
 @bot.tree.command(name="diemdanh", description="Điểm danh nhận cơ duyên thăng 1 cấp")
 async def diemdanh(interaction: discord.Interaction):
     await interaction.response.defer()
-    uid, today = str(interaction.user.id), datetime.now().strftime("%Y-%m-%d")
     
-    # 1. Khởi tạo/Lấy dữ liệu
-    u = await users_col.find_one_and_update(
-        {"_id": uid}, 
-        {"$setOnInsert": {"level": 1, "exp": 0, "linh_thach": 1}}, 
-        upsert=True, 
-        return_document=True
-    )
+    uid = str(interaction.user.id)
+    # Lấy ngày hiện tại định dạng YYYY-MM-DD
+    today = datetime.now().strftime("%Y-%m-%d")
     
-    if u.get("last_daily") == today: 
-        return await interaction.followup.send("❌ Hôm nay đạo hữu đã nhận bổng lộc rồi!")
+    try:
+        # 1. Khởi tạo/Lấy dữ liệu (Dùng find_one_and_update để tránh race condition)
+        u = await users_col.find_one_and_update(
+            {"_id": uid}, 
+            {"$setOnInsert": {"level": 1, "exp": 0, "linh_thach": 1, "last_daily": "Never"}}, 
+            upsert=True, 
+            return_document=True
+        )
+        
+        # Kiểm tra nếu đã điểm danh hôm nay
+        if u.get("last_daily") == today: 
+            return await interaction.followup.send("❌ Hôm nay đạo hữu đã nhận bổng lộc rồi!")
 
-    current_lv = u.get("level", 1)
-    current_exp = u.get("exp", 0)
+        current_lv = int(u.get("level", 1))
+        
+        # 2. KIỂM TRA CHẶN BUG ĐỘT PHÁ
+        # logic: lv 9, 19, 29... không được lên 10, 20, 30 qua điểm danh
+        is_at_bottleneck = (current_lv + 1) % 10 == 0
+        # logic: lv 10, 20, 30... đang kẹt chưa đột phá
+        is_stuck_at_gate = (current_lv % 10 == 0)
 
-    # 2. KIỂM TRA CHẶN BUG ĐỘT PHÁ (Mở rộng điều kiện)
-    # TH1: Đang ở cấp 9, 19, 29... (Chặn không cho nhảy lên mốc đột phá)
-    # TH2: Đang ở cấp 10, 20, 30... (Chặn không cho thăng cấp khi chưa đột phá)
-    is_at_bottleneck = (current_lv + 1) % 10 == 0
-    is_stuck_at_gate = (current_lv % 10 == 0)
+        if is_at_bottleneck or is_stuck_at_gate:
+            # Chỉ cho Linh thạch, không cho cấp
+            await users_col.update_one(
+                {"_id": uid},
+                {"$inc": {"linh_thach": 1}, "$set": {"last_daily": today}}
+            )
+            
+            msg = (f"⚠️ Cảnh giới cấp {current_lv} sát mốc đại hạn! Thiên đạo không thể giúp ngươi nhảy vọt." 
+                   if is_at_bottleneck else 
+                   f"⚠️ Đạo hữu kẹt tại đỉnh phong {current_lv}! Hãy đột phá trước.")
+                
+            return await interaction.followup.send(f"{msg}\n\n✅ Điểm danh thành công: Nhận **1 Linh Thạch**.")
 
-    if is_at_bottleneck or is_stuck_at_gate:
+        # 3. TRƯỜNG HỢP HỢP LỆ -> THĂNG 1 CẤP
+        new_level = current_lv + 1
+        
+        # Cập nhật DB
         await users_col.update_one(
             {"_id": uid},
-            {"$inc": {"linh_thach": 1}, "$set": {"last_daily": today}}
+            {
+                "$set": {"level": new_level, "exp": 0, "last_daily": today},
+                "$inc": {"linh_thach": 1}
+            }
         )
-        msg = ""
-        if is_at_bottleneck:
-            msg = f"⚠️ Cảnh giới cấp {current_lv} đã sát mốc đại hạn 10 cấp! Thiên đạo không thể giúp ngươi nhảy vọt."
-        else:
-            msg = f"⚠️ Đạo hữu đang kẹt tại đỉnh phong cấp {current_lv}! Hãy đột phá trước khi nhận cơ duyên thăng cấp."
-            
-        return await interaction.followup.send(f"{msg}\nĐiểm danh thành công: Nhận **1 Linh Thạch**.")
+        
+        # Gửi thông báo bằng Embed
+        embed = discord.Embed(
+            title="🎊 ĐẠI CƠ DUYÊN 🎊",
+            description=(f"Đạo hữu {interaction.user.mention} điểm danh, linh khí quán đỉnh!\n"
+                         f"✨ Thăng lên: **Cấp {new_level}**\n"
+                         f"💎 Nhận được: **1 Linh thạch**"),
+            color=discord.Color.gold(),
+            timestamp=datetime.now()
+        )
+        # Lưu ý: Dùng link ảnh trực tiếp kết thúc bằng .png/.jpg
+        embed.set_thumbnail(url="https://i.imgur.com/8S9UvY6.png") 
+        
+        await interaction.followup.send(embed=embed)
 
-    # 3. TRƯỜNG HỢP HỢP LỆ -> THĂNG 1 CẤP
-    new_level = current_lv + 1
-    await users_col.update_one(
-        {"_id": uid},
-        {
-            "$set": {"level": new_level, "exp": 0, "last_daily": today},
-            "$inc": {"linh_thach": 1}
-        }
-    )
-    
-    # Tạo Embed để thay ảnh Thumbnail cho đẹp
-    embed = discord.Embed(
-        title="🎊 ĐẠI CƠ DUYÊN 🎊",
-        description=f"Đạo hữu điểm danh, linh khí quán đỉnh thăng lên **Cấp {new_level}**!\nNhận được **1 Linh thạch**.",
-        color=discord.Color.gold()
-    )
-    # Thay link ảnh thumbnail của đạo hữu vào đây
-    embed.set_thumbnail(url="https://i.imgur.com/your_image_link.png") 
-    
-    await interaction.followup.send(embed=embed)
-
+    except Exception as e:
+        print(f"❌ Lỗi điểm danh: {e}")
+        await interaction.followup.send("⚠️ Pháp trận điểm danh gặp trục trặc, hãy thử lại sau!")
 @bot.tree.command(name="gacha", description="Gacha trang bị & Linh thú độc bản (Tốn 1 Linh thạch sau 3 lượt)")
 async def gacha(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -789,7 +802,7 @@ async def bxh(interaction: discord.Interaction):
     
     embed.set_footer(text="Khổ luyện thành tài - Danh toại bảng vàng")
     # Đạo hữu có thể thay đổi link ảnh thumbnail dưới đây nếu muốn
-    embed.set_thumbnail(url="")
+    embed.set_thumbnail(url="https://i.imgur.com/8S9UvY6.png")
 
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="resetday", description="ADMIN: Reset ngày")
@@ -1262,6 +1275,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
