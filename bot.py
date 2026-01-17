@@ -383,98 +383,74 @@ async def on_message(message):
     
     await bot.process_commands(message)
 # ========== LỆNH SLASH (/) ==========
-def get_canghioi_detail(lv):
-def get_canghioi_detail(lv):
-    stages = [
-        ("Luyện Khí", 10), ("Trúc Cơ", 20), ("Kết Đan", 30),
-        ("Nguyên Anh", 40), ("Hóa Thần", 50), ("Luyện Hư", 60),
-        ("Hợp Thể", 70), ("Đại Thừa", 80), ("Đại Tiên", 90), ("Thiên Tiên", 100)
-    ]
-    current_stage = "Phàm Nhân"
-    for name, threshold in stages:
-        if lv <= threshold:
-            current_stage = name
-            break
-    else: current_stage = "Thiên Tiên"
-
-    tang = (lv % 10)
-    if tang == 0: tang = 10
-    return f"Lv.{lv} - {current_stage} tầng {tang}"
-
-@bot.tree.command(name="check", description="Xem hồ sơ tu tiên & trang bị bản thân")
+@bot.tree.command(name="check", description="Xem hồ sơ tu tiên")
 async def info(interaction: discord.Interaction):
     try:
         await interaction.response.defer()
         uid = str(interaction.user.id)
         
+        # Kết nối DB
         u = await users_col.find_one({"_id": uid})
         if not u:
             return await interaction.followup.send("⚠️ Đạo hữu chưa có tên trong sổ sinh tử!")
-
+        
+        # Lấy trang bị (eq_col phải được định nghĩa ở trên)
         eq = await eq_col.find_one({"_id": uid}) or {}
 
-        # 1. THÔNG SỐ CƠ BẢN
         level = u.get("level", 1)
         than_khi_name = u.get("than_khi")
-        
-        # 2. LẤY CẤP ĐỘ 5 MÓN (Kiếm, Nhẫn, Giáp, Tay, Ủng)
-        kiem_lv = eq.get("Kiếm") or eq.get("kiem") or 0
-        nhan_lv = eq.get("Nhẫn") or eq.get("nhan") or 0
-        giap_lv = eq.get("Giáp") or eq.get("giap") or 0
-        tay_lv = eq.get("Tay") or eq.get("tay") or 0
-        ung_lv = eq.get("Ủng") or eq.get("ung") or 0
 
-        # 3. XỬ LÝ VŨ KHÍ & THẦN KHÍ
-        if than_khi_name and than_khi_name in THAN_KHI_CONFIG:
-            tk_data = THAN_KHI_CONFIG[than_khi_name]
-            weapon_display = f"🌟 **{than_khi_name}**"
-            embed_color = tk_data["color"]
-            footer_text = f"Khí Vật Chí: {tk_data['desc']}"
+        # 1. TÍNH CẢNH GIỚI (Định dạng Lv.X - Cảnh giới tầng Y)
+        stages = [("Luyện Khí", 10), ("Trúc Cơ", 20), ("Kết Đan", 30), ("Nguyên Anh", 40), 
+                  ("Hóa Thần", 50), ("Luyện Hư", 60), ("Hợp Thể", 70), ("Đại Thừa", 80), 
+                  ("Đại Tiên", 90), ("Thiên Tiên", 100)]
+        
+        canh_gioi_ten = "Phàm Nhân"
+        for name, thres in stages:
+            if level <= thres:
+                canh_gioi_ten = name
+                break
+        else: canh_gioi_ten = "Thiên Tiên"
+        
+        tang = (level % 10) or 10
+        display_canh_gioi = f"Lv.{level} - {canh_gioi_ten} tầng {tang}"
+
+        # 2. XỬ LÝ TRANG BỊ (Đúng tên: Kiếm, Nhẫn, Giáp, Tay, Ủng)
+        # Bần đạo dùng .get(key, 0) để chắc chắn không bị lỗi nếu DB trống
+        kiem_lv = eq.get("Kiếm", 0)
+        nhan_lv = eq.get("Nhẫn", 0)
+        giap_lv = eq.get("Giáp", 0)
+        tay_lv = eq.get("Tay", 0)
+        ung_lv = eq.get("Ủng", 0)
+
+        if than_khi_name:
+            weapon_val = f"🌟 **{than_khi_name}**"
+            color = 0xffd700 # Màu vàng kim cho thần khí
         else:
-            weapon_display = f"⚔️ Kiếm Cấp {kiem_lv}" if kiem_lv > 0 else "⚔️ Vô nhận kiếm"
-            embed_color = discord.Color.blue()
-            footer_text = "Con đường tu tiên còn dài, đạo hữu hãy cố gắng!"
+            weapon_val = f"⚔️ Kiếm Cấp {kiem_lv}" if kiem_lv > 0 else "⚔️ Vô nhận kiếm"
+            color = 0x3498db # Màu xanh mặc định
 
-        # 4. THỨ HẠNG & DANH HIỆU
-        all_users = await users_col.find().sort([("level", -1), ("exp", -1)]).to_list(length=10)
-        rank = next((i + 1 for i, user in enumerate(all_users) if user["_id"] == uid), 0)
-        danh_hieu = "Phàm Nhân"
-        if rank == 1: danh_hieu = "🏆 Đệ Nhất Chí Tôn"
-        elif rank == 2: danh_hieu = "🥈 Vạn Cổ Nhị Đế"
-        elif rank == 3: danh_hieu = "🥉 Tam Thế Đại Tiên"
-
-        # 5. KHỞI TẠO EMBED
-        embed = discord.Embed(title=f"📜 HỒ SƠ TU TIÊN: {interaction.user.display_name}", color=embed_color)
-        embed.set_thumbnail(url=interaction.user.display_avatar.url)
-
-        # Cảnh giới (Lv.X - Cảnh Giới tầng Y)
-        embed.add_field(name="📜 Cảnh Giới", value=f"**{get_canghioi_detail(level)}**", inline=False)
-        
-        # Thông tin tài sản
-        embed.add_field(name="🎖️ Danh Hiệu", value=f"**{danh_hieu}**", inline=True)
+        # 3. EMBED
+        embed = discord.Embed(title=f"📜 HỒ SƠ: {interaction.user.display_name}", color=color)
+        embed.add_field(name="📜 Cảnh Giới", value=f"**{display_canh_gioi}**", inline=False)
         embed.add_field(name="💎 Linh Thạch", value=f"{u.get('linh_thach', 0)} viên", inline=True)
         embed.add_field(name="✨ Linh Lực", value=f"`{u.get('exp', 0)} / {level * 100}`", inline=True)
 
-        # HIỂN THỊ 5 TRANG BỊ
         trang_bi_str = (
-            f"Vũ khí: {weapon_display}\n"
+            f"Vũ khí: {weapon_val}\n"
             f"💍 Nhẫn: Cấp {nhan_lv}\n"
             f"🛡️ Giáp: Cấp {giap_lv}\n"
             f"🧤 Tay: Cấp {tay_lv}\n"
             f"👢 Ủng: Cấp {ung_lv}"
         )
         embed.add_field(name="📦 Trang Bị Khảm Nạm", value=trang_bi_str, inline=True)
-
-        # Linh thú
-        pet_name = u.get("pet")
-        embed.add_field(name="🦄 Linh Thú", value=f"🐾 **{pet_name}**" if pet_name else "Chưa có", inline=True)
-
-        embed.set_footer(text=footer_text)
+        
+        pet = u.get("pet", "Chưa có")
+        embed.add_field(name="🦄 Linh Thú", value=f"🐾 **{pet}**", inline=True)
 
         await interaction.followup.send(embed=embed)
-        
     except Exception as e:
-        print(f"Lỗi lệnh check: {e}")
+        print(f"❌ LỖI TẠI LỆNH CHECK: {e}")
 @bot.tree.command(name="diemdanh", description="Điểm danh nhận cơ duyên thăng 1 cấp")
 async def diemdanh(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -1496,6 +1472,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
