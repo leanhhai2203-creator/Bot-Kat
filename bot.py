@@ -614,13 +614,13 @@ async def dotpha(interaction: discord.Interaction):
         return await interaction.followup.send(f"❌ Tu vi chưa đủ! (Cần {int(exp)}/{needed} EXP)")
 
     # 3. TÍNH LINH THẠCH YÊU CẦU (Giữ nguyên các mốc 1, 3, 6, 12)
-    required_lt = 1 if lv < 30 else (3 if lv < 60 else (6 if lv < 90 else 12))
+    required_lt = 1 if lv < 30 else (3 if lv < 60 else (6 if lv < 80 else 12))
     if linh_thach < required_lt:
         return await interaction.followup.send(f"❌ Cần **{required_lt} Linh thạch**. Đạo hữu chỉ có: **{linh_thach}**")
 
     # 4. TỈ LỆ THÀNH CÔNG (Giữ nguyên công thức: 100 - realm*8)
     realm_index = lv // 10
-    base_rate = max(10, 100 - (realm_index * 8))
+    base_rate = max(5, 90 - (realm_index * 10))
     final_rate = base_rate + break_buff # Chỉ cộng thêm, không làm giảm tỉ lệ gốc
     
     success = random.randint(1, 100) <= final_rate
@@ -652,7 +652,7 @@ async def dotpha(interaction: discord.Interaction):
         
         # Giữ nguyên tỉ lệ 30% xuất hiện Lôi Kiếp cấp cao
         if lv >= 30 and random.randint(1, 100) <= 30:
-            base_tut_cap = random.randint(2, 3)
+            base_tut_cap = random.randint(2, 5)
             loi_kiep_msg = "\n⚡ **LÔI KIẾP BẤT NGỜ!** Đạo hữu bị đánh văng tu vi!"
 
         # ÁP DỤNG GIẢM RỦI RO (Chỉ kích hoạt nếu có Pet như Huyền Quy)
@@ -1168,6 +1168,34 @@ async def ban_exp(interaction: discord.Interaction, target: discord.Member):
         f"Tu sĩ {target.mention} đã bị cấm túc nhận linh khí (EXP) trong **6 tiếng**.\n"
         f"Thời hạn đến: `{expire_time.strftime('%H:%M:%S %d/%m/%Y')}`"
     )
+@bot.tree.command(name="unban_exp", description="Đại xá thiên hạ: Gỡ bỏ lệnh cấm EXP cho tu sĩ")
+async def unban_exp(interaction: discord.Interaction, target: discord.Member):
+    # 1. Kiểm tra quyền Admin tối thượng (Cách 2)
+    if interaction.user.id != ADMIN_ID:
+        return await interaction.response.send_message(
+            "⛔ Cảnh giới của ngươi không đủ để ban lệnh Đại Xá!", 
+            ephemeral=True
+        )
+
+    # 2. Xóa bỏ mốc thời gian cấm trong Database
+    # Sử dụng $unset để loại bỏ hoàn toàn trường dữ liệu này
+    result = await users_col.update_one(
+        {"_id": str(target.id)},
+        {"$unset": {"ban_exp_until": ""}} 
+    )
+
+    # 3. Thông báo kết quả
+    if result.modified_count > 0:
+        await interaction.response.send_message(
+            f"✨ **ĐẠI XÁ THIÊN HẠ** ✨\n"
+            f"Đạo hữu {target.mention} đã được gỡ bỏ cấm túc. "
+            f"Từ nay đã có thể tiếp tục hấp thụ linh khí (EXP) bình thường!"
+        )
+    else:
+        await interaction.response.send_message(
+            f"❓ Tu sĩ {target.mention} hiện đang không trong trạng thái bị cấm túc.",
+            ephemeral=True
+        )
 @bot.tree.command(name="pay", description="Chuyển linh thạch cho đạo hữu khác")
 @app_commands.describe(member="Người nhận linh thạch", amount="Số lượng linh thạch muốn chuyển")
 async def pay(interaction: discord.Interaction, member: discord.Member, amount: int):
@@ -1231,6 +1259,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
