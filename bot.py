@@ -26,6 +26,7 @@ MIN_MSG_LEN = 7
 MSG_COOLDOWN = 20
 last_msg_time = {}
 last_msg_content = {} 
+server_avg_lv = 1.0
 # Các kênh nhận thông báo quan trọng
 NOTIFY_CHANNELS = [1455081842473697362, 1455837230332641280, 1454793019160006783, 1454793109094268948, 1454506037779369986] 
 CHANNEL_EXP_RATES = {
@@ -121,12 +122,35 @@ async def calc_power(uid: str) -> int:
         else: hp += eq_lv * 150
     if pet_name in PET_CONFIG: atk += PET_CONFIG[pet_name].get("atk", 0)
     return int((atk * 10) + hp + random.randint(0, 100))
-
 async def add_exp(uid: str, amount: int):
     uid = str(uid)
+    # 1. Lấy dữ liệu để kiểm tra điều kiện cấp độ
     u = await users_col.find_one({"_id": uid})
-    if not u or (u["level"] % 10 == 0 and u["exp"] >= exp_needed(u["level"])): return
-    await users_col.update_one({"_id": uid}, {"$inc": {"exp": amount}})
+    
+    # 2. Nếu là người mới hoàn toàn (chưa có trong DB) -> Tạo mới với EXP khởi điểm
+    if not u:
+        await users_col.insert_one({
+            "_id": uid, 
+            "level": 1, 
+            "exp": amount, 
+            "linh_thach": 10, 
+            "pet": None
+        })
+        return
+
+    # 3. Logic Cảnh giới: Nếu đang ở cấp 10, 20... và đã đầy EXP thì không cộng thêm
+    # Điều này ép tu sĩ phải dùng lệnh /dotpha
+    current_lv = u.get("level", 1)
+    if current_lv % 10 == 0:
+        needed = exp_needed(current_lv)
+        if u.get("exp", 0) >= needed:
+            return # Đã chạm đỉnh cảnh giới, phải đột phá!
+
+    # 4. Nếu không vướng cảnh giới, tiến hành cộng EXP an toàn
+    await users_col.update_one(
+        {"_id": uid}, 
+        {"$inc": {"exp": amount}}
+    )
 
 async def check_level_up(uid, channel, name):
     uid = str(uid)
@@ -182,10 +206,22 @@ async def thien_y_loop():
 @bot.event
 async def on_ready():
     try:
+        # 1. Khởi chạy các vòng lặp (Tasks)
+        if not update_server_avg.is_running():
+            update_server_avg.start()
+        if not thien_y_loop.is_running():
+            thien_y_loop.start()
+            
+        # 2. Đồng bộ lệnh Slash
         synced = await bot.tree.sync()
+        
+        # 3. Thông báo trạng thái
+        print(f"✅ Đã đăng nhập: {bot.user}")
         print(f"✅ Đã đồng bộ {len(synced)} lệnh Slash. Bot sẵn sàng!")
-        if not thien_y_loop.is_running(): thien_y_loop.start()
-    except Exception as e: print(f"❌ Lỗi: {e}")
+        print(f"✨ Level trung bình server hiện tại: {server_avg_lv:.2f}")
+
+    except Exception as e:
+        print(f"❌ Lỗi khi khởi động Bot: {e}")
 @bot.event
 async def on_message(message):
     if message.author.bot: return
@@ -194,47 +230,56 @@ async def on_message(message):
     now = datetime.now().timestamp()
     content = message.content.strip().lower()
 
-    # 1. CHỐNG TRÙNG LẶP
-    if content == last_msg_content.get(uid):
-        return 
+    # 1. CHỐNG TRÙNG LẶP & COOLDOWN
+    if content == last_msg_content.get(uid): return 
 
-    # 2. KIỂM TRA ĐỘ DÀI & COOLDOWN
     if len(content) >= MIN_MSG_LEN and now - last_msg_time.get(uid, 0) >= MSG_COOLDOWN:
         last_msg_time[uid] = now
         last_msg_content[uid] = content
         
-        # 3. LẤY DỮ LIỆU TỪ DB
+        # 2. LẤY DỮ LIỆU TỪ DB
         user_data = await users_col.find_one({"_id": uid})
         if not user_data:
             user_data = {"level": 1, "exp": 0, "linh_thach": 10, "pet": None}
             await users_col.insert_one({"_id": uid, **user_data})
 
-        # 4. TÍNH TOÁN EXP CƠ BẢN
+        # 3. TÍNH TOÁN EXP CƠ BẢN THEO KÊNH
         rate = CHANNEL_EXP_RATES.get(message.channel.id, 0.1)
         base_exp = int(MSG_EXP * rate)
-        pet_bonus = 0
         
-        # --- LOGIC THẢ ICON THEO PET & CỘNG THÊM EXP ---
+        # --- [MỚI] LOGIC BUFF SERVER (DÀNH CHO NGƯỜI LV THẤP) ---
+        user_lv = user_data.get("level", 1)
+        is_server_buffed = False
+        
+        if user_lv < server_avg_lv:
+            base_exp *= 2  # Nhân đôi EXP cơ bản
+            is_server_buffed = True
+        # ------------------------------------------------------
+
+        pet_bonus = 0
         user_pet = user_data.get("pet")
         
-        if user_pet in PET_ICONS:
-            # A. Luôn thả icon của Pet đó nếu tin nhắn hợp lệ
-            try:
-                await message.add_reaction(PET_ICONS[user_pet])
-            except:
-                pass
+        # 4. LOGIC THẢ ICON THEO PET & CỘNG THÊM EXP
+        if user_pet in PET_CONFIG:
+            pet_data = PET_CONFIG[user_pet]
+            
+            # A. Thả icon đại diện của Pet
+            try: await message.add_reaction(pet_data["icon"])
+            except: pass
 
-            # B. Riêng Thôn Phệ Thú có tỷ lệ cộng thêm EXP (Bonus)
+            # B. Bonus riêng cho Thôn Phệ Thú (Tính trên base_exp đã có thể đã x2)
             if user_pet == "Thôn Phệ Thú" and random.random() < 0.30:
                 pet_bonus = random.randint(5, 15)
-                # Nếu muốn Pet giúp sức thì thả thêm 1 icon lấp lánh
-                try: await message.add_reaction("✨")
+                try: await message.add_reaction("✨") # Icon Pet giúp sức
                 except: pass
-        # ----------------------------------------------
-
-        total_gain = base_exp + pet_bonus
         
-        # 5. CẬP NHẬT DATABASE & CHECK LEVEL
+        # C. Nếu được Buff Server nhưng không có Pet, vẫn thả icon "Hào quang"
+        if is_server_buffed and user_pet not in PET_CONFIG:
+            try: await message.add_reaction("💎") 
+            except: pass
+
+        # 5. TỔNG KẾT VÀ CẬP NHẬT
+        total_gain = base_exp + pet_bonus
         await add_exp(uid, total_gain)
         await check_level_up(uid, message.channel, message.author.display_name)
         
@@ -982,6 +1027,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
