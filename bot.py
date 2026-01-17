@@ -7,7 +7,6 @@ from datetime import datetime
 from discord import app_commands
 import motor.motor_asyncio
 import asyncio
-
 # ========== KẾT NỐI MONGODB ==========
 MONGO_URI = os.getenv("MONGO_URI") 
 cluster = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
@@ -993,6 +992,79 @@ class ConfirmTransfer(discord.ui.View):
         await interaction.response.edit_message(content="🚫 **Giao dịch đã bị hủy bỏ.**", view=None)
         self.stop()
 
+
+@bot.tree.command(name="captcha", description="Lệnh chấp pháp của riêng Admin để kiểm tra tu sĩ")
+async def captcha(interaction: discord.Interaction, target: discord.Member):
+    # 1. Kiểm tra ID người dùng
+    if interaction.user.id != ADMIN_ID:
+        return await interaction.response.send_message(
+            "⛔ Đạo hạnh của ngươi chưa đủ để thi triển lệnh Chấp Pháp này!", 
+            ephemeral=True # Chỉ người gõ lệnh mới thấy dòng này
+        )
+
+    await interaction.response.defer()
+
+    # 2. Chuẩn bị danh sách biểu tượng xác minh
+    emojis = ["🔥", "❄️", "⚡", "🍃", "🌑", "☀️", "💎", "🔮"]
+    correct_emoji = random.choice(emojis)
+    
+    # Định nghĩa View cho các nút bấm
+    class CaptchaView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=30) # 30 giây để xác minh
+            self.value = None
+
+        async def check_choice(self, btn_interaction: discord.Interaction, chosen_emoji: str):
+            # Chỉ người bị tag (target) mới có thể bấm nút
+            if btn_interaction.user.id != target.id:
+                return await btn_interaction.response.send_message(
+                    "Đây không phải thử thách dành cho ngươi!", 
+                    ephemeral=True
+                )
+            
+            if chosen_emoji == correct_emoji:
+                self.value = True
+                self.stop()
+                await btn_interaction.response.edit_message(
+                    content=f"✅ **{target.display_name}** đã vượt qua thử thách đạo tâm! Trạng thái: Bình thường.", 
+                    view=None
+                )
+            else:
+                self.value = False
+                self.stop()
+                # Hình phạt khi chọn sai
+                await btn_interaction.response.edit_message(
+                    content=f"❌ **{target.display_name}** đã chọn sai! Nghi vấn tà thuật (Auto/Spam).", 
+                    view=None
+                )
+
+    # 3. Tạo các nút bấm tương ứng với danh sách emoji
+    view = CaptchaView()
+    for e in emojis:
+        button = discord.ui.Button(label=e, custom_id=e, style=discord.ButtonStyle.gray)
+        
+        # Hàm callback khi bấm nút
+        async def button_callback(bi, e_val=e):
+            await view.check_choice(bi, e_val)
+            
+        button.callback = button_callback
+        view.add_item(button)
+
+    # 4. Gửi pháp trận xác minh vào kênh
+    await interaction.followup.send(
+        f"🛡️ **PHÁP TRẬN CHẤP PHÁP** 🛡️\n"
+        f"Tu sĩ {target.mention} đang bị nghi ngờ tẩu hỏa nhập ma (Spam).\n"
+        f"Hãy chứng minh đạo tâm bằng cách nhấn vào biểu tượng: **{correct_emoji}**",
+        view=view
+    )
+
+    # 5. Xử lý khi hết thời gian mà không bấm (Timeout)
+    await view.wait()
+    if view.value is None:
+        await interaction.edit_original_response(
+            content=f"⏰ **{target.display_name}** không có phản ứng sau 30 giây! Kết luận: Treo máy hoặc sử dụng Auto.", 
+            view=None
+                )
 @bot.tree.command(name="loiphat", description="[ADMIN] Thiên phạt: Top 1 (500-1000 EXP) & 2 vị trong Top 2-5 (100-500 EXP)")
 async def loiphat(interaction: discord.Interaction):
     # 1. Kiểm tra quyền Admin
@@ -1113,6 +1185,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
