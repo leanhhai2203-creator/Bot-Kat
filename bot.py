@@ -1716,9 +1716,59 @@ async def pet_show(interaction: discord.Interaction):
     embed_res.set_footer(text="Khí thế chấn động bát hoang!")
 
     await interaction.followup.send(content=f"📡 **Thông cáo thiên hạ:**", embed=embed_res)
+
+@bot.tree.command(name="addthankhi", description="Ban tặng thần khí cho đạo hữu (Chỉ dành cho Admin)")
+@app_commands.checks.has_permissions(administrator=True)
+async def add_thankhi(interaction: discord.Interaction, member: discord.Member, ten_than_khi: str):
+    await interaction.response.defer()
+    uid = str(member.id)
+
+    # 1. Cập nhật thần khí cho người được tag
+    result = await users_col.update_one(
+        {"_id": uid}, 
+        {"$set": {"than_khi": ten_than_khi}}
+    )
+
+    if result.matched_count == 0:
+        return await interaction.followup.send(f"❌ Đạo hữu {member.mention} chưa có hồ sơ tu tiên!")
+
+    # 2. Tìm danh sách thần khí chưa có ai sở hữu
+    # Lấy tất cả thần khí đang có người cầm trong DB
+    cursor = users_col.find({"than_khi": {"$exists": True, "$ne": None}})
+    owned_than_khi = []
+    async for user in cursor:
+        owned_than_khi.append(user.get("than_khi"))
+
+    # Lọc ra những thần khí chưa xuất hiện trong DB
+    available_than_khi = [tk for tk in ALL_THAN_KHI if tk not in owned_than_khi]
+
+    # 3. Tạo Embed thông báo
+    embed = discord.Embed(
+        title="✨ THẦN KHÍ XUẤT THẾ",
+        description=f"Chúc mừng đạo hữu {member.mention} đã nhận được **{ten_than_khi}**!",
+        color=discord.Color.gold()
+    )
+    
+    # Hiển thị danh sách thần khí còn lại
+    if available_than_khi:
+        list_str = "\n".join([f"🔹 {tk}" for tk in available_than_khi])
+        embed.add_field(name="📜 Thần khí chưa có chủ nhân:", value=list_str, inline=False)
+    else:
+        embed.add_field(name="📜 Thần khí chưa có chủ nhân:", value="❌ Tất cả thần khí đã có chủ!", inline=False)
+
+    embed.set_footer(text="Thiên địa dị biến, báu vật tìm chủ nhân!")
+    
+    await interaction.followup.send(embed=embed)
+
+# Xử lý lỗi nếu người dùng không phải Admin
+@add_thankhi.error
+async def add_thankhi_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.errors.MissingPermissions):
+        await interaction.response.send_message("❌ Đạo hữu không có quyền hạn (Admin) để thực hiện lệnh này!", ephemeral=True)
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
