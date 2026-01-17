@@ -1717,60 +1717,66 @@ async def pet_show(interaction: discord.Interaction):
 
     await interaction.followup.send(content=f"📡 **Thông cáo thiên hạ:**", embed=embed_res)
 
-@bot.tree.command(name="thankhi", description="Thị uy Thần Khí và xem danh sách báu vật")
+@bot.tree.command(name="thankhi", description="Thị uy Thần Khí thượng cổ và xem báu vật thất lạc")
 async def show_thankhi(interaction: discord.Interaction):
+    # Khai báo defer để tránh treo bot
     await interaction.response.defer()
+    
     uid = str(interaction.user.id)
     
-    # 1. Truy vấn thông tin tu sĩ
-    u = await users_col.find_one({"_id": uid})
-    current_tk = u.get("than_khi") if u else None
+    try:
+        # 1. Truy vấn Database lấy thông tin người dùng
+        u = await users_col.find_one({"_id": uid})
+        current_tk = u.get("than_khi") if u else None
 
-    # 2. Cấu hình Chân Ngôn riêng biệt cho từng món
-    THAN_KHI_DETAILS = {
-        "Trảm Tiên Kiếm": {"msg": "⚔️ Kiếm khí tung hoành vạn dặm, trảm tiên diệt thánh, thiên hạ vô song!", "color": 0xff0000},
-        "Hạo Thiên Tháp": {"msg": "🗼 Tháp trấn bát hoang, thu phục yêu ma, càn khôn định giới!", "color": 0xffd700},
-        "Luyện Yêu Hồ": {"msg": "🏺 Hồ lô huyền diệu, luyện hóa vạn vật, tinh hoa hội tụ!", "color": 0xadff2f},
-        "Thần Nông Đỉnh": {"msg": "🧪 Đỉnh luyện thánh dược, hồi sinh nghịch tử, khí vận vô biên!", "color": 0x00ff7f},
-        "Phục Hy Cầm": {"msg": "🪕 Tiếng đàn du dương, thao túng tâm trí, vạn dặm cô liêu!", "color": 0x1e90ff},
-        "Không Động Ấn": {"msg": "📜 Ấn chương bất tử, vĩnh hằng bất diệt, thọ cùng trời đất!", "color": 0xffffff},
-        "Côn Luân Kính": {"msg": "🪞 Gương soi quá khứ, thấu hiểu tương lai, xuyên không vượt thời gian!", "color": 0xeee8aa},
-        "Yêu Đao Thôn Chính": {"msg": "🗡️ Đao mang tà khí, uống máu chúng sinh, sát ý ngập trời!", "color": 0x8b0000},
-        "Gậy Như Ý": {"msg": "🦯 Định hải thần châm, biến hóa khôn lường, đập tan thiên đình!", "color": 0xff4500}
-    }
+        # 2. Quét Database tìm những thần khí ĐÃ có chủ
+        owned_than_khi = []
+        async for user in users_col.find({"than_khi": {"$exists": True, "$ne": None}}):
+            tk_in_db = user.get("than_khi")
+            if tk_in_db:
+                owned_than_khi.append(tk_in_db)
+        
+        # Lọc ra danh sách thần khí CHƯA có chủ
+        available_than_khi = [tk for tk in ALL_THAN_KHI if tk not in owned_than_khi]
 
-    # 3. Lấy danh sách thần khí chưa có chủ
-    cursor = users_col.find({"than_khi": {"$exists": True, "$ne": None}})
-    owned_than_khi = []
-    async for user in cursor:
-        owned_than_khi.append(user.get("than_khi"))
-    available_than_khi = [tk for tk in ALL_THAN_KHI if tk not in owned_than_khi]
+        # 3. Tạo Embed hiển thị chính
+        embed = discord.Embed(title="📜 THẦN KHÍ MINH BẢNG", color=0x2F3136)
+        
+        # Kiểm tra nếu tu sĩ đang sở hữu thần khí hợp lệ trong config
+        if current_tk in THAN_KHI_CONFIG:
+            data = THAN_KHI_CONFIG[current_tk]
+            
+            embed.title = f"{data['icon']} THẦN KHÍ THỊ UY: {current_tk.upper()}"
+            embed.description = (
+                f"## {data['quote']}\n"  # Khẩu ngữ riêng (Hiện to)
+                f"*{data['desc']}*\n\n"   # Mô tả chi tiết (In nghiêng)
+                f"**⚡ Công lực gia trì:** `+{data['atk']} ATK`"
+            )
+            embed.color = data['color']
+            embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+            embed.set_thumbnail(url=interaction.user.display_avatar.url)
+            embed.set_footer(text="Hào quang vạn trượng - Khí trấn sơn hà!")
+        else:
+            embed.description = "🥀 Đạo hữu hiện tại chưa có duyên sở hữu Thần Khí thượng cổ."
+            embed.color = discord.Color.light_gray()
 
-    # 4. Thiết lập Embed
-    embed = discord.Embed(title="📜 THẦN KHÍ MINH BẢNG", color=discord.Color.dark_embed())
-    
-    if current_tk:
-        tk_info = THAN_KHI_DETAILS.get(current_tk, {"msg": "🌟 Linh áp mạnh mẽ, thần vật hộ thân!", "color": 0xffffff})
-        embed.title = f"✨ THẦN KHÍ THỊ UY: {current_tk.upper()}"
-        embed.description = f"### {tk_info['msg']}\n\n*Đạo hữu **{interaction.user.display_name}** đang thủ hộ báu vật này.*"
-        embed.color = tk_info['color']
-        embed.set_thumbnail(url=interaction.user.display_avatar.url)
-    else:
-        embed.description = "🥀 Đạo hữu chưa sở hữu thần khí. Hãy tìm kiếm cơ duyên tại các đại hội!"
-        embed.color = discord.Color.light_gray()
+        # 4. Thêm Field danh sách thần khí chưa xuất thế
+        if available_than_khi:
+            list_str = "\n".join([f"🔸 **{tk}**" for tk in available_than_khi])
+            embed.add_field(name="🏛️ Thần Khí Thất Lạc (Chưa có chủ):", value=list_str, inline=False)
+        else:
+            embed.add_field(name="🏛️ Thần Khí:", value="✅ Toàn bộ Thần Khí đã tìm được chủ nhân.", inline=False)
 
-    # 5. Danh sách báu vật chưa xuất thế
-    if available_than_khi:
-        list_str = "\n".join([f"✨ {tk}" for tk in available_than_khi])
-        embed.add_field(name="🏛️ Thần Khí Thất Lạc (Chưa chủ):", value=list_str, inline=False)
-    else:
-        embed.add_field(name="🏛️ Thần Khí Thất Lạc:", value="❌ Vạn vật đã tìm được chủ nhân.", inline=False)
+        # 5. Gửi thông cáo
+        await interaction.followup.send(content=f"🔔 **Thông cáo lục đạo:**", embed=embed)
 
-    embed.set_footer(text="Hữu duyên thiên lý năng tương ngộ!")
-    await interaction.followup.send(content=f"🔔 **Thông cáo lục đạo:**", embed=embed)
+    except Exception as e:
+        print(f"❌ Lỗi lệnh thankhi: {e}")
+        await interaction.follow
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
