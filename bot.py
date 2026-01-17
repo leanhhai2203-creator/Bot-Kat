@@ -55,35 +55,40 @@ THAN_CHU_THIEN_PHAT = [
 EQ_TYPES = ["Kiếm", "Nhẫn", "Giáp", "Tay", "Ủng"]
 PET_CONFIG = {
     "Tiểu Hỏa Phượng": {
-        "atk": 120, 
+        "atk": 180, 
+        "hp": 2000,
         "drop_buff": 0.1, 
         "effect": "Tăng 10% rơi đồ", 
         "color": 0xe74c3c,
         "icon": "🔥"
     },
     "Băng Tinh Hổ": {
-        "atk": 100, 
+        "atk": 170,
+        "hp": 2300,
         "break_buff": 5, 
         "effect": "Tăng 5% tỉ lệ đột phá", 
         "color": 0x3498db,
         "icon": "❄️"
     },
     "Thôn Phệ Thú": {
-        "atk": 100, 
+        "atk": 170, 
+        "hp": 2200,
         "exp_mult": 1.15, 
         "effect": "Tăng 15% EXP", 
         "color": 0x9b59b6,
         "icon": "🐾"
     },
     "Huyền Quy": {
-        "atk": 95, 
+        "atk": 120, 
+        "hp": 3000,
         "risk_reduce": 0.5, 
         "effect": "Giảm 50% rủi ro Lôi Kiếp", 
         "color": 0x2ecc71,
         "icon": "🐢"
     },
     "Hóa Hình Hồ Ly": {
-        "atk": 130,
+        "atk": 190,
+        "hp": 1500,
         "lt_buff": 0.2, # Tăng 20% Linh thạch nhận được
         "effect": "Tăng 20% Linh Thạch",
         "color": 0xff99cc,
@@ -108,20 +113,36 @@ def get_monster_data(lv: int):
     elif lv <= 30: return "Ma thú", 0.20, (2, 4)
     elif lv <= 60: return "Linh thú", 0.25, (4, 7)
     else: return "Cổ thú", 0.30, (6, 9)
-
 async def calc_power(uid: str) -> int:
     uid = str(uid)
     u = await users_col.find_one({"_id": uid})
     if not u: return 0
+    
     eq = await eq_col.find_one({"_id": uid}) or {}
     lv, pet_name = u.get("level", 1), u.get("pet")
+    
+    # Chỉ số gốc từ Level
     atk, hp = lv * 5, lv * 50
+    
+    # Cộng chỉ số từ Trang bị (Cấp 1-10)
     for t in EQ_TYPES:
         eq_lv = eq.get(t, 0)
-        if t in ("Kiếm", "Nhẫn"): atk += eq_lv * 15
-        else: hp += eq_lv * 150
-    if pet_name in PET_CONFIG: atk += PET_CONFIG[pet_name].get("atk", 0)
-    return int((atk * 10) + hp + random.randint(0, 100))
+        if t in ("Kiếm", "Nhẫn"): 
+            atk += eq_lv * 15
+        else: 
+            hp += eq_lv * 150
+            
+    # --- PHẦN CẬP NHẬT CHO PET ---
+    if pet_name in PET_CONFIG:
+        pet_stats = PET_CONFIG[pet_name]
+        atk += pet_stats.get("atk", 0)
+        hp += pet_stats.get("hp", 0) # Cộng thêm máu từ Pet vào tổng HP
+    # -----------------------------
+
+    # Tính toán Lực chiến tổng hợp
+    # Công thức: (Công * 10) + Thủ + May mắn ngẫu nhiên
+    power = (atk * 10) + hp + random.randint(0, 100)
+    return int(power)
 async def add_exp(uid: str, amount: int):
     uid = str(uid)
     # 1. Lấy dữ liệu để kiểm tra điều kiện cấp độ
@@ -1092,6 +1113,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
