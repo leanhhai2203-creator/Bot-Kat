@@ -384,21 +384,13 @@ async def on_message(message):
     await bot.process_commands(message)
 # ========== LỆNH SLASH (/) ==========
 def get_canghioi_detail(lv):
-def get_progress_bar(current, total):
-    """Tạo thanh linh lực [████░░░]"""
-    if total <= 0: return "[░░░░░░░░░░]"
-    ratio = current / total
-    fill_count = int(ratio * 10)
-    if fill_count > 10: fill_count = 10
-    return f"[{'█' * fill_count}{'░' * (10 - fill_count)}] {int(ratio * 100)}%"
-
 def get_canghioi_detail(lv):
     stages = [
         ("Luyện Khí", 10), ("Trúc Cơ", 20), ("Kết Đan", 30),
         ("Nguyên Anh", 40), ("Hóa Thần", 50), ("Luyện Hư", 60),
         ("Hợp Thể", 70), ("Đại Thừa", 80), ("Đại Tiên", 90), ("Thiên Tiên", 100)
     ]
-    current_stage = "Tiên Nhân"
+    current_stage = "Phàm Nhân"
     for name, threshold in stages:
         if lv <= threshold:
             current_stage = name
@@ -411,30 +403,78 @@ def get_canghioi_detail(lv):
 
 @bot.tree.command(name="check", description="Xem hồ sơ tu tiên & trang bị bản thân")
 async def info(interaction: discord.Interaction):
-    await interaction.response.defer()
-    uid = str(interaction.user.id)
-    
-    u = await users_col.find_one({"_id": uid})
-    if not u:
-        return await interaction.followup.send("⚠️ Đạo hữu chưa có tên trong sổ sinh tử!")
+    try:
+        await interaction.response.defer()
+        uid = str(interaction.user.id)
+        
+        u = await users_col.find_one({"_id": uid})
+        if not u:
+            return await interaction.followup.send("⚠️ Đạo hữu chưa có tên trong sổ sinh tử!")
 
-    eq = await eq_col.find_one({"_id": uid}) or {}
+        eq = await eq_col.find_one({"_id": uid}) or {}
 
-    # 1. THÔNG SỐ CƠ BẢN
-    level = u.get("level", 1)
-    than_khi_name = u.get("than_khi")
-    
-    # 2. LẤY CẤP ĐỘ 5 MÓN TRANG BỊ (Fix lỗi cấp 0 bằng cách tìm mọi tên biến có thể)
-    kiem_lv = eq.get("Kiếm") or eq.get("kiem") or 0
-    nhan_lv = eq.get("Nhẫn") or eq.get("nhan") or 0
-    giap_lv = eq.get("Giáp") or eq.get("giap") or 0
-    tay_lv = eq.get("Tay") or eq.get("tay") or 0
-    ung_lv = eq.get("Ủng") or eq.get("ung") or 0
+        # 1. THÔNG SỐ CƠ BẢN
+        level = u.get("level", 1)
+        than_khi_name = u.get("than_khi")
+        
+        # 2. LẤY CẤP ĐỘ 5 MÓN (Kiếm, Nhẫn, Giáp, Tay, Ủng)
+        kiem_lv = eq.get("Kiếm") or eq.get("kiem") or 0
+        nhan_lv = eq.get("Nhẫn") or eq.get("nhan") or 0
+        giap_lv = eq.get("Giáp") or eq.get("giap") or 0
+        tay_lv = eq.get("Tay") or eq.get("tay") or 0
+        ung_lv = eq.get("Ủng") or eq.get("ung") or 0
 
-    # 3. XỬ LÝ VŨ KHÍ
-    if than_khi_name:
-        tk_data = THAN_KHI_CONFIG[than_khi_name]
-        weapon_display = f"
+        # 3. XỬ LÝ VŨ KHÍ & THẦN KHÍ
+        if than_khi_name and than_khi_name in THAN_KHI_CONFIG:
+            tk_data = THAN_KHI_CONFIG[than_khi_name]
+            weapon_display = f"🌟 **{than_khi_name}**"
+            embed_color = tk_data["color"]
+            footer_text = f"Khí Vật Chí: {tk_data['desc']}"
+        else:
+            weapon_display = f"⚔️ Kiếm Cấp {kiem_lv}" if kiem_lv > 0 else "⚔️ Vô nhận kiếm"
+            embed_color = discord.Color.blue()
+            footer_text = "Con đường tu tiên còn dài, đạo hữu hãy cố gắng!"
+
+        # 4. THỨ HẠNG & DANH HIỆU
+        all_users = await users_col.find().sort([("level", -1), ("exp", -1)]).to_list(length=10)
+        rank = next((i + 1 for i, user in enumerate(all_users) if user["_id"] == uid), 0)
+        danh_hieu = "Phàm Nhân"
+        if rank == 1: danh_hieu = "🏆 Đệ Nhất Chí Tôn"
+        elif rank == 2: danh_hieu = "🥈 Vạn Cổ Nhị Đế"
+        elif rank == 3: danh_hieu = "🥉 Tam Thế Đại Tiên"
+
+        # 5. KHỞI TẠO EMBED
+        embed = discord.Embed(title=f"📜 HỒ SƠ TU TIÊN: {interaction.user.display_name}", color=embed_color)
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
+
+        # Cảnh giới (Lv.X - Cảnh Giới tầng Y)
+        embed.add_field(name="📜 Cảnh Giới", value=f"**{get_canghioi_detail(level)}**", inline=False)
+        
+        # Thông tin tài sản
+        embed.add_field(name="🎖️ Danh Hiệu", value=f"**{danh_hieu}**", inline=True)
+        embed.add_field(name="💎 Linh Thạch", value=f"{u.get('linh_thach', 0)} viên", inline=True)
+        embed.add_field(name="✨ Linh Lực", value=f"`{u.get('exp', 0)} / {level * 100}`", inline=True)
+
+        # HIỂN THỊ 5 TRANG BỊ
+        trang_bi_str = (
+            f"Vũ khí: {weapon_display}\n"
+            f"💍 Nhẫn: Cấp {nhan_lv}\n"
+            f"🛡️ Giáp: Cấp {giap_lv}\n"
+            f"🧤 Tay: Cấp {tay_lv}\n"
+            f"👢 Ủng: Cấp {ung_lv}"
+        )
+        embed.add_field(name="📦 Trang Bị Khảm Nạm", value=trang_bi_str, inline=True)
+
+        # Linh thú
+        pet_name = u.get("pet")
+        embed.add_field(name="🦄 Linh Thú", value=f"🐾 **{pet_name}**" if pet_name else "Chưa có", inline=True)
+
+        embed.set_footer(text=footer_text)
+
+        await interaction.followup.send(embed=embed)
+        
+    except Exception as e:
+        print(f"Lỗi lệnh check: {e}")
 @bot.tree.command(name="diemdanh", description="Điểm danh nhận cơ duyên thăng 1 cấp")
 async def diemdanh(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -1456,6 +1496,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
