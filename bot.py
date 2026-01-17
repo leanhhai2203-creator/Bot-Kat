@@ -1615,10 +1615,102 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member):
         # Đảm bảo luôn giải phóng khóa nếu có lỗi bất ngờ
         active_battles.discard(uid1)
         active_battles.discard(uid2)
+@bot.tree.command(name="thanthu", description="Thần thú thị uy chân ngôn (Chỉ dành cho người có linh thú)")
+async def pet_show(interaction: discord.Interaction):
+    # 1. Khởi động pháp trận (Defer) để tránh treo lệnh
+    await interaction.response.defer()
+    uid = str(interaction.user.id)
+    
+    # 2. Truy vấn dữ liệu tu sĩ
+    u = await users_col.find_one({"_id": uid})
+    
+    # 3. CHỐT CHẶN: Kiểm tra nếu không có Thần Thú
+    # Kiểm tra cả trường hợp user không tồn tại hoặc trường pet là None/rỗng/"Chưa có"
+    pet_name = u.get("pet") if u else None
+    
+    if not pet_name or pet_name in [None, "", "Chưa có", "Không có"]:
+        embed_none = discord.Embed(
+            title="⚠️ LINH THÚ CÁC THÔNG BÁO",
+            description=(
+                "Đạo hữu hiện tại đơn thương độc mã, bên mình không có linh thú hộ vệ.\n\n"
+                "*Hãy nỗ lực tu luyện hoặc tìm kiếm cơ duyên để thu phục Thần Thú!*"
+            ),
+            color=discord.Color.light_gray()
+        )
+        return await interaction.followup.send(embed=embed_none)
 
+    # 4. CẤU HÌNH CHÂN NGÔN (Dành cho người đã có Pet)
+    pet_actions = {
+        "Tiểu Hỏa Phượng": {
+            "quotes": [
+                "🔥 Thân mang Chân Hỏa, nhất vũ kinh thiên, thiêu rụi tà ma!",
+                "🔥 Phượng hoàng niết bàn, hỏa diệm ngập trời, vạn vật thành tro!",
+                "🔥 Dưới đôi cánh lửa, tài bảo xuất thế, cơ duyên khó cưỡng!"
+            ],
+            "color": 0xe74c3c, "icon": "🔥"
+        },
+        "Băng Tinh Hổ": {
+            "quotes": [
+                "❄️ Mãnh hổ xuất sơn, hàn khí thấu xương, trấn áp thiên địa!",
+                "❄️ Tiếng gầm xé toạc không gian, phá tan xiềng xích, nghịch thiên đột phá!",
+                "❄️ Băng tinh vĩnh cửu, đóng băng thời gian, vạn pháp quy nhất!"
+            ],
+            "color": 0x3498db, "icon": "❄️"
+        },
+        "Thôn Phệ Thú": {
+            "quotes": [
+                "🐾 Thôn thiên nạp địa, hấp thụ tinh hoa, tu vi đại tiến!",
+                "🐾 Linh thú thượng cổ hiện thân, há miệng nuốt chửng linh lực phương viên vạn dặm!",
+                "🐾 Một ngụm sạch bóng, vạn linh quy phục, đạo quả viên mãn!"
+            ],
+            "color": 0x9b59b6, "icon": "🐾"
+        },
+        "Huyền Quy": {
+            "quotes": [
+                "🐢 Bất động như sơn, vạn kiếp bất xâm, bảo hộ chân thân!",
+                "🐢 Quy giáp hiện linh văn, ngăn chặn thiên lôi, hóa giải lôi kiếp!",
+                "🐢 Trấn giữ phương Bắc, thọ cùng trời đất, vĩnh hằng bất diệt!"
+            ],
+            "color": 0x2ecc71, "icon": "🐢"
+        },
+        "Hóa Hình Hồ Ly": {
+            "quotes": [
+                "🦊 Thiên hồ hóa hình, mị hoặc chúng sinh, ảo cảnh vô biên!",
+                "🦊 Cửu vĩ lay động, nghịch chuyển càn khôn, biến ảo khôn lường!",
+                "🦊 Linh căn huyền diệu, tâm trí thông tuệ, thấu hiểu thiên cơ!"
+            ],
+            "color": 0xff69b4, "icon": "🦊"
+        }
+    }
+
+    # 5. XỬ LÝ THỊ UY
+    data = pet_actions.get(pet_name)
+    
+    # Nếu tên pet không nằm trong danh sách cấu hình (Pet lạ)
+    if not data:
+        embed_unknown = discord.Embed(
+            description=f"🐾 **{pet_name}** đang trầm mặc, uy lực tỏa ra khiến vạn vật xung quanh run sợ!",
+            color=0x95a5a6
+        )
+        return await interaction.followup.send(embed=embed_unknown)
+
+    # Chọn ngẫu nhiên chân ngôn
+    selected_quote = random.choice(data["quotes"])
+
+    # 6. HIỂN THỊ KẾT QUẢ
+    embed_res = discord.Embed(
+        title=f"{data['icon']} {pet_name.upper()} THỊ UY",
+        description=f"\n## {selected_quote}\n",
+        color=data["color"]
+    )
+    embed_res.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+    embed_res.set_footer(text="Khí thế chấn động bát hoang!")
+
+    await interaction.followup.send(content=f"📡 **Thông cáo thiên hạ:**", embed=embed_res)
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
