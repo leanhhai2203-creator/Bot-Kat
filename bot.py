@@ -325,18 +325,61 @@ async def check(interaction: discord.Interaction):
     embed.add_field(name="🧰 Trang bị", value=eq_text, inline=False)
     await interaction.followup.send(embed=embed)
 
-@bot.tree.command(name="diemdanh", description="Điểm danh nhận quà")
+@bot.tree.command(name="diemdanh", description="Điểm danh nhận cơ duyên thăng 1 cấp")
 async def diemdanh(interaction: discord.Interaction):
     await interaction.response.defer()
     uid, today = str(interaction.user.id), datetime.now().strftime("%Y-%m-%d")
-    u = await users_col.find_one_and_update({"_id": uid}, {"$setOnInsert": {"level": 1, "exp": 0, "linh_thach": 10}}, upsert=True, return_document=True)
     
-    if u.get("last_daily") == today: return await interaction.followup.send("❌ Hôm nay đã điểm danh rồi!")
+    # 1. Lấy dữ liệu (Giữ nguyên mốc khởi tạo của đạo hữu)
+    u = await users_col.find_one_and_update(
+        {"_id": uid}, 
+        {"$setOnInsert": {"level": 1, "exp": 0, "linh_thach": 10}}, 
+        upsert=True, 
+        return_document=True
+    )
     
-    reward = exp_needed(u["level"])
-    await users_col.update_one({"_id": uid}, {"$set": {"last_daily": today}, "$inc": {"exp": reward, "linh_thach": 1}})
-    await check_level_up(uid, interaction.channel, interaction.user.display_name)
-    await interaction.followup.send(f"✅ Điểm danh thành công! +{reward} EXP, +1 Linh thạch.")
+    # 2. Kiểm tra đã điểm danh chưa
+    if u.get("last_daily") == today: 
+        return await interaction.followup.send("❌ Hôm nay đạo hữu đã nhận bổng lộc rồi!")
+
+    current_lv = u.get("level", 1)
+
+    # 3. CHẶN BUG ĐỘT PHÁ (Tuyệt đối không cho nhảy qua mốc 10, 20, 30...)
+    # Nếu cấp tiếp theo là mốc đột phá, chỉ cho Linh thạch, không cho lên Level
+    if (current_lv + 1) % 10 == 0:
+        await users_col.update_one(
+            {"_id": uid},
+            {
+                "$inc": {"linh_thach": 1}, # Chỉ thưởng 1 Linh thạch
+                "$set": {"last_daily": today}
+            }
+        )
+        return await interaction.followup.send(
+            f"⚠️ Cảnh giới cấp {current_lv} đã chạm ngưỡng đột phá! \n"
+            f"Thiên đạo không thể giúp ngươi vượt qua đại hạn này. \n"
+            f"Điểm danh thành công: Nhận **1 Linh Thạch**. Hãy tự mình đột phá!"
+        )
+
+    # 4. TRƯỜNG HỢP CẤP THƯỜNG -> LÊN THẲNG 1 LV
+    new_level = current_lv + 1
+
+    await users_col.update_one(
+        {"_id": uid},
+        {
+            "$set": {
+                "level": new_level, 
+                "exp": 0,            # Reset EXP để bắt đầu cấp mới
+                "last_daily": today
+            },
+            "$inc": {"linh_thach": 1} # Chỉ thưởng 1 Linh thạch
+        }
+    )
+    
+    await interaction.followup.send(
+        f"🎊 **ĐẠI CƠ DUYÊN!** 🎊\n"
+        f"Đạo hữu điểm danh, thăng lên **Cấp {new_level}**! \n"
+        f"Nhận được **1 Linh thạch** bổng lộc."
+    )
 
 @bot.tree.command(name="gacha", description="Gacha trang bị & Linh thú độc bản (Tốn 1 Linh thạch sau 3 lượt)")
 async def gacha(interaction: discord.Interaction):
@@ -1047,6 +1090,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
