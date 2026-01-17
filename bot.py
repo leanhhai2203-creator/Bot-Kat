@@ -398,7 +398,7 @@ def get_canghioi_detail(lv):
         ("Nguyên Anh", 40), ("Hóa Thần", 50), ("Luyện Hư", 60),
         ("Hợp Thể", 70), ("Đại Thừa", 80), ("Đại Tiên", 90), ("Thiên Tiên", 100)
     ]
-    current_stage = "Phàm Nhân"
+    current_stage = "Tiên Nhân"
     for name, threshold in stages:
         if lv <= threshold:
             current_stage = name
@@ -1456,6 +1456,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
