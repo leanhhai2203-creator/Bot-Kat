@@ -1164,7 +1164,7 @@ class ShopView(discord.ui.View):
         
         # 2. Kiểm tra linh thạch
         u = await self.users_col.find_one({"_id": self.uid})
-        if not u or u.get("linh_thach", 0) < 50:
+        if not u or u.get("linh_thach", 0) < 80:
             return await interaction.response.send_message("❌ Đạo hữu không đủ 50 Linh thạch!", ephemeral=True)
 
         # 3. Thực hiện giao dịch
@@ -1172,7 +1172,7 @@ class ShopView(discord.ui.View):
             {"_id": self.uid},
             {
                 "$set": {"than_khi": selected_tk},
-                "$inc": {"linh_thach": -50}
+                "$inc": {"linh_thach": -80}
             }
         )
         
@@ -1180,14 +1180,14 @@ class ShopView(discord.ui.View):
         tk_data = self.config[selected_tk]
         embed = discord.Embed(
             title="🔥 GIAO DỊCH THÀNH CÔNG 🔥",
-            description=f"Chúc mừng đạo hữu nhận được **{selected_tk}**!\n\n*\"{tk_data['desc']}\"*",
+            description=f"Thần khí chọn chủ, Chúc mừng đạo hữu nhận được **{selected_tk}**!\n\n*\"{tk_data['desc']}\"*",
             color=tk_data['color']
         )
         # Sử dụng interaction.response vì select_callback chưa được defer
         await interaction.response.send_message(embed=embed)
         self.stop()
 
-@bot.tree.command(name="shop", description="Cửa hàng Thần Khí Thượng Cổ (50 Linh thạch/món)")
+@bot.tree.command(name="shop", description="Cửa hàng Thần Khí Thượng Cổ (80 Linh thạch/món)")
 async def shop(interaction: discord.Interaction):
     await interaction.response.defer()
     uid = str(interaction.user.id)
@@ -1211,7 +1211,7 @@ async def shop(interaction: discord.Interaction):
     for name in available_tk[:25]:
         view.children[0].add_option(
             label=name, 
-            description=f"Giá: 50 Linh thạch - {THAN_KHI_CONFIG[name]['desc'][:50]}..."
+            description=f"Giá: 80 Linh thạch - {THAN_KHI_CONFIG[name]['desc'][:80]}..."
         )
 
     await interaction.followup.send("🏛️ **LINH BẢO CÁC** 🏛️\nNơi trao đổi những món thần vật thượng cổ.", view=view)
@@ -1469,6 +1469,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
