@@ -425,7 +425,7 @@ async def info(interaction: discord.Interaction):
             rank = i + 1
             break
     
-    danh_hieu = "Phàm Nhân"
+    danh_hieu = "Tiên Nhân"
     if rank == 1: danh_hieu = "🏆 Đệ Nhất Chí Tôn"
     elif rank == 2: danh_hieu = "🥈 Vạn Cổ Nhị Đế"
     elif rank == 3: danh_hieu = "🥉 Tam Thế Đại Tiên"
@@ -1511,6 +1511,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
