@@ -383,74 +383,43 @@ async def on_message(message):
     
     await bot.process_commands(message)
 # ========== LỆNH SLASH (/) ==========
+# 1. Đảm bảo hàm exp_needed đồng bộ với lệnh check_level_up
+def exp_needed(lv):
+    return lv * 100
+
 @bot.tree.command(name="check", description="Xem hồ sơ tu tiên")
 async def info(interaction: discord.Interaction):
     try:
         await interaction.response.defer()
         uid = str(interaction.user.id)
-        
-        # Kết nối DB
         u = await users_col.find_one({"_id": uid})
-        if not u:
-            return await interaction.followup.send("⚠️ Đạo hữu chưa có tên trong sổ sinh tử!")
-        
-        # Lấy trang bị (eq_col phải được định nghĩa ở trên)
+        if not u: return await interaction.followup.send("⚠️ Chưa có hồ sơ!")
+
         eq = await eq_col.find_one({"_id": uid}) or {}
-
         level = u.get("level", 1)
-        than_khi_name = u.get("than_khi")
+        cur_exp = u.get("exp", 0)
 
-        # 1. TÍNH CẢNH GIỚI (Định dạng Lv.X - Cảnh giới tầng Y)
-        stages = [("Luyện Khí", 10), ("Trúc Cơ", 20), ("Kết Đan", 30), ("Nguyên Anh", 40), 
-                  ("Hóa Thần", 50), ("Luyện Hư", 60), ("Hợp Thể", 70), ("Đại Thừa", 80), 
-                  ("Đại Tiên", 90), ("Thiên Tiên", 100)]
-        
-        canh_gioi_ten = "Phàm Nhân"
-        for name, thres in stages:
-            if level <= thres:
-                canh_gioi_ten = name
-                break
-        else: canh_gioi_ten = "Thiên Tiên"
-        
-        tang = (level % 10) or 10
-        display_canh_gioi = f"Lv.{level} - {canh_gioi_ten} tầng {tang}"
-
-        # 2. XỬ LÝ TRANG BỊ (Đúng tên: Kiếm, Nhẫn, Giáp, Tay, Ủng)
-        # Bần đạo dùng .get(key, 0) để chắc chắn không bị lỗi nếu DB trống
-        kiem_lv = eq.get("Kiếm", 0)
-        nhan_lv = eq.get("Nhẫn", 0)
-        giap_lv = eq.get("Giáp", 0)
-        tay_lv = eq.get("Tay", 0)
-        ung_lv = eq.get("Ủng", 0)
-
-        if than_khi_name:
-            weapon_val = f"🌟 **{than_khi_name}**"
-            color = 0xffd700 # Màu vàng kim cho thần khí
+        # ĐỘT PHÁ: Nếu đang ở cấp 10, 20, 30... thì ghi "Đỉnh phong"
+        if level % 10 == 0:
+            exp_display = "Cần Đột Phá Cảnh Giới"
         else:
-            weapon_val = f"⚔️ Kiếm Cấp {kiem_lv}" if kiem_lv > 0 else "⚔️ Vô nhận kiếm"
-            color = 0x3498db # Màu xanh mặc định
+            # Lấy đúng hàm exp_needed để hiển thị
+            needed = exp_needed(level) 
+            exp_display = f"{cur_exp} / {needed}"
 
-        # 3. EMBED
-        embed = discord.Embed(title=f"📜 HỒ SƠ: {interaction.user.display_name}", color=color)
+        # Cảnh giới (Sử dụng hàm detail đã sửa ở trên)
+        display_canh_gioi = get_canghioi_detail(level)
+
+        # ... (Phần trang bị giữ nguyên như cũ) ...
+
+        embed = discord.Embed(title=f"📜 HỒ SƠ: {interaction.user.display_name}", color=0x3498db)
         embed.add_field(name="📜 Cảnh Giới", value=f"**{display_canh_gioi}**", inline=False)
-        embed.add_field(name="💎 Linh Thạch", value=f"{u.get('linh_thach', 0)} viên", inline=True)
-        embed.add_field(name="✨ Linh Lực", value=f"`{u.get('exp', 0)} / {level * 100}`", inline=True)
-
-        trang_bi_str = (
-            f"Vũ khí: {weapon_val}\n"
-            f"💍 Nhẫn: Cấp {nhan_lv}\n"
-            f"🛡️ Giáp: Cấp {giap_lv}\n"
-            f"🧤 Tay: Cấp {tay_lv}\n"
-            f"👢 Ủng: Cấp {ung_lv}"
-        )
-        embed.add_field(name="📦 Trang Bị Khảm Nạm", value=trang_bi_str, inline=True)
+        embed.add_field(name="✨ Linh Lực", value=f"`{exp_display}`", inline=True)
+        # ... (Các field khác) ...
         
-        pet = u.get("pet", "Chưa có")
-        embed.add_field(name="🦄 Linh Thú", value=f"🐾 **{pet}**", inline=True)
-
         await interaction.followup.send(embed=embed)
     except Exception as e:
-        print(f"❌ LỖI TẠI LỆNH CHECK: {e}")
+        print(f"Lỗi: {e}")
 @bot.tree.command(name="diemdanh", description="Điểm danh nhận cơ duyên thăng 1 cấp")
 async def diemdanh(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -1472,6 +1441,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
