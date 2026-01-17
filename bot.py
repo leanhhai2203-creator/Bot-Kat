@@ -286,23 +286,26 @@ async def on_message(message):
         user_data = {"level": 1, "exp": 0, "linh_thach": 10, "pet": None}
         await users_col.insert_one({"_id": uid, **user_data})
 
-    # --- MỚI: KIỂM TRA TRẠNG THÁI CẤM TÚC ---
+    # --- KIỂM TRA TRẠNG THÁI CẤM TÚC (ĐÃ SỬA) ---
     ban_until = user_data.get("ban_exp_until")
     if ban_until:
-        # Nếu ban_until là kiểu datetime, ta so sánh trực tiếp
+        # Đảm bảo so sánh cùng kiểu datetime
+        # Nếu ban_until trong DB bị lưu nhầm là số, ta dùng datetime.fromtimestamp
+        if isinstance(ban_until, (int, float)):
+            ban_until = datetime.fromtimestamp(ban_until)
+
         if now_dt < ban_until:
-            # Nhắc nhở 60 giây một lần
             if uid not in last_ban_warn or (now_ts - last_ban_warn[uid]) > 60:
+                time_str = ban_until.strftime('%H:%M %d/%m')
                 await message.channel.send(
-                    f"⚠️ {message.author.mention}, đạo hữu đang trong thời gian **Cấm túc**. "
-                    f"Không thể hấp thụ linh khí (Hết hạn lúc: {ban_until.strftime('%H:%M %d/%m')})",
+                    f"⚠️ {message.author.mention}, đạo hữu đang bị cấm túc. Hết hạn: {time_str}",
                     delete_after=10
                 )
                 last_ban_warn[uid] = now_ts
             
-            # Quan trọng: Vẫn xử lý lệnh (process_commands) nhưng không chạy tiếp phần cộng EXP
             await bot.process_commands(message)
-            return
+            return # Dừng tại đây, không xuống phần cộng EXP
+    # ------------------------------------------
     # --------------------------------------
 
     # 3. TÍNH TOÁN HỆ SỐ KÊNH
@@ -1259,6 +1262,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
