@@ -7,6 +7,9 @@ from datetime import datetime
 from discord import app_commands
 import motor.motor_asyncio
 import asyncio
+import time
+import datetime
+
 # ========== KẾT NỐI MONGODB ==========
 MONGO_URI = os.getenv("MONGO_URI") 
 cluster = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
@@ -26,6 +29,7 @@ MSG_COOLDOWN = 20
 last_msg_time = {}
 last_msg_content = {} 
 server_avg_lv = 1.0
+last_ban_warn = {} 
 # Các kênh nhận thông báo quan trọng
 NOTIFY_CHANNELS = [1455081842473697362, 1455837230332641280, 1454793019160006783, 1454793109094268948, 1454506037779369986] 
 CHANNEL_EXP_RATES = {
@@ -259,19 +263,21 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Lỗi nghiêm trọng khi khởi động Bot: {e}")
 @bot.event
+
 async def on_message(message):
     if message.author.bot: return
     
     uid = str(message.author.id)
-    now = datetime.now().timestamp()
+    now_dt = datetime.now()
+    now_ts = now_dt.timestamp()
     content = message.content.strip().lower()
 
     # 1. BỘ LỌC SPAM & TRÙNG LẶP
     if content == last_msg_content.get(uid): return 
-    if not (len(content) >= MIN_MSG_LEN and now - last_msg_time.get(uid, 0) >= MSG_COOLDOWN):
+    if not (len(content) >= MIN_MSG_LEN and now_ts - last_msg_time.get(uid, 0) >= MSG_COOLDOWN):
         return
 
-    last_msg_time[uid] = now
+    last_msg_time[uid] = now_ts
     last_msg_content[uid] = content
     
     # 2. TRUY VẤN DỮ LIỆU TU SĨ
@@ -279,6 +285,25 @@ async def on_message(message):
     if not user_data:
         user_data = {"level": 1, "exp": 0, "linh_thach": 10, "pet": None}
         await users_col.insert_one({"_id": uid, **user_data})
+
+    # --- MỚI: KIỂM TRA TRẠNG THÁI CẤM TÚC ---
+    ban_until = user_data.get("ban_exp_until")
+    if ban_until:
+        # Nếu ban_until là kiểu datetime, ta so sánh trực tiếp
+        if now_dt < ban_until:
+            # Nhắc nhở 60 giây một lần
+            if uid not in last_ban_warn or (now_ts - last_ban_warn[uid]) > 60:
+                await message.channel.send(
+                    f"⚠️ {message.author.mention}, đạo hữu đang trong thời gian **Cấm túc**. "
+                    f"Không thể hấp thụ linh khí (Hết hạn lúc: {ban_until.strftime('%H:%M %d/%m')})",
+                    delete_after=10
+                )
+                last_ban_warn[uid] = now_ts
+            
+            # Quan trọng: Vẫn xử lý lệnh (process_commands) nhưng không chạy tiếp phần cộng EXP
+            await bot.process_commands(message)
+            return
+    # --------------------------------------
 
     # 3. TÍNH TOÁN HỆ SỐ KÊNH
     rate = CHANNEL_EXP_RATES.get(message.channel.id, 0.1)
@@ -290,8 +315,7 @@ async def on_message(message):
     is_server_buffed = False
     
     if user_lv < server_avg_lv:
-        base_exp = base_exp * 2  # Thêm 100% EXP gốc
-        is_buffed_icon = "✨"    # Icon hiệu ứng buff
+        base_exp = base_exp * 2  
         is_server_buffed = True
     # --------------------------------------
 
@@ -301,19 +325,15 @@ async def on_message(message):
     
     if user_pet in PET_CONFIG:
         pet_info = PET_CONFIG[user_pet]
-        # Thả icon đại diện của Linh thú
         try: await message.add_reaction(pet_info["icon"])
         except: pass
 
-        # Bonus đặc biệt cho Thôn Phệ Thú
         if user_pet == "Thôn Phệ Thú":
             pet_bonus = int(base_exp * (pet_info.get("exp_mult", 1.15) - 1))
-            # Nếu đã có x2 server buff, thả thêm icon để tu sĩ biết
             if is_server_buffed:
                 try: await message.add_reaction("✨")
                 except: pass
     
-    # Nếu được buff lv thấp nhưng không có Pet, vẫn hiện icon ngôi sao
     elif is_server_buffed:
         try: await message.add_reaction("✨")
         except: pass
@@ -1123,6 +1143,31 @@ async def loiphat(interaction: discord.Interaction):
     
     await interaction.followup.send(embed=embed)
 
+@bot.tree.command(name="ban_exp", description="Cấm túc tu sĩ, không cho nhận EXP trong 6 tiếng")
+async def ban_exp(interaction: discord.Interaction, target: discord.Member):
+    # 1. Kiểm tra ID Admin (Cách 2)
+    if interaction.user.id != ADMIN_ID:
+        return await interaction.response.send_message(
+            "⛔ Ngươi không có quyền thực thi lệnh cấm túc này!", 
+            ephemeral=True
+        )
+
+    # 2. Tính toán thời gian: Hiện tại + 6 tiếng
+    ban_duration = datetime.timedelta(hours=6)
+    expire_time = datetime.datetime.now() + ban_duration
+    
+    # 3. Cập nhật vào Database (Trường ban_exp_until)
+    await users_col.update_one(
+        {"_id": str(target.id)},
+        {"$set": {"ban_exp_until": expire_time}},
+        upsert=True
+    )
+
+    await interaction.response.send_message(
+        f"🚫 **THIẾT LUẬT CHẤP PHÁP** 🚫\n"
+        f"Tu sĩ {target.mention} đã bị cấm túc nhận linh khí (EXP) trong **6 tiếng**.\n"
+        f"Thời hạn đến: `{expire_time.strftime('%H:%M:%S %d/%m/%Y')}`"
+    )
 @bot.tree.command(name="pay", description="Chuyển linh thạch cho đạo hữu khác")
 @app_commands.describe(member="Người nhận linh thạch", amount="Số lượng linh thạch muốn chuyển")
 async def pay(interaction: discord.Interaction, member: discord.Member, amount: int):
@@ -1148,6 +1193,7 @@ async def pay(interaction: discord.Interaction, member: discord.Member, amount: 
         f"📜 **XÁC NHẬN GIAO DỊCH**\nĐạo hữu có chắc muốn chuyển **{amount} Linh thạch** cho **{member.mention}** không?\n*(Nút bấm sẽ hết hạn sau 30 giây)*",
         view=view
     )
+
 
 @bot.tree.command(name="add", description="[ADMIN] Ban thưởng Linh thạch cho tu sĩ")
 @app_commands.describe(target="Tu sĩ được ban thưởng", so_luong="Số lượng linh thạch")
@@ -1185,6 +1231,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
