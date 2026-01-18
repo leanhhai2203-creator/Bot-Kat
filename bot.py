@@ -596,7 +596,7 @@ async def gacha(interaction: discord.Interaction):
     # KIỂM TRA SLOT KIẾM & THẦN KHÍ
     if eq_type == "Kiếm" and user_than_khi:
         # Nếu đã có Thần Khí, mọi loại Kiếm thường đều bị rã
-        exp_bonus = lv * 100
+        exp_bonus = lv * 10
         msg = f"⚔️ Uy áp từ **[{user_than_khi}]** khiến **Kiếm cấp {lv}** vừa xuất hiện đã vụn nát, nhận **{exp_bonus} EXP**."
     elif lv > old_lv:
         # Nhận đồ mạnh hơn
@@ -604,7 +604,7 @@ async def gacha(interaction: discord.Interaction):
         msg = f"🎁 Nhận được **{eq_type} cấp {lv}**"
     else:
         # Phân rã đồ yếu hơn hoặc bằng
-        exp_bonus = lv * 100
+        exp_bonus = lv * 10
         msg = f"🗑️ **{eq_type} cấp {lv}** quá yếu, rã nhận **{exp_bonus} EXP**"
 
     # 5. CẬP NHẬT DATABASE TỔNG HỢP
@@ -1781,6 +1781,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
