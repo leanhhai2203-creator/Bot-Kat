@@ -1611,7 +1611,7 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member):
 
     try:
         # Buff Boss cực mạnh (Khoảng 35,000+ Power)
-        boss_p = (800 * 20) + 15000 + random.randint(1000, 5000)
+        boss_p = (800 * 25) + 15000 + random.randint(1000, 5000)
         
         view = BossInviteView(member.id, interaction.user.id)
         msg = await interaction.followup.send(
@@ -1640,7 +1640,7 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member):
             p1 = await calc_power(uid1)
             p2 = await calc_power(uid2)
             total_p = p1 + p2
-            win_rate = (total_p / boss_p) * 0.9 # Giảm 10% tỉ lệ thắng để Boss khó hơn
+            win_rate = (total_p / boss_p) * 0.8 # Giảm 10% tỉ lệ thắng để Boss khó hơn
             
             is_win = random.random() < win_rate
 
@@ -1841,6 +1841,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
