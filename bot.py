@@ -944,7 +944,7 @@ async def huongdan(interaction: discord.Interaction):
     # Hình ảnh minh họa và Footer
     embed.set_footer(text="Chúc đạo hữu sớm ngày phi thăng!")
     # Đạo hữu có thể thêm ảnh minh họa tiên cảnh ở đây
-    embed.set_thumbnail(url="https://i.imgur.com/8pY8Xf8.png") 
+    embed.set_thumbnail(url="https://i.postimg.cc/sx0d4pWy/Bxh.jpg") 
 
     await interaction.response.send_message(embed=embed)
 import asyncio
@@ -1948,6 +1948,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
