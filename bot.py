@@ -114,7 +114,8 @@ PET_CONFIG = {
         "effect": "Tăng 20% Linh Thạch",
         "color": 0xff99cc,
         "icon": "🦊"
-    }
+    },
+    "Rồng Hoa Thánh":{"icon": 🐉}
 }
 
 # ========== UTIL FUNCTIONS (THUẦN MONGODB) ==========
@@ -2063,6 +2064,7 @@ async def baucua(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
