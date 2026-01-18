@@ -1367,27 +1367,19 @@ async def captcha(interaction: discord.Interaction, target: discord.Member):
             content=f"⏰ **{target.display_name}** không có phản ứng sau 30 giây! Kết luận: Treo máy hoặc sử dụng Auto.", 
             view=None
                 )
-@bot.tree.command(name="loiphat", description="[ADMIN] Thiên phạt: Top 1 (500-1000 EXP) & 2 vị trong Top 2-5 (100-500 EXP)")
+@bot.tree.command(name="loiphat", description="[ADMIN] Thiên phạt: Giảm EXP và có thể rớt cấp (Bảo hộ mốc 21, 31, 41)")
 async def loiphat(interaction: discord.Interaction):
-    # 1. Kiểm tra quyền Admin
     if interaction.user.id != ADMIN_ID:
-        return await interaction.response.send_message(
-            "❌ **THIÊN PHẠT!** Bạn không có quyền năng này.", 
-            ephemeral=True
-        )
+        return await interaction.response.send_message("❌ **THIÊN PHẠT!** Bạn không có quyền năng này.", ephemeral=True)
 
     await interaction.response.defer()
     
-    # 2. Lấy danh sách Top 5 cao thủ
     top_5 = await users_col.find().sort([("level", -1), ("exp", -1)]).limit(5).to_list(length=5)
-    
     if len(top_5) < 3:
         return await interaction.followup.send("⚠️ Linh khí server chưa đủ mạnh (cần ít nhất 3 người trong BXH)!")
 
-    # --- LOGIC MỚI: CHỌN MỤC TIÊU ---
-    # Top 1 chắc chắn bị đánh
+    # Chọn mục tiêu
     top_1 = top_5[0]
-    # Chọn ngẫu nhiên 2 người từ danh sách còn lại (Top 2 đến Top 5)
     others = top_5[1:] 
     victims_others = random.sample(others, k=min(2, len(others)))
     
@@ -1395,33 +1387,57 @@ async def loiphat(interaction: discord.Interaction):
     report_msg = f"✨ **KHẨU LỆNH:** *\"{than_chu}\"*\n"
     report_msg += "─" * 15 + "\n\n"
 
-    # 3. XỬ LÝ TOP 1 (Sét đánh cực nặng: 500-1000 EXP)
-    t1_uid = top_1.get("_id")
-    t1_exp = top_1.get("exp", 0)
-    t1_lost = random.randint(500, 1000)
-    t1_new_exp = max(0, t1_exp - t1_lost)
-    
-    await users_col.update_one({"_id": t1_uid}, {"$set": {"exp": t1_new_exp}})
-    report_msg += f"🔥 **ĐẠI NẠN TOP 1 - <@{t1_uid}>** bị thiên lôi truy sát!\n   └─ 📉 Hao tổn cực nặng: **-{t1_lost} EXP**\n\n"
-
-    # 4. XỬ LÝ 2 NGƯỜI CÒN LẠI (Sét đánh thường: 100-500 EXP)
-    for user in victims_others:
-        uid = user.get("_id")
-        current_exp = user.get("exp", 0)
-        lost_exp = random.randint(100, 500)
-        new_exp = max(0, current_exp - lost_exp)
+    # --- HÀM XỬ LÝ KHẤU TRỪ TU VI (LOGIC RỚT CẤP) ---
+    async def apply_penalty(user_data, lost_amount):
+        uid = user_data.get("_id")
+        lv = user_data.get("level", 1)
+        current_exp = user_data.get("exp", 0)
         
-        await users_col.update_one({"_id": uid}, {"$set": {"exp": new_exp}})
-        report_msg += f"⚡ **<@{uid}>** bị lôi đình đánh trúng!\n   └─ 📉 Hao tổn: **-{lost_exp} EXP**\n\n"
+        # Mốc bảo hộ: 21, 31, 41...
+        PROTECTED_LEVELS = [21, 31, 41, 51, 61, 71, 81, 91]
+        
+        if current_exp >= lost_amount:
+            # Trường hợp 1: Đủ EXP để trừ
+            new_exp = current_exp - lost_amount
+            await users_col.update_one({"_id": uid}, {"$set": {"exp": new_exp}})
+            return f"-{lost_amount} EXP"
+        else:
+            # Trường hợp 2: Không đủ EXP, kiểm tra xem có rớt cấp được không
+            if lv in PROTECTED_LEVELS or lv <= 1:
+                # Nếu đang ở mốc bảo hộ, chỉ về 0 EXP
+                await users_col.update_one({"_id": uid}, {"$set": {"exp": 0}})
+                return f"-{current_exp} EXP (Đã chạm mốc bảo hộ {lv})"
+            else:
+                # Thực hiện rớt cấp
+                remainder = lost_amount - current_exp
+                new_lv = lv - 1
+                # EXP cần của cấp cũ (Giả sử công thức của đạo hữu là lv * 100, hãy sửa theo công thức của bạn)
+                # Ở đây bần đạo giả định mốc EXP tối đa của cấp mới (cấp lv-1)
+                exp_needed_old_lv = new_lv * 100 
+                
+                final_exp = max(0, exp_needed_old_lv - remainder)
+                
+                await users_col.update_one(
+                    {"_id": uid}, 
+                    {"$set": {"level": new_lv, "exp": final_exp}}
+                )
+                return f"📉 **Rớt xuống Cấp {new_lv}** (Thất thoát {lost_amount} Tu vi)"
 
-    # 5. Gửi Embed kết quả
-    embed = discord.Embed(
-        title="⛈️ THIÊN PHẠT BẢNG VÀNG ⛈️",
-        description=report_msg,
-        color=discord.Color.from_rgb(255, 0, 0) # Màu đỏ cảnh báo
-    )
+    # 3. XỬ LÝ TOP 1
+    t1_lost = random.randint(500, 1000)
+    res_t1 = await apply_penalty(top_1, t1_lost)
+    report_msg += f"🔥 **ĐẠI NẠN TOP 1 - <@{top_1['_id']}>**\n   └─ {res_t1}\n\n"
+
+    # 4. XỬ LÝ 2 NGƯỜI CÒN LẠI
+    for user in victims_others:
+        lost_val = random.randint(100, 500)
+        res_other = await apply_penalty(user, lost_val)
+        report_msg += f"⚡ **<@{user['_id']}>** bị sét đánh!\n   └─ {res_other}\n\n"
+
+    # 5. Gửi Embed
+    embed = discord.Embed(title="⛈️ THIÊN PHẠT GIÁNG LÂM ⛈️", description=report_msg, color=0xFF0000)
     embed.set_image(url="https://i.imgur.com/K6Y0X9E.gif") 
-    embed.set_footer(text=f"Thiên đạo công minh - Người thi triển: {interaction.user.display_name}")
+    embed.set_footer(text=f"Thiên đạo vô tình - Người thi triển: {interaction.user.display_name}")
     
     await interaction.followup.send(embed=embed)
 
@@ -1841,6 +1857,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
