@@ -601,7 +601,7 @@ async def gacha(interaction: discord.Interaction):
     # Đảm bảo dùng biến này để kiểm tra xuyên suốt hàm gacha
     current_user_tk = u.get("than_khi")
     
-    if not current_user_tk and random.random() <= 0.5: 
+    if not current_user_tk and random.random() <= 0.005: 
         owned_tk = await users_col.distinct("than_khi", {"than_khi": {"$ne": None}})
         available_tk = [tk for tk in THAN_KHI_CONFIG.keys() if tk not in owned_tk]
         
@@ -1948,6 +1948,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
