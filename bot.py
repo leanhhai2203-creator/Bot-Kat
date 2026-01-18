@@ -947,29 +947,35 @@ async def huongdan(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed)
 import asyncio
-@bot.tree.command(name="bxhlc", description="Vinh danh Top 10 cao thủ có Lực chiến kinh thiên động địa")
+@bot.tree.command(name="bxhlc", description="Vinh danh Top 10 cao thủ có Lực chiến cao nhất server")
 async def bxhlc(interaction: discord.Interaction):
     await interaction.response.defer()
 
-    # 1. Lấy danh sách tu sĩ (Quét 100 người để lọc ra Top 10 LC)
+    # 1. Lấy danh sách tu sĩ (Quét 100 người để tính toán LC)
     all_users = await users_col.find().to_list(length=100)
     
     if not all_users:
-        return await interaction.followup.send("🥀 Linh giới chưa có tu sĩ nào ghi danh.")
+        return await interaction.followup.send("⚠️ Chưa có tu sĩ nào ghi danh trên bảng vàng.")
 
     leaderboard_data = []
 
-    # 2. Duyệt qua từng tu sĩ và tính lực chiến bằng hàm calc_power
+    # 2. Duyệt qua từng tu sĩ và tính lực chiến
     for u in all_users:
-        uid = u.get("_id")
-        # Lấy tên hiển thị từ Database hoặc dùng tên Discord nếu không có
-        user_name = u.get("name") or f"Tu sĩ {uid[-4:]}"
+        uid = str(u.get("_id"))
         
-        # GỌI HÀM CALC_POWER ĐÃ CÓ (Đảm bảo đồng bộ tuyệt đối)
+        # --- LẤY TÊN HIỂN THỊ TRƯƠNG TỰ /BXH ---
+        member = interaction.guild.get_member(int(uid)) if uid.isdigit() else None
+        if member:
+            name_display = member.display_name
+        else:
+            # Nếu không tìm thấy trong cache, lấy 4 số cuối ID để tránh lỗi hiển thị
+            name_display = f"Tu sĩ ({uid[-4:]})"
+        
+        # GỌI HÀM CALC_POWER (Đảm bảo đồng bộ tuyệt đối với /check)
         power_value = await calc_power(uid)
         
         leaderboard_data.append({
-            "name": user_name,
+            "name": name_display,
             "power": power_value,
             "level": u.get("level", 1),
             "than_khi": u.get("than_khi")
@@ -979,28 +985,28 @@ async def bxhlc(interaction: discord.Interaction):
     leaderboard_data.sort(key=lambda x: x["power"], reverse=True)
     top_10 = leaderboard_data[:10]
 
-    # 4. Tạo Embed hiển thị
+    # 4. Xây dựng nội dung hiển thị
+    description = ""
+    for i, user in enumerate(top_10):
+        # Biểu tượng huy chương cho Top 3
+        medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"**#{i+1}**"
+        
+        # Thêm thông tin Thần khí nếu có
+        tk_tag = f" | ⚔️ `{user['than_khi']}`" if user['than_khi'] else ""
+        
+        # Định dạng giống /bxh để thống nhất phong cách
+        description += f"{medal} **{user['name']}**\n└─ Lực chiến: `{user['power']:,}` • Cấp {user['level']}{tk_tag}\n\n"
+
+    # 5. Tạo Embed
     embed = discord.Embed(
         title="🏆 THIÊN BẢNG LỰC CHIẾN 🏆",
-        description="*Khí trấn sơn hà - Danh lưu vạn cổ*",
-        color=0xF1C40F # Màu Vàng Kim của bậc đại năng
+        description=description,
+        color=0xF1C40F, # Màu Vàng Kim
+        timestamp=datetime.now()
     )
-
-    description_list = []
-    for i, user in enumerate(top_10, 1):
-        # Biểu tượng hạng
-        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"**#{i}**"
-        
-        # Hiển thị Thần khí nếu có để tăng phần uy thế
-        tk_str = f" | ⚔️ `{user['than_khi']}`" if user['than_khi'] else ""
-        
-        # Dòng hiển thị chi tiết
-        line = f"{medal} **{user['name']}** - LC: `{user['power']:,}`\n└ *Cấp {user['level']}{tk_str}*"
-        description_list.append(line)
-
-    embed.description = "─" * 20 + "\n\n" + "\n\n".join(description_list)
-    embed.set_footer(text=f"Thiên đạo minh chứng • {interaction.user.display_name}")
-    embed.set_thumbnail(url="https://i.imgur.com/K6Y0X9E.gif") # Hiệu ứng lôi đình cho oai phong
+    
+    embed.set_footer(text=f"Yêu cầu bởi: {interaction.user.display_name}")
+    embed.set_thumbnail(url="https://i.imgur.com/K6Y0X9E.gif")
 
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="bxh", description="Xem bảng xếp hạng các đại năng tu tiên")
@@ -1948,6 +1954,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
