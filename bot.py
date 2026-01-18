@@ -5,12 +5,16 @@ from discord import app_commands, SelectOption
 from discord.ui import Select, View
 from discord.ext import commands, tasks
 import random
+import asyncio
 from discord import app_commands
 import motor.motor_asyncio
 import asyncio
 import time
 import datetime
 from datetime import datetime, timedelta
+
+
+
 # ========== KẾT NỐI MONGODB ==========
 MONGO_URI = os.getenv("MONGO_URI") 
 cluster = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
@@ -67,11 +71,9 @@ THAN_CHU_THIEN_PHAT = [
 ]
 
 EQ_TYPES = ["Kiếm", "Nhẫn", "Giáp", "Tay", "Ủng"]
-# Định nghĩa các linh vật
-BAU_CUA_ICONS = {
-    "Bầu": "🎃", "Cua": "🦀", "Tôm": "🦐", 
-    "Cá": "🐟", "Gà": "🐓", "Nai": "🦌"
-}
+
+# --- CONFIG LINH VẬT ---
+BAU_CUA_ICONS = {"Bầu": "🎃", "Cua": "🦀", "Tôm": "🦐", "Cá": "🐟", "Gà": "🐓", "Nai": "🦌"}
 PET_CONFIG = {
     "Tiểu Hỏa Phượng": {
         "atk": 180, 
@@ -1951,9 +1953,15 @@ async def show_thankhi(interaction: discord.Interaction):
         print(f"Lỗi: {e}")
         if not interaction.responses.is_done():
             await interaction.followup.send(f"⚠️ Pháp trận lỗi: {str(e)}")
-# --- 1. MODAL ĐỂ NHẬP SỐ TIỀN CƯỢC ---
-class BetAmountModal(discord.ui.Modal, title="Nhập số linh thạch cược"):
-    amount = discord.ui.TextInput(label="Số linh thạch", placeholder="Ví dụ: 10, 50, 100...", min_length=1, max_length=10)
+
+# --- 1. MODAL NHẬP TIỀN CƯỢC ---
+class BetAmountModal(discord.ui.Modal, title="Nhập số linh thạch muốn cược"):
+    amount = discord.ui.TextInput(
+        label="Số lượng đặt cược", 
+        placeholder="Nhập số linh thạch (VD: 100)...", 
+        min_length=1, 
+        max_length=10
+    )
 
     def __init__(self, choice, parent_view):
         super().__init__()
@@ -1964,108 +1972,118 @@ class BetAmountModal(discord.ui.Modal, title="Nhập số linh thạch cược")
         try:
             val = int(self.amount.value)
             if val <= 0: raise ValueError
-        except:
+        except ValueError:
             return await interaction.response.send_message("⚠️ Số linh thạch không hợp lệ!", ephemeral=True)
 
         uid = str(interaction.user.id)
-        # Kiểm tra túi đồ người chơi
         u = await users_col.find_one({"_id": uid})
         if not u or u.get("linh_thach", 0) < val:
-            return await interaction.response.send_message("❌ Đạo hữu không đủ linh thạch!", ephemeral=True)
+            return await interaction.response.send_message("❌ Đạo hữu không có đủ linh thạch!", ephemeral=True)
 
-        # Ghi nhận đặt cược vào danh sách chung của phiên
+        # Trừ tiền ngay lập tức để đặt cọc
+        await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": -val}})
+
         if uid not in self.parent_view.all_bets:
             self.parent_view.all_bets[uid] = []
-        
         self.parent_view.all_bets[uid].append({"choice": self.choice, "amount": val})
-        
-        # Trừ tiền tạm thời để tránh gian lận (đặt 1 nơi dùng nhiều chỗ)
-        await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": -val}})
-        
-        await interaction.response.send_message(f"✅ Đã đặt **{val} Linh thạch** vào **{self.choice}**!", ephemeral=True)
 
-# --- 2. VIEW HIỂN THỊ NÚT BẤM ---
+        await interaction.response.send_message(f"✅ Đã đặt **{val}** linh thạch vào **{self.choice}**!", ephemeral=True)
+
+# --- 2. GIAO DIỆN SÒNG BẠC (VIEW) ---
 class MultiBauCuaView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=45)
-        self.all_bets = {} # { "uid": [{"choice": "Bầu", "amount": 10}, ...] }
-        self.icons = {"Bầu": "🎃", "Cua": "🦀", "Tôm": "🦐", "Cá": "🐟", "Gà": "🐓", "Nai": "🦌"}
+        self.all_bets = {} 
 
-    async def make_bet(self, interaction, choice):
+    async def prompt_bet(self, interaction, choice):
         await interaction.response.send_modal(BetAmountModal(choice, self))
 
     @discord.ui.button(label="Bầu", emoji="🎃", style=discord.ButtonStyle.gray)
-    async def bet_bau(self, interaction, button): await self.make_bet(interaction, "Bầu")
+    async def bau(self, interaction, button): await self.prompt_bet(interaction, "Bầu")
     @discord.ui.button(label="Cua", emoji="🦀", style=discord.ButtonStyle.gray)
-    async def bet_cua(self, interaction, button): await self.make_bet(interaction, "Cua")
+    async def cua(self, interaction, button): await self.prompt_bet(interaction, "Cua")
     @discord.ui.button(label="Tôm", emoji="🦐", style=discord.ButtonStyle.gray)
-    async def bet_tom(self, interaction, button): await self.make_bet(interaction, "Tôm")
+    async def tom(self, interaction, button): await self.prompt_bet(interaction, "Tôm")
     @discord.ui.button(label="Cá", emoji="🐟", style=discord.ButtonStyle.gray)
-    async def bet_ca(self, interaction, button): await self.make_bet(interaction, "Cá")
+    async def ca(self, interaction, button): await self.prompt_bet(interaction, "Cá")
     @discord.ui.button(label="Gà", emoji="🐓", style=discord.ButtonStyle.gray)
-    async def bet_ga(self, interaction, button): await self.make_bet(interaction, "Gà")
+    async def ga(self, interaction, button): await self.prompt_bet(interaction, "Gà")
     @discord.ui.button(label="Nai", emoji="🦌", style=discord.ButtonStyle.gray)
-    async def bet_nai(self, interaction, button): await self.make_bet(interaction, "Nai")
+    async def nai(self, interaction, button): await self.prompt_bet(interaction, "Nai")
 
-# --- 3. LỆNH CHÍNH /BAUCUA ---
-@bot.tree.command(name="baucua", description="Mở sòng Bầu Cua cho toàn bộ đạo hữu (45 giây đặt cược)")
+# --- 3. LỆNH SLASH COMMAND ---
+@bot.tree.command(name="baucua", description="Mở sòng Bầu Cua công cộng (45 giây đặt cược)")
 async def baucua(interaction: discord.Interaction):
     await interaction.response.defer()
-    
     view = MultiBauCuaView()
+    
     embed = discord.Embed(
-        title="🎲 SÒNG BẠC TU TIÊN - ĐANG MỞ CỬA 🎲",
-        description="Đạo hữu hãy bấm các nút dưới đây để đặt cược.\nThời gian còn lại: **45 giây**!",
+        title="🎲 SÒNG BẠC CHƯ ĐẠO HỮU 🎲",
+        description=(
+            "Lục đạo luân hồi, may rủi tại tâm!\n"
+            "Các vị đạo hữu có **45 giây** để đặt cược linh thạch.\n\n"
+            "👉 Nhấn nút linh vật bên dưới để đặt cược."
+        ),
         color=discord.Color.gold()
     )
-    # Ảnh minh họa (Đạo hữu thay link ảnh sòng bài vào đây)
-    embed.set_image(url="https://i.imgur.com/your-baucua-image.png")
+    embed.set_footer(text="Nhà cái uy tín - Xanh chín 100%")
     
     msg = await interaction.followup.send(embed=embed, view=view)
 
-    # Đợi 45 giây
     await asyncio.sleep(45)
 
-    # KHÓA BÀN VÀ TÍNH TOÁN
     for item in view.children:
         item.disabled = True
-    
-    # Lắc xúc xắc
-    choices = list(view.icons.keys())
-    results = [random.choice(choices) for _ in range(3)]
-    res_str = " ".join([view.icons[r] for r in results])
-    
-    summary = f"🎲 Kết quả: **{res_str}**\n\n"
-    winners = []
 
-    # Duyệt qua tất cả người đặt cược
+    # --- THUẬT TOÁN NHÀ CÁI ƯU TIÊN (HÚT MÁU 70%) ---
+    choices = list(BAU_CUA_ICONS.keys())
+    bet_totals = {c: 0 for c in choices}
     for uid, bets in view.all_bets.items():
-        total_win = 0
-        total_bet = 0
         for b in bets:
-            total_bet += b['amount']
-            count = results.count(b['choice'])
-            if count > 0:
-                # Thắng: Trả lại vốn + (số linh vật trúng * số tiền cược)
-                total_win += b['amount'] + (count * b['amount'])
-        
-        if total_win > 0:
-            await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": total_win}})
-            winners.append(f"<@{uid}> thắng **{total_win}** viên")
+            bet_totals[b['choice']] += b['amount']
+
+    sorted_by_bet = sorted(choices, key=lambda x: bet_totals[x])
+    
+    results = []
+    for _ in range(3):
+        if random.random() < 0.7: # Tỉ lệ can thiệp 70%
+            results.append(random.choice(sorted_by_bet[:3])) # Ra 1 trong 3 con ít tiền nhất
         else:
-            # Tiền đã trừ lúc đặt, thua thì không cần làm gì thêm
-            pass
+            results.append(random.choice(choices))
 
-    if winners:
-        summary += "🎊 **DANH SÁCH CHIẾN THẦN:**\n" + "\n".join(winners)
+    # --- TÍNH TOÁN KẾT QUẢ (KHÔNG THUẾ) ---
+    res_icons = " ".join([BAU_CUA_ICONS[r] for r in results])
+    winner_list = []
+    
+    for uid, bets in view.all_bets.items():
+        user_total_payout = 0
+        for b in bets:
+            hit_count = results.count(b['choice'])
+            if hit_count > 0:
+                # Trả đủ: Vốn + (Số linh vật trúng * Tiền cược)
+                user_total_payout += (b['amount'] + (hit_count * b['amount']))
+
+        if user_total_payout > 0:
+            await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": user_total_payout}})
+            winner_list.append(f"<@{uid}> nhận: **+{user_total_payout}** linh thạch")
+
+    summary_desc = f"🎲 Kết quả xúc xắc: **{res_icons}**\n\n"
+    if winner_list:
+        summary_desc += "🎊 **DANH SÁCH CHIẾN THẦN:**\n" + "\n".join(winner_list)
     else:
-        summary += "💀 Không đạo hữu nào trúng thưởng. Tiền cược đã xung vào công quỹ thiên đình!"
+        summary_desc += "💀 Thiên đạo vô tình! Không ai trúng thưởng phiên này."
 
-    end_embed = discord.Embed(title="🎲 KẾT QUẢ PHIÊN BẦU CUA 🎲", description=summary, color=0x00FF00)
-    await msg.edit(embed=end_embed, view=view)
+    result_embed = discord.Embed(
+        title="🎲 KẾT QUẢ PHIÊN BẦU CUA 🎲",
+        description=summary_desc,
+        color=0x00FF00 if winner_list else 0xFF0000
+    )
+    
+    await msg.edit(embed=result_embed, view=view)
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
