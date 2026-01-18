@@ -606,7 +606,6 @@ async def gacha(interaction: discord.Interaction):
     # 2. LOGIC GACHA THẦN KHÍ (0.5%)
     tk_msg = ""
     got_new_tk = False
-    # Đảm bảo dùng biến này để kiểm tra xuyên suốt hàm gacha
     current_user_tk = u.get("than_khi")
     
     if not current_user_tk and random.random() <= 0.005: 
@@ -614,28 +613,14 @@ async def gacha(interaction: discord.Interaction):
         available_tk = [tk for tk in THAN_KHI_CONFIG.keys() if tk not in owned_tk]
         
         if available_tk:
-            # Gán thần khí mới vào biến
             current_user_tk = random.choice(available_tk) 
             await users_col.update_one({"_id": uid}, {"$set": {"than_khi": current_user_tk}})
             
-            tk_msg = f"\n🔥 **DỊ TƯỢNG!** Đạo hữu đã thu phục được Thần Khí: **[{current_user_tk}]**!"
-            got_new_tk = True
-            
-            # PHÁT THÔNG BÁO TOÀN SERVER (Sử dụng hàm phụ đã khai báo sát lề trái)
             tk_data = THAN_KHI_CONFIG[current_user_tk]
-            broadcast_msg = (
-                f"## {tk_data['quote']}\n\n" # Dùng ## để tiêu đề khẩu ngữ to và ngầu hơn
-                f"Chúc mừng đạo hữu **{user_name}** đã nhận được Thần Khí Thượng Cổ: **{current_user_tk}**!"
-            )
-            
-            # Lưu ý: Truyền đúng biến bot và sửa lỗi typo interaction.user
-            await broadcast_anomaly(
-                bot, 
-                "📢 THẦN KHÍ XUẤT THẾ", 
-                broadcast_msg, 
-                tk_data['color'], 
-                interaction.user.display_avatar.url
-            )
+            tk_msg = f"\n\n🔥 **DỊ TƯỢNG XUẤT THẾ!**\n{tk_data['quote']}\nChúc mừng đạo hữu thu phục được Thần Khí: **[{current_user_tk}]**!"
+            got_new_tk = True
+            # ĐÃ LOẠI BỎ BROADCAST TOÀN SERVER TẠI ĐÂY
+
     # 3. LOGIC GACHA LINH THÚ (0.2%)
     pet_msg = ""
     if not u.get("pet") and random.random() <= 0.002: 
@@ -645,17 +630,8 @@ async def gacha(interaction: discord.Interaction):
         if available_pets:
             pet_got = random.choice(available_pets)
             await users_col.update_one({"_id": uid}, {"$set": {"pet": pet_got}})
-            pet_msg = f"\n🎊 **THIÊN CƠ!** Đạo hữu thu phục được Linh thú: **{pet_got}**!"
-            
-            # PHÁT THÔNG BÁO TOÀN SERVER (LINH THÚ)
-            # Sử dụng interaction.user.display_name trực tiếp để an toàn tuyệt đối
-            await broadcast_anomaly(
-                bot, 
-                "🐾 LINH THÚ TÌM CHỦ", 
-                f"Lục đạo rung chuyển! Đạo hữu **{interaction.user.display_name}** đã thuần hóa được Linh thú hiếm: **{pet_got}**!", 
-                0xFFAC33, # Màu cam vàng đặc trưng của linh thú
-                interaction.user.display_avatar.url
-            )
+            pet_msg = f"\n\n🎊 **THIÊN CƠ CHIẾU RỌI!**\nĐạo hữu đã thuần hóa được Linh thú hiếm: **{pet_got}**!"
+            # ĐÃ LOẠI BỎ BROADCAST TOÀN SERVER TẠI ĐÂY
 
     # 4. LOGIC GACHA TRANG BỊ
     eq_type = random.choice(EQ_TYPES)
@@ -669,7 +645,7 @@ async def gacha(interaction: discord.Interaction):
 
     if eq_type == "Kiếm" and current_user_tk:
         exp_bonus = lv * 10
-        msg = f"⚔️ Uy áp từ **[{current_user_tk}]** khiến **Kiếm cấp {lv}** vụn nát, nhận **{exp_bonus} EXP**."
+        msg = f"⚔️ Uy áp từ **[{current_user_tk}]** khiến **Kiếm cấp {lv}** vụn nát, rã nhận **{exp_bonus} EXP**."
     elif lv > old_lv:
         await eq_col.update_one({"_id": uid}, {"$set": {eq_type: lv}}, upsert=True)
         msg = f"🎁 Nhận được **{eq_type} cấp {lv}**"
@@ -694,10 +670,11 @@ async def gacha(interaction: discord.Interaction):
     # 6. HIỂN THỊ KẾT QUẢ CHO NGƯỜI QUAY
     status = f"🎰 Lượt: **{new_gacha_count}/3** (Miễn phí)" if new_gacha_count <= 3 else f"💎 Phí: **1 Linh thạch**"
     
+    # Xác định màu sắc Embed
     color = discord.Color.blue()
     if got_new_tk: 
         color = THAN_KHI_CONFIG[current_user_tk]["color"]
-    elif pet_msg != "":
+    elif pet_msg:
         color = 0xFFAC33
 
     embed = discord.Embed(
@@ -705,8 +682,11 @@ async def gacha(interaction: discord.Interaction):
         description=f"{msg}{tk_msg}{pet_msg}\n\n{status}",
         color=color
     )
+    
     if got_new_tk:
-        embed.set_footer(text=THAN_KHI_CONFIG[current_user_tk]["desc"])
+        embed.set_footer(text=f"Mô tả: {THAN_KHI_CONFIG[current_user_tk]['desc']}")
+    else:
+        embed.set_footer(text="Thiên địa xoay vần, vận may tại tâm.")
 
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="solo", description="Thách đấu người chơi khác (Ẩn lực chiến, cược linh thạch)")
@@ -2083,6 +2063,7 @@ async def baucua(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
