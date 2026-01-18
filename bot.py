@@ -464,13 +464,14 @@ async def info(interaction: discord.Interaction):
         else:
             weapon_display = f"⚔️ Kiếm Cấp {kiem_lv}" if kiem_lv > 0 else "⚔️ Vô nhận kiếm"
 
-        # 6. HIỂN THỊ EXP
-        # Theo logic check_level_up: Đạt mốc % 10 thì dừng thăng cấp
+        # 6. HIỂN THỊ EXP (Đã chỉnh sửa để khớp với hàm check_level_up)
+        # Theo logic check_level_up: Đạt mốc % 10 thì dừng thăng cấp (Đỉnh Phong)
         if level % 10 == 0:
-            exp_display = f"`{cur_exp} / Đỉnh Phong (Cần Đột Phá)`"
+            exp_display = f"`{int(cur_exp):,} / Đỉnh Phong (Cần Đột Phá)`"
         else:
-            needed = level * 100
-            exp_display = f"`{cur_exp} / {needed}`"
+            # SỬ DỤNG HÀM exp_needed(level) ĐỂ ĐỒNG BỘ VỚI LỆNH LEVEL UP
+            needed = exp_needed(level) 
+            exp_display = f"`{int(cur_exp):,} / {int(needed):,}`"
 
         # 7. KHỞI TẠO EMBED
         embed = discord.Embed(title=f"📜 HỒ SƠ TU TIÊN: {interaction.user.display_name}", color=embed_color)
@@ -1463,51 +1464,54 @@ async def captcha(interaction: discord.Interaction, target: discord.Member):
                 )
 @bot.tree.command(name="loiphat", description="[ADMIN] Thiên phạt: Giảm EXP và có thể rớt cấp (Bảo hộ mốc 21, 31, 41)")
 async def loiphat(interaction: discord.Interaction):
-    # 1. Kiểm tra quyền Admin
     if interaction.user.id != ADMIN_ID:
         return await interaction.response.send_message("❌ **THIÊN PHẠT!** Bạn không có quyền năng này.", ephemeral=True)
 
     await interaction.response.defer()
     
-    # 2. Lấy danh sách Top 5 cao thủ
     top_5 = await users_col.find().sort([("level", -1), ("exp", -1)]).limit(5).to_list(length=5)
     if len(top_5) < 3:
         return await interaction.followup.send("⚠️ Linh khí server chưa đủ mạnh (cần ít nhất 3 người trong BXH)!")
 
-    # Chọn mục tiêu ngẫu nhiên như cũ
     top_1 = top_5[0]
     others = top_5[1:] 
     victims_others = random.sample(others, k=min(2, len(others)))
     
     than_chu = random.choice(THAN_CHU_THIEN_PHAT)
-    # Phần nội dung thông báo
     report_msg = f"✨ **KHẨU LỆNH:** *\"{than_chu}\"*\n"
     report_msg += "─" * 15 + "\n\n"
 
-    # --- HÀM XỬ LÝ KHẤU TRỪ TU VI (GIỮ NGUYÊN CHỈ SỐ CỦA ĐẠO HỮU) ---
+    # --- HÀM XỬ LÝ KHẤU TRỪ TU VI ĐÃ ĐỒNG BỘ ---
     async def apply_penalty(user_data, lost_amount):
         uid = user_data.get("_id")
         lv = user_data.get("level", 1)
         current_exp = user_data.get("exp", 0)
         
-        # Mốc bảo hộ đạo hữu đã chọn
+        # Mốc bảo hộ đạo hữu yêu cầu (Không rớt khi vừa đột phá)
         PROTECTED_LEVELS = [21, 31, 41, 51, 61, 71, 81, 91]
         
         if current_exp >= lost_amount:
-            # GIỮ NGUYÊN: Trừ EXP bình thường
+            # Trường hợp 1: Đủ EXP để trừ, giữ nguyên cấp
             new_exp = current_exp - lost_amount
             await users_col.update_one({"_id": uid}, {"$set": {"exp": new_exp}})
-            return f"📉 Hao tổn: **-{lost_amount} EXP**"
+            return f"Hao tổn **-{lost_amount} EXP**"
         else:
-            # GIỮ NGUYÊN: Logic rớt cấp hoặc về 0
+            # Trường hợp 2: Không đủ EXP để trừ
             if lv in PROTECTED_LEVELS or lv <= 1:
+                # Gặp mốc bảo hộ: Chỉ đưa về 0 EXP của cấp hiện tại
                 await users_col.update_one({"_id": uid}, {"$set": {"exp": 0}})
-                return f"📉 Hao tổn: **-{current_exp} EXP** (Đã chạm mốc bảo hộ {lv})"
+                return f"Hao tổn **-{current_exp} EXP** (Đã chạm mốc bảo hộ cấp {lv})"
             else:
+                # Thực hiện rớt cấp: Tính số EXP còn thiếu
                 remainder = lost_amount - current_exp
                 new_lv = lv - 1
-                exp_needed_old_lv = new_lv * 100 # Cần khớp với công thức của đạo hữu
-                final_exp = max(0, exp_needed_old_lv - remainder)
+                
+                # SỬ DỤNG CHÍNH HÀM exp_needed CỦA ĐẠO HỮU
+                # EXP tối đa của cấp độ mới (sau khi rớt)
+                max_exp_of_new_lv = exp_needed(new_lv)
+                
+                # EXP còn lại ở cấp thấp hơn
+                final_exp = max(0, max_exp_of_new_lv - remainder)
                 
                 await users_col.update_one(
                     {"_id": uid}, 
@@ -1515,30 +1519,20 @@ async def loiphat(interaction: discord.Interaction):
                 )
                 return f"📉 **Rớt xuống Cấp {new_lv}** (Thất thoát {lost_amount} Tu vi)"
 
-    # 3. XỬ LÝ TOP 1 (GIỮ NGUYÊN: 500-1000 EXP)
+    # Xử lý Top 1 và các vị còn lại (Giữ nguyên các chỉ số ngẫu nhiên)
     t1_lost = random.randint(500, 1000)
     res_t1 = await apply_penalty(top_1, t1_lost)
     report_msg += f"🔥 **ĐẠI NẠN TOP 1 - <@{top_1['_id']}>**\n   └─ {res_t1}\n\n"
 
-    # 4. XỬ LÝ 2 NGƯỜI CÒN LẠI (GIỮ NGUYÊN: 100-500 EXP)
     for user in victims_others:
         lost_val = random.randint(100, 500)
         res_other = await apply_penalty(user, lost_val)
         report_msg += f"⚡ **<@{user['_id']}>** bị lôi đình đánh trúng!\n   └─ {res_other}\n\n"
 
-    # --- PHÁT THÔNG BÁO CHẤN ĐỘNG ---
-    # Sử dụng hàm broadcast_anomaly để gửi report_msg đi khắp server
-    await broadcast_anomaly(
-        bot, 
-        "⛈️ THIÊN PHẠT GIÁNG LÂM ⛈️", 
-        report_msg, 
-        0xFF0000, 
-        "https://i.imgur.com/K6Y0X9E.gif" # Thumbnail GIF sấm sét
-    )
+    # PHÁT THÔNG BÁO TOÀN SERVER
+    await broadcast_anomaly(bot, "⛈️ THIÊN PHẠT GIÁNG LÂM ⛈️", report_msg, 0xFF0000, "https://i.imgur.com/K6Y0X9E.gif")
 
-    # Phản hồi cho Admin biết đã xong
-    await interaction.followup.send("✅ Thiên đạo đã thực thi. Thông báo đã được phát đi khắp lục đạo!", ephemeral=True)
-
+    await interaction.followup.send("✅ Thiên đạo đã thực thi hình phạt.", ephemeral=True)
 @bot.tree.command(name="ban_exp", description="Cấm túc tu sĩ: Không cho nhận EXP trong 6 tiếng")
 async def ban_exp(interaction: discord.Interaction, target: discord.Member):
     # 1. Kiểm tra quyền Admin tối thượng
@@ -1954,6 +1948,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
