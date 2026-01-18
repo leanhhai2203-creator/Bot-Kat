@@ -577,6 +577,7 @@ async def diemdanh(interaction: discord.Interaction):
 
 @bot.tree.command(name="gacha", description="Gacha trang bị & Linh thú & Thần khí (Tốn 1 Linh thạch sau 3 lượt)")
 async def gacha(interaction: discord.Interaction):
+    global bot
     await interaction.response.defer()
     uid = str(interaction.user.id)
     today = datetime.now().strftime("%Y-%m-%d")
@@ -1948,6 +1949,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
