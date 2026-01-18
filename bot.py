@@ -1095,15 +1095,48 @@ async def attack(interaction: discord.Interaction):
 
     # 6. Logic rơi trang bị
     drop_msg = ""
-    final_drop_rate = drop_rate + pet_data.get("drop_buff", 0)
+    
+    # Mặc định buff rơi đồ là 0
+    additional_buff = 0
+    
+    # Kiểm tra nếu có Linh thú và Linh thú đó là Tiểu Hỏa Phượng
+    user_pet = u.get("pet")
+    if user_pet == "Tiểu Hỏa Phượng":
+        additional_buff = 0.25 # Tăng thêm 25% tỷ lệ rơi
+        # Chèn thêm một câu thông báo nhỏ cho ngầu
+        pet_aura = "✨ *Hỏa Phượng minh khiết, thiên vận gia thân!*"
+    else:
+        pet_aura = ""
+
+    # Tính toán tỷ lệ rơi cuối cùng
+    final_drop_rate = drop_rate + additional_buff
+    
+    # Thực hiện quay số vận may
     if random.random() <= final_drop_rate:
         eq_type = random.choice(EQ_TYPES)
         eq_lv = random.randint(*eq_range)
+        
+        # Lấy trang bị hiện tại để so sánh
         current_eq = await eq_col.find_one({"_id": uid}) or {}
-        if eq_lv > current_eq.get(eq_type, 0):
-            await eq_col.update_one({"_id": uid}, {"$set": {eq_type: eq_lv}}, upsert=True)
-            drop_msg = f"\n🎁 **VẬN MAY!** Nhận được: `{eq_type} Cấp {eq_lv}`"
+        old_lv = current_eq.get(eq_type, 0)
+        user_than_khi = u.get("than_khi")
 
+        # TRƯỜNG HỢP 1: Nếu là Kiếm và đã có Thần Khí -> Tự rã
+        if eq_type == "Kiếm" and user_than_khi:
+            exp_gain = eq_lv * 10
+            await add_exp(uid, exp_gain)
+            drop_msg = f"{pet_aura}\n⚔️ Uy áp từ **[{user_than_khi}]** khiến **{eq_type} cấp {eq_lv}** vụn nát, nhận **{exp_gain} EXP**."
+        
+        # TRƯỜNG HỢP 2: Nếu cấp độ mới cao hơn -> Thay đồ mới
+        elif eq_lv > old_lv:
+            await eq_col.update_one({"_id": uid}, {"$set": {eq_type: eq_lv}}, upsert=True)
+            drop_msg = f"{pet_aura}\n🎁 **VẬN MAY!** Nhận được: `{eq_type} Cấp {eq_lv}`"
+            
+        # TRƯỜNG HỢP 3: Đồ yếu hơn hoặc bằng -> Tự rã
+        else:
+            exp_gain = eq_lv * 10
+            await add_exp(uid, exp_gain)
+            drop_msg = f"{pet_aura}\n🗑️ Rơi ra `{eq_type} Cấp {eq_lv}`, tự rã nhận **{exp_gain} EXP**."
    # 7. TÍNH TOÁN SỐ LƯỢT MỚI (Xử lý hồi lượt từ Thôn Phệ Thú)
     actual_count_inc = 1
     refund_msg = ""
@@ -1808,6 +1841,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
