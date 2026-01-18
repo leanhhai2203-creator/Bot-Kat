@@ -298,8 +298,28 @@ async def on_ready():
 
     except Exception as e:
         print(f"❌ Lỗi nghiêm trọng khi khởi động Bot: {e}")
-@bot.event
+async def broadcast_anomaly(bot, title, message, color, thumbnail_url=None):
+    # 1. Kiểm tra danh sách kênh có tồn tại không
+    if not NOTIFY_CHANNELS:
+        return
 
+    for channel_id in NOTIFY_CHANNELS:
+        try:
+            # Ưu tiên lấy từ cache, nếu không thấy thì fetch từ Discord API
+            channel = bot.get_channel(channel_id) or await bot.fetch_channel(channel_id)
+            
+            if channel:
+                embed = discord.Embed(title=title, description=message, color=color)
+                if thumbnail_url:
+                    embed.set_thumbnail(url=thumbnail_url)
+                embed.set_footer(text="Thiên địa dị tượng - Vạn dân bái phục!")
+                
+                await channel.send(embed=embed)
+                
+        except Exception as e:
+            # Ghi lỗi ra console để đạo hữu theo dõi mà không làm treo Bot
+            print(f"⚠️ Lỗi phát thông báo tại kênh {channel_id}: {e}")
+@bot.event
 async def on_message(message):
     if message.author.bot: return
     
@@ -577,6 +597,7 @@ async def gacha(interaction: discord.Interaction):
     # 2. LOGIC GACHA THẦN KHÍ (0.5%)
     tk_msg = ""
     got_new_tk = False
+    # Đảm bảo dùng biến này để kiểm tra xuyên suốt hàm gacha
     current_user_tk = u.get("than_khi")
     
     if not current_user_tk and random.random() <= 0.005: 
@@ -584,35 +605,46 @@ async def gacha(interaction: discord.Interaction):
         available_tk = [tk for tk in THAN_KHI_CONFIG.keys() if tk not in owned_tk]
         
         if available_tk:
-            current_user_tk = random.choice(available_tk)
+            # Gán thần khí mới vào biến
+            current_user_tk = random.choice(available_tk) 
             await users_col.update_one({"_id": uid}, {"$set": {"than_khi": current_user_tk}})
+            
             tk_msg = f"\n🔥 **DỊ TƯỢNG!** Đạo hữu đã thu phục được Thần Khí: **[{current_user_tk}]**!"
             got_new_tk = True
             
-            # PHÁT THÔNG BÁO TOÀN SERVER (THẦN KHÍ)
+            # PHÁT THÔNG BÁO TOÀN SERVER (Sử dụng hàm phụ đã khai báo sát lề trái)
             tk_data = THAN_KHI_CONFIG[current_user_tk]
             broadcast_msg = (
-                f"### {tk_data['quote']}\n\n"
+                f"## {tk_data['quote']}\n\n" # Dùng ## để tiêu đề khẩu ngữ to và ngầu hơn
                 f"Chúc mừng đạo hữu **{user_name}** đã nhận được Thần Khí Thượng Cổ: **{current_user_tk}**!"
             )
-            await broadcast_anomaly(bot, "📢 THẦN KHÍ XUẤT THẾ", broadcast_msg, tk_data['color'], interaction.user.display_avatar.url)
-
+            
+            # Lưu ý: Truyền đúng biến bot và sửa lỗi typo interaction.user
+            await broadcast_anomaly(
+                bot, 
+                "📢 THẦN KHÍ XUẤT THẾ", 
+                broadcast_msg, 
+                tk_data['color'], 
+                interaction.user.display_avatar.url
+            )
     # 3. LOGIC GACHA LINH THÚ (0.2%)
     pet_msg = ""
     if not u.get("pet") and random.random() <= 0.002: 
         owned_pets = await users_col.distinct("pet", {"pet": {"$ne": None}})
         available_pets = [p for p in PET_CONFIG.keys() if p not in owned_pets]
+        
         if available_pets:
             pet_got = random.choice(available_pets)
             await users_col.update_one({"_id": uid}, {"$set": {"pet": pet_got}})
             pet_msg = f"\n🎊 **THIÊN CƠ!** Đạo hữu thu phục được Linh thú: **{pet_got}**!"
             
             # PHÁT THÔNG BÁO TOÀN SERVER (LINH THÚ)
+            # Sử dụng interaction.user.display_name trực tiếp để an toàn tuyệt đối
             await broadcast_anomaly(
                 bot, 
                 "🐾 LINH THÚ TÌM CHỦ", 
-                f"Lục đạo rung chuyển! Đạo hữu **{user_name}** đã thuần hóa được Linh thú hiếm: **{pet_got}**!", 
-                0xFFAC33, 
+                f"Lục đạo rung chuyển! Đạo hữu **{interaction.user.display_name}** đã thuần hóa được Linh thú hiếm: **{pet_got}**!", 
+                0xFFAC33, # Màu cam vàng đặc trưng của linh thú
                 interaction.user.display_avatar.url
             )
 
@@ -1857,6 +1889,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
