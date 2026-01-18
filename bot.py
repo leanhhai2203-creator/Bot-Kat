@@ -67,6 +67,11 @@ THAN_CHU_THIEN_PHAT = [
 ]
 
 EQ_TYPES = ["Kiếm", "Nhẫn", "Giáp", "Tay", "Ủng"]
+# Định nghĩa các linh vật
+BAU_CUA_ICONS = {
+    "Bầu": "🎃", "Cua": "🦀", "Tôm": "🦐", 
+    "Cá": "🐟", "Gà": "🐓", "Nai": "🦌"
+}
 PET_CONFIG = {
     "Tiểu Hỏa Phượng": {
         "atk": 180, 
@@ -1946,9 +1951,96 @@ async def show_thankhi(interaction: discord.Interaction):
         print(f"Lỗi: {e}")
         if not interaction.responses.is_done():
             await interaction.followup.send(f"⚠️ Pháp trận lỗi: {str(e)}")
+
+class BauCuaView(discord.ui.View):
+    def __init__(self, interaction, bet_amount):
+        super().__init__(timeout=60)
+        self.interaction = interaction
+        self.bet_amount = bet_amount
+
+    async def handle_bet(self, selection, interaction):
+        uid = str(interaction.user.id)
+        # 1. Kiểm tra lại tiền một lần nữa trước khi lắc
+        user = await users_col.find_one({"_id": uid})
+        if user.get("linh_thach", 0) < self.bet_amount:
+            return await interaction.response.send_message("❌ Đạo hữu đã tiêu hết linh thạch trong lúc chần chừ!", ephemeral=True)
+
+        # 2. Lắc xúc xắc
+        results = [random.choice(list(BAU_CUA_ICONS.keys())) for _ in range(3)]
+        result_icons = [BAU_CUA_ICONS[r] for r in results]
+        
+        # 3. Tính toán kết quả
+        matches = results.count(selection)
+        
+        if matches > 0:
+            win_amount = self.bet_amount * matches
+            await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": win_amount}})
+            msg = f"🎉 **THẮNG LỚN!**\n🎲 Kết quả: {' '.join(result_icons)}\n✨ Đạo hữu chọn **{selection}** và trúng **{matches}** hình! Nhận được **{win_amount} Linh thạch**."
+            color = discord.Color.green()
+        else:
+            await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": -self.bet_amount}})
+            msg = f"💸 **TRẮNG TAY!**\n🎲 Kết quả: {' '.join(result_icons)}\n💀 Không có hình **{selection}** nào. Đạo hữu mất **{self.bet_amount} Linh thạch**."
+            color = discord.Color.red()
+
+        # 4. Hiển thị kết quả
+        embed = discord.Embed(title="🎲 KẾT QUẢ BẦU CUA 🎲", description=msg, color=color)
+        embed.set_footer(text=f"Số dư hiện tại: {user.get('linh_thach', 0) + (win_amount if matches > 0 else -self.bet_amount)} viên")
+        
+        # Vô hiệu hóa các nút sau khi chơi xong
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    # Tạo các nút bấm
+    @discord.ui.button(label="Bầu", style=discord.ButtonStyle.secondary, emoji="🎃")
+    async def bau(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle_bet("Bầu", interaction)
+
+    @discord.ui.button(label="Cua", style=discord.ButtonStyle.secondary, emoji="🦀")
+    async def cua(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle_bet("Cua", interaction)
+
+    @discord.ui.button(label="Tôm", style=discord.ButtonStyle.secondary, emoji="🦐")
+    async def tom(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle_bet("Tôm", interaction)
+
+    @discord.ui.button(label="Cá", style=discord.ButtonStyle.secondary, emoji="🐟")
+    async def ca(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle_bet("Cá", interaction)
+
+    @discord.ui.button(label="Gà", style=discord.ButtonStyle.secondary, emoji="🐓")
+    async def ga(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle_bet("Gà", interaction)
+
+    @discord.ui.button(label="Nai", style=discord.ButtonStyle.secondary, emoji="🦌")
+    async def nai(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle_bet("Nai", interaction)
+
+@bot.tree.command(name="baucua", description="Đánh cược linh thạch vào trò chơi Bầu Cua")
+@app_commands.describe(cuoc="Số lượng linh thạch muốn đặt cược")
+async def baucua(interaction: discord.Interaction, cuoc: int):
+    if cuoc <= 0:
+        return await interaction.response.send_message("⚠️ Số linh thạch đặt cược phải lớn hơn 0!", ephemeral=True)
+
+    uid = str(interaction.user.id)
+    user = await users_col.find_one({"_id": uid})
+    
+    if not user or user.get("linh_thach", 0) < cuoc:
+        return await interaction.response.send_message("❌ Đạo hữu không đủ linh thạch để chơi!", ephemeral=True)
+
+    embed = discord.Embed(
+        title="🎲 SÒNG BẠC TU TIÊN 🎲",
+        description=f"Đạo hữu đặt cược: **{cuoc} Linh thạch**\n\nHãy chọn linh vật đạo hữu tin tưởng nhất bên dưới!",
+        color=discord.Color.gold()
+    )
+    embed.set_image(url="https://i.imgur.com/your-baucua-image.png") # Thêm ảnh bàn bầu cua nếu có
+    
+    view = BauCuaView(interaction, cuoc)
+    await interaction.response.send_message(embed=embed, view=view)
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
