@@ -1107,9 +1107,9 @@ async def attack(interaction: discord.Interaction):
    # 7. TÍNH TOÁN SỐ LƯỢT MỚI (Xử lý hồi lượt từ Thôn Phệ Thú)
     actual_count_inc = 1
     refund_msg = ""
-    if pet_name == "Thôn Phệ Thú" and random.randint(1, 100) <= 20:
+    if pet_name == "Tiểu Hỏa Phượng" and random.randint(1, 100) <= 20:
         actual_count_inc = 0
-        refund_msg = "\n🌀 **Thôn Phệ Thú** hấp thụ linh khí, giúp bạn không tốn thể lực!"
+        refund_msg = "\n🌀 **Tiểu Hỏa Phượng** hấp thụ linh khí,Tái Sinh, giúp bạn không tốn thể lực!"
 
     # CHỐT CHẶN CUỐI CÙNG: Tính con số chính xác để ghi đè vào Database
     final_count_to_save = current_attack_count + actual_count_inc
@@ -1808,6 +1808,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
