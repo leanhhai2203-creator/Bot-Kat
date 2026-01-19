@@ -1781,62 +1781,75 @@ class BossInviteView(discord.ui.View):
         self.stop()
 
 # --- LỆNH SLASH BOSS ---
-@bot.tree.command(name="boss", description="Đại chiến Ma Thần - Cần 2 người tổ đội")
-@app_commands.describe(member="Đồng đội cùng tham chiến", ten_boss="Chọn Ma Thần muốn thảo phạt")
+# --- LỆNH BOSS CHÍNH (BẢN VÁ LỖI 10062) ---
+@bot.tree.command(name="boss", description="Đại chiến Ma Thần - Có rớt cấp")
+@app_commands.describe(member="Đồng đội cùng tham chiến", ten_boss="Chọn Ma Thần muốn khiêu chiến")
 @app_commands.choices(ten_boss=[app_commands.Choice(name=k, value=k) for k in BOSS_CONFIG.keys()])
 async def boss_hunt(interaction: discord.Interaction, member: discord.Member, ten_boss: str):
-    # Phản hồi ngay để tránh lỗi treo lệnh
-    await interaction.response.defer()
+    # DÒNG QUAN TRỌNG NHẤT: Phải nằm ngay đầu hàm, không được có bất cứ logic nào phía trên
+    try:
+        await interaction.response.defer() 
+    except:
+        return # Nếu không defer được thì thoát luôn tránh crash
 
     uid1, uid2 = str(interaction.user.id), str(member.id)
     today = datetime.now().strftime("%Y-%m-%d")
 
+    # Kiểm tra các điều kiện cơ bản (Dùng followup thay vì response)
     if uid1 == uid2:
-        return await interaction.followup.send("❌ Đạo hữu không thể tự mời bản thân đi vào chỗ chết!")
-
-    if member.bot:
-        return await interaction.followup.send("❌ Không thể mời linh thể (Bot) tham chiến!")
+        return await interaction.followup.send("❌ Đạo hữu không thể tự mời bản thân.")
 
     if uid1 in active_battles or uid2 in active_battles:
-        return await interaction.followup.send("⚠️ Một trong hai vị đang trong một trận chiến khác!")
-
-    # Truy vấn dữ liệu
-    u1, u2 = await asyncio.gather(
-        users_col.find_one({"_id": uid1}),
-        users_col.find_one({"_id": uid2})
-    )
-
-    if not u1 or not u2:
-        return await interaction.followup.send("⚠️ Một trong hai đạo hữu chưa có tên trong sổ sinh tử (chưa có hồ sơ).")
-    
-    if u1.get("last_boss") == today or u2.get("last_boss") == today:
-        return await interaction.followup.send("❌ Một trong hai đã hết lượt thảo phạt hôm nay.")
-
-    # Đưa vào danh sách bận
-    active_battles.add(uid1)
-    active_battles.add(uid2)
+        return await interaction.followup.send("⚠️ Một trong hai vị đang bận hoặc đang chờ xác nhận!")
 
     try:
+        # Truy vấn dữ liệu 2 tu sĩ (Đây là bước tốn thời gian gây ra lỗi 404)
+        u1, u2 = await asyncio.gather(
+            users_col.find_one({"_id": uid1}),
+            users_col.find_one({"_id": uid2})
+        )
+
+        if not u1 or not u2:
+            return await interaction.followup.send("⚠️ Một trong hai vị chưa có hồ sơ tu tiên.")
+
+        # Kiểm tra lượt đánh trong ngày
+        if u1.get("last_boss") == today:
+            return await interaction.followup.send("❌ Đạo hữu đã hết lượt hôm nay!")
+            
+        if u2.get("last_boss") == today:
+            return await interaction.followup.send(f"❌ **{member.display_name}** đã hết lượt.")
+
+        # Thêm vào danh sách bận sau khi đã check hết điều kiện
+        active_battles.add(uid1)
+        active_battles.add(uid2)
+
+        # Lấy cấu hình Boss và tính lực chiến
         config = BOSS_CONFIG[ten_boss]
-        # Tính toán LC Boss và Tỉ lệ thắng dựa trên hàm calc_power có sẵn
+        boss_p = int((800 * config['multiplier']) + config['base'] + random.randint(1000, 5000))
+        
+        # Tính LC (Truy vấn DB tiếp)
         p1 = await calc_power(uid1)
         p2 = await calc_power(uid2)
-        boss_p = int((800 * config['multiplier']) + config['base'])
+        total_p = p1 + p2
         
-        win_rate = max(0.01, min(0.95, (p1 + p2) / ((p1 + p2) + boss_p)))
-
+        win_rate = max(0.01, min(0.95, total_p / (total_p + boss_p)))
+        
+        # Tạo View mời
         view = BossInviteView(member.id, interaction.user.id, ten_boss, boss_p, win_rate, config)
         
+        # Gửi tin nhắn mời
         await interaction.followup.send(
             f"⚔️ **{interaction.user.display_name}** mời **{member.mention}** thảo phạt **{ten_boss}**!\n"
-            f"👿 **Sức mạnh Boss:** `{boss_p:,}` | 📈 **Tỉ lệ thắng dự kiến:** `{win_rate*100:.1f}%`",
+            f"👿 **Ma Thần Lực Chiến:** `{boss_p:,}`\n"
+            f"📈 **Tỉ lệ thắng dự kiến:** `{win_rate*100:.1f}%`",
             view=view
         )
+
     except Exception as e:
+        print(f"Lỗi Boss: {e}")
         active_battles.discard(uid1)
         active_battles.discard(uid2)
-        print(f"Lỗi Boss: {e}")
-        await interaction.followup.send(f"⚠️ Pháp trận trục trặc: {e}")
+        await interaction.followup.send("❌ Đã xảy ra lỗi khi kết nối linh mạch.")
 
 @bot.tree.command(name="thanthu", description="Thần thú thị uy chân ngôn (Chỉ dành cho người có linh thú)")
 async def pet_show(interaction: discord.Interaction):
@@ -2040,6 +2053,7 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
