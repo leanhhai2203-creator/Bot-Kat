@@ -118,25 +118,25 @@ PET_CONFIG = {
 BOSS_CONFIG = {
     "Hồng Tụ Tôn Sứ": {
         "multiplier": 20, 
-        "base": 6000, 
+        "base": 10000, 
         "reward": (7, 10), 
         "penalty": 500, 
         "color": 0x3498db,
         "desc": "Yêu nữ am tường ảo thuật, thích hợp cho tu sĩ mới vào nghề."
     },
     "Lôi Âm Tôn Sứ": {
-        "multiplier": 30, 
-        "base": 20000, 
-        "reward": (12, 18), 
-        "penalty": 1200, 
+        "multiplier": 35, # Tăng từ 30 -> 35
+        "base": 35000,   # Tăng từ 20,000 -> 25,000
+        "reward": (12, 18), # Tăng nhẹ thưởng để xứng tầm
+        "penalty": 1000, # Tăng phạt (vượt ngưỡng rớt cấp nhanh hơn)
         "color": 0xe67e22,
         "desc": "Hộ pháp đọa lạc, lôi điện quanh thân, thực lực không thể coi thường."
     },
     "Mục Dã Di": {
-        "multiplier": 40, 
-        "base": 40000, 
-        "reward": (20, 30), 
-        "penalty": 3000, 
+        "multiplier": 55, # Tăng mạnh từ 40 -> 55
+        "base": 65000,   # Tăng mạnh từ 40,000 -> 55,000
+        "reward": (20, 25), # Thưởng xứng đáng cho đại nạn
+        "penalty": 2000, # Phạt cực nặng (5k EXP thường là rớt thẳng 1-2 cấp)
         "color": 0x992d22,
         "desc": "Thượng cổ Ma Thần, sức mạnh đủ để hủy thiên diệt địa."
     }
@@ -1972,6 +1972,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
