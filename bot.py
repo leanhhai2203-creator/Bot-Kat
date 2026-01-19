@@ -1983,10 +1983,50 @@ async def show_thankhi(interaction: discord.Interaction):
         print(f"Lỗi: {e}")
         if not interaction.responses.is_done():
             await interaction.followup.send(f"⚠️ Pháp trận lỗi: {str(e)}")
+@bot.tree.command(name="addthankhi", description="Ban tặng Thần Khí cho tu sĩ (Chỉ dành cho Admin)")
+@app_commands.describe(tu_si="Chọn tu sĩ muốn ban tặng", ten_than_khi="Nhập tên Thần Khí")
+@app_commands.checks.has_permissions(administrator=True) # Chỉ Admin mới dùng được
+async def add_than_khi(interaction: discord.Interaction, tu_si: discord.Member, ten_than_khi: str):
+    await interaction.response.defer()
+    uid = str(tu_si.id)
 
+    # Kiểm tra hồ sơ tu sĩ
+    user = await users_col.find_one({"_id": uid})
+    if not user:
+        return await interaction.followup.send(f"❌ Tu sĩ {tu_si.mention} chưa có hồ sơ tu tiên, không thể nhận Thần Khí!")
+
+    try:
+        # Cập nhật trường than_khi trong Database
+        await users_col.update_one(
+            {"_id": uid},
+            {"$set": {"than_khi": ten_than_khi}}
+        )
+
+        embed = discord.Embed(
+            title="🔱 THIÊN ĐẠO BAN THƯỞNG 🔱",
+            description=f"Chúc mừng tu sĩ {tu_si.mention} đã nhận được Thần Khí thượng cổ!",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="🗡️ Thần Khí:", value=f"**[{ten_than_khi}]**", inline=False)
+        embed.add_field(name="✨ Uy lực:", value="Lực chiến sẽ được gia tăng và xuất hiện hiệu ứng đặc biệt khi Solo!", inline=False)
+        embed.set_thumbnail(url=tu_si.display_avatar.url)
+        embed.set_footer(text="Khí phách hiên ngang, trấn áp quần hùng!")
+
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        print(f"Lỗi add thần khí: {e}")
+        await interaction.followup.send("❌ Đã xảy ra lỗi trong quá trình ban tặng Thần Khí.")
+
+# Xử lý lỗi nếu người không có quyền cố tình dùng lệnh
+@add_than_khi.error
+async def add_than_khi_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.errors.MissingPermissions):
+        await interaction.response.send_message("⚠️ Đạo hữu không có quyền hạn của Thiên Đạo để sử dụng lệnh này!", ephemeral=True)
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
