@@ -761,7 +761,6 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
                  (f"💎 Cược: **{bet} Linh thạch**" if bet > 0 else "🎲 Giao hữu")
     await interaction.followup.send(content=invite_msg, view=SoloView())
 
-@bot.tree.command(name="dotpha", description="Đột phá cảnh giới (Lôi kiếp từ cấp 30)")
 @bot.tree.command(name="dotpha", description="Đột phá cảnh giới (Tăng 5% tỉ lệ sau mỗi lần thất bại)")
 async def dotpha(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -1923,6 +1922,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
