@@ -1739,7 +1739,6 @@ class BossInviteView(discord.ui.View):
         self.accepted = False
         await interaction.response.edit_message(content="❌ Lời mời đã bị khước từ.", view=None)
         self.stop()
-
 # --- LỆNH BOSS CHÍNH ---
 @bot.tree.command(name="boss", description="Đại chiến Ma Thần - Tỉ lệ Solo - Có rớt cấp")
 @app_commands.describe(member="Đồng đội cùng tham chiến", ten_boss="Chọn Ma Thần muốn khiêu chiến")
@@ -1819,7 +1818,31 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member, te
             if is_win:
                 gift = random.randint(config['reward'][0], config['reward'][1])
                 await users_col.update_many({"_id": {"$in": [uid1, uid2]}}, {"$inc": {"linh_thach": gift}})
-                embed.description
+                embed.description = f"🎉 **CHIẾN THẮNG!**\nMa khí tan biến, hai vị đạo hữu bình an trở về.\n🎁 Mỗi người nhận: **{gift}** 💎 Linh Thạch."
+                embed.color = discord.Color.green()
+            else:
+                loss_exp = config['penalty']
+                drop_msg = ""
+                # Logic trừ EXP và kiểm tra rớt cấp cho từng người
+                for tid in [uid1, uid2]:
+                    await users_col.update_one({"_id": tid}, {"$inc": {"exp": -loss_exp}})
+                    if await check_level_down(tid):
+                        drop_msg = "\n⚠️ **CẢNH BÁO:** Phản phệ quá mạnh, tu vi đã bị **TỤT CẤP**!"
+                
+                embed.description = f"💀 **THẤT BẠI!**\nSức mạnh của **{ten_boss}** quá khủng khiếp.\n⚠️ Mỗi người bị phản phệ: **{loss_exp:,}** EXP.{drop_msg}"
+                embed.color = discord.Color.red()
+
+            embed.add_field(name="👥 Tu Sĩ", value=f"Tổng LC: `{total_p:,}`", inline=True)
+            embed.add_field(name="👿 Ma Thần", value=f"LC: `{boss_p:,}`", inline=True)
+            
+            # Gửi kết quả cuối cùng
+            await interaction.followup.send(content=f"{interaction.user.mention} {member.mention}", embed=embed)
+
+    except Exception as e:
+        print(f"Lỗi Boss: {e}")
+    finally:
+        active_battles.discard(uid1)
+        active_battles.discard(uid2)
 @bot.tree.command(name="thanthu", description="Thần thú thị uy chân ngôn (Chỉ dành cho người có linh thú)")
 async def pet_show(interaction: discord.Interaction):
     # 1. Khởi động pháp trận (Defer) để tránh treo lệnh
@@ -2022,6 +2045,7 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
