@@ -726,6 +726,7 @@ async def gacha(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="solo", description="Thách đấu người chơi khác (Ẩn lực chiến, cược linh thạch)")
 async def solo(interaction: discord.Interaction, target: discord.Member, linh_thach: int | None = None):
+    # Tránh lỗi Unknown Interaction
     await interaction.response.defer()
     uid = str(interaction.user.id)
     tid = str(target.id)
@@ -739,9 +740,10 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
     if bet < 0:
         return await interaction.followup.send("❌ Số linh thạch không hợp lệ!")
 
-    # Lấy dữ liệu 2 bên từ MongoDB
-    u1 = await users_col.find_one({"_id": uid})
-    u2 = await users_col.find_one({"_id": tid})
+    u1, u2 = await asyncio.gather(
+        users_col.find_one({"_id": uid}),
+        users_col.find_one({"_id": tid})
+    )
 
     if not u1 or not u2:
         return await interaction.followup.send("❌ Một trong hai đạo hữu chưa có hồ sơ tu tiên!")
@@ -750,6 +752,7 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
         if u1.get("linh_thach", 0) < bet or u2.get("linh_thach", 0) < bet:
             return await interaction.followup.send(f"❌ Một trong hai không đủ **{bet} linh thạch** để cược!")
 
+    # Tính toán lực chiến chuẩn bị cho trận đấu
     p1_power = await calc_power(uid)
     p2_power = await calc_power(tid)
 
@@ -765,59 +768,85 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
 
         @discord.ui.button(label="✅ Tiếp Chiến", style=discord.ButtonStyle.success)
         async def accept(self, i: discord.Interaction, button: discord.ui.Button):
-            # Kiểm tra lại linh thạch trên Cloud trước khi đánh
-            curr_u1 = await users_col.find_one({"_id": uid})
-            curr_u2 = await users_col.find_one({"_id": tid})
+            # Kiểm tra linh thạch thực tế lúc bấm nút
+            curr_u1, curr_u2 = await asyncio.gather(
+                users_col.find_one({"_id": uid}),
+                users_col.find_one({"_id": tid})
+            )
             
-            if bet > 0 and (curr_u1["linh_thach"] < bet or curr_u2["linh_thach"] < bet):
+            if bet > 0 and (curr_u1.get("linh_thach", 0) < bet or curr_u2.get("linh_thach", 0) < bet):
                 return await i.response.edit_message(content="❌ Trận đấu hủy bỏ! Một bên đã không còn đủ linh thạch.", view=None)
 
-            total_power = p1_power + p2_power
-            if total_power == 0: total_power = 1
-            
+            total_power = p1_power + p2_power if (p1_power + p2_power) > 0 else 1
             win_chance = p1_power / total_power
-            roll = random.random()
             
-            if roll <= win_chance:
-                winner_id, winner_name, winner_pet = uid, interaction.user.display_name, curr_u1.get("pet")
-                loser_id, loser_name = tid, target.display_name
-            else:
-                winner_id, winner_name, winner_pet = tid, target.display_name, curr_u2.get("pet")
-                loser_id, loser_name = uid, interaction.user.display_name
+            # --- XÁC ĐỊNH KẾT QUẢ ---
+            is_u1_win = random.random() <= win_chance
+            winner_data = curr_u1 if is_u1_win else curr_u2
+            winner_name = interaction.user.display_name if is_u1_win else target.display_name
+            loser_name = target.display_name if is_u1_win else interaction.user.display_name
+            winner_id = uid if is_u1_win else tid
 
-            # XỬ LÝ CƯỢC TRÊN MONGODB
+            # Xử lý cược
             if bet > 0:
-                # Trừ tiền cả 2
                 await users_col.update_many({"_id": {"$in": [uid, tid]}}, {"$inc": {"linh_thach": -bet}})
-                # Cộng hũ cho người thắng
                 await users_col.update_one({"_id": winner_id}, {"$inc": {"linh_thach": bet * 2}})
+
+            # --- KIỂM TRA HÀO QUANG (THẦN KHÍ & LINH THÚ) ---
+            winner_tk = winner_data.get("than_khi")
+            winner_pet = winner_data.get("pet")
+            
+            embed_color = discord.Color.gold()
+            special_msg = ""
+            embed_title = "⚔️ TRẬN THƯ HÙNG KẾT THÚC ⚔️"
+
+            # Hiệu ứng nếu có cả 2
+            if winner_tk and winner_pet:
+                embed_color = discord.Color.from_rgb(255, 0, 255) # Tím huyền ảo
+                embed_title = "🔥 TUYỆT THẾ VÔ SONG - CHIẾN THẮNG 🔥"
+                special_msg = f"🌟 **Hào quang vạn trượng!** {winner_name} cùng linh thú **{winner_pet}** xuất kích, tay cầm **{winner_tk}** trấn áp quần hùng!"
+            # Hiệu ứng chỉ có Thần Khí
+            elif winner_tk:
+                embed_color = discord.Color.red()
+                embed_title = "🔱 THẦN KHÍ GIÁNG THẾ - CHIẾN THẮNG 🔱"
+                special_msg = f"🔱 **{winner_tk}** phát ra uy áp khủng khiếp, khiến đối phương không kịp trở tay!"
+            # Hiệu ứng chỉ có Linh Thú
+            elif winner_pet:
+                embed_color = discord.Color.blue()
+                embed_title = "🐾 LINH THÚ HỘ THỂ - CHIẾN THẮNG 🐾"
+                special_msg = f"🐾 Linh thú **{winner_pet}** gầm vang trời đất, trợ lực cho chủ nhân giành chiến thắng!"
 
             p1_percent = round((p1_power / total_power) * 100, 1)
             p2_percent = round(100 - p1_percent, 1)
-            pet_msg = f"\n🐾 Trợ lực từ linh thú **{winner_pet}** thật dũng mãnh!" if winner_pet else ""
 
-            result_embed = discord.Embed(
-                title="⚔️ TRẬN THƯ HÙNG KẾT THÚC ⚔️",
-                description=(
-                    f"🔵 **{interaction.user.display_name}**: {p1_power:,} LC ({p1_percent}%)\n"
-                    f"🔴 **{target.display_name}**: {p2_power:,} LC ({p2_percent}%)\n"
-                    f"🏆 Người thắng: **{winner_name}**\n💀 Kẻ bại: {loser_name}\n"
-                    f"💰 Kết quả: " + (f"Thắng cược **{bet} Linh thạch**" if bet > 0 else "Vang danh thiên hạ") + pet_msg
-                ),
-                color=discord.Color.gold()
+            result_embed = discord.Embed(title=embed_title, color=embed_color)
+            
+            # Mô tả chi tiết trận đấu
+            desc = (
+                f"🔵 **{interaction.user.display_name}**: `{p1_power:,}` LC ({p1_percent}%)\n"
+                f"🔴 **{target.display_name}**: `{p2_power:,}` LC ({p2_percent}%)\n\n"
+                f"🏆 Người thắng: **{winner_name}**\n"
+                f"💀 Kẻ bại: {loser_name}\n"
+                f"💰 Kết quả: " + (f"Thắng cược **{bet} 💎**" if bet > 0 else "Vang danh thiên hạ")
             )
+            
+            if special_msg:
+                desc += f"\n\n{special_msg}"
+                
+            result_embed.description = desc
+            result_embed.set_footer(text="Hữu thắng hữu bại, chớ nên nản lòng.")
+
             await i.response.edit_message(content=None, embed=result_embed, view=None)
             self.stop()
 
         @discord.ui.button(label="❌ Thủ Thế", style=discord.ButtonStyle.danger)
         async def decline(self, i: discord.Interaction, button: discord.ui.Button):
-            await i.response.edit_message(content=f"❌ **{target.display_name}** đã chọn cách thủ thế.", embed=None, view=None)
+            await i.response.edit_message(content=f"❌ **{target.display_name}** đã chọn cách thủ thế, từ chối tiếp chiến.", view=None)
             self.stop()
 
     invite_msg = f"⚔️ **{interaction.user.display_name}** thách đấu **{target.mention}**!\n" + \
-                 (f"💎 Cược: **{bet} Linh thạch**" if bet > 0 else "🎲 Giao hữu")
+                 (f"💎 Cược: **{bet} Linh thạch**" if bet > 0 else "🎲 Trận chiến giao hữu")
     await interaction.followup.send(content=invite_msg, view=SoloView())
-
 @bot.tree.command(name="dotpha", description="Đột phá cảnh giới (Tăng 5% tỉ lệ sau mỗi lần thất bại)")
 async def dotpha(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -1957,6 +1986,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
