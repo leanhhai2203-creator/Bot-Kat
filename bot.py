@@ -116,17 +116,17 @@ PET_CONFIG = {
     },
 }
 BOSS_CONFIG = {
-    "Hồng Tụ": {
+    "Hồng Tụ Tôn Sứ": {
         "multiplier": 20, 
         "base": 6000, 
-        "reward": (7, 12), 
+        "reward": (7, 10), 
         "penalty": 500, 
         "color": 0x3498db,
         "desc": "Yêu nữ am tường ảo thuật, thích hợp cho tu sĩ mới vào nghề."
     },
-    "Lôi Âm": {
+    "Lôi Âm Tôn Sứ": {
         "multiplier": 30, 
-        "base": 15000, 
+        "base": 20000, 
         "reward": (12, 18), 
         "penalty": 1200, 
         "color": 0xe67e22,
@@ -134,7 +134,7 @@ BOSS_CONFIG = {
     },
     "Mục Dã Di": {
         "multiplier": 40, 
-        "base": 30000, 
+        "base": 40000, 
         "reward": (20, 30), 
         "penalty": 3000, 
         "color": 0x992d22,
@@ -1972,6 +1972,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
