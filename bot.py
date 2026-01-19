@@ -20,7 +20,7 @@ cluster = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
 db_mongo = cluster["game_database"] 
 users_col = db_mongo["users"]       
 eq_col = db_mongo["equipment"]      
-
+active_battles = set() # Dùng để ngăn tu sĩ phân thân đánh nhiều boss cùng lúc
 # ========== CONFIG ==========
 TOKEN = os.getenv("DISCORD_TOKEN")
 INTENTS = discord.Intents.all()
@@ -1712,7 +1712,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
     embed.set_thumbnail(url="https://i.imgur.com/39A72Pj.png")
     
     await interaction.followup.send(embed=embed)
-# --- CLASS VIEW XỬ LÝ NÚT BẤM ---
+# --- VIEW XỬ LÝ LỜI MỜI VÀ CHIẾN ĐẤU ---
 class BossInviteView(discord.ui.View):
     def __init__(self, target_id, initiator_id, ten_boss, boss_p, win_rate, config):
         super().__init__(timeout=60)
@@ -1731,85 +1731,112 @@ class BossInviteView(discord.ui.View):
 
     @discord.ui.button(label="✅ Tiếp Chiến", style=discord.ButtonStyle.success)
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Xác nhận ngay để mất chữ "đang suy nghĩ"
-        await interaction.response.edit_message(content="⚔️ **TRẬN CHIẾN BẮT ĐẦU!**", view=None)
+        # Tắt trạng thái đang suy nghĩ ngay lập tức
+        await interaction.response.edit_message(content="⚔️ **TRẬN CHIẾN BẮT ĐẦU!** Đang tính toán thiên cơ...", view=None)
         
         uid1, uid2 = str(self.initiator_id), str(self.target_id)
+        today = datetime.now().strftime("%Y-%m-%d")
+
         try:
+            # Ghi nhận lượt đánh hôm nay
+            await users_col.update_many({"_id": {"$in": [uid1, uid2]}}, {"$set": {"last_boss": today}})
+            
             is_win = random.random() < self.win_rate
-            embed = discord.Embed(title=f"⚔️ CHIẾN BÁO: {self.ten_boss}", color=self.config['color'])
+            embed = discord.Embed(title=f"⚔️ CHIẾN BÁO: {self.ten_boss.upper()}", color=self.config['color'])
             
             if is_win:
                 # Lấy thưởng từ tuple (min, max) trong config của đạo hữu
                 min_r, max_r = self.config['reward']
                 gift = random.randint(min_r, max_r)
-                await users_col.update_many({"_id": {"$in": [uid1, uid2]}}, {"$inc": {"linh_thach": gift}, "$set": {"last_boss": datetime.now().strftime("%Y-%m-%d")}})
-                embed.description = f"🎉 **CHIẾN THẮNG!**\n🎁 Mỗi người nhận: **{gift}** 💎 Linh Thạch."
+                
+                await users_col.update_many(
+                    {"_id": {"$in": [uid1, uid2]}}, 
+                    {"$inc": {"linh_thach": gift}}
+                )
+                embed.description = f"🎉 **CHIẾN THẮNG!**\nMa khí tan biến, hai vị đạo hữu bình an trở về.\n🎁 Mỗi người nhận: **{gift}** 💎 Linh Thạch."
                 embed.color = discord.Color.green()
             else:
                 loss_exp = self.config['penalty']
-                await users_col.update_many({"_id": {"$in": [uid1, uid2]}}, {"$inc": {"exp": -loss_exp}, "$set": {"last_boss": datetime.now().strftime("%Y-%m-%d")}})
-                # Chạy kiểm tra rớt cấp
-                for tid in [uid1, uid2]: await check_level_down(tid)
+                for tid in [uid1, uid2]:
+                    await users_col.update_one({"_id": tid}, {"$inc": {"exp": -loss_exp}})
+                    await check_level_down(tid) # Sử dụng hàm check_level_down có sẵn trong file
                 
-                embed.description = f"💀 **THẤT BẠI!**\n⚠️ Mỗi người bị phản phệ: **{loss_exp:,}** EXP."
+                embed.description = f"💀 **THẤT BẠI!**\nSức mạnh của **{self.ten_boss}** quá khủng khiếp.\n⚠️ Mỗi người bị phản phệ: **{loss_exp:,}** EXP (có thể rớt cấp)."
                 embed.color = discord.Color.red()
 
             embed.add_field(name="👿 Ma Thần", value=f"LC: `{self.boss_p:,}`", inline=True)
-            embed.add_field(name="📈 Tỷ lệ", value=f"`{self.win_rate*100:.1f}%`", inline=True)
+            embed.add_field(name="📈 Tỉ lệ thắng", value=f"`{self.win_rate*100:.1f}%`", inline=True)
             
             await interaction.followup.send(content=f"<@{uid1}> <@{uid2}>", embed=embed)
         finally:
-            active_battles.discard(uid1); active_battles.discard(uid2)
+            active_battles.discard(uid1)
+            active_battles.discard(uid2)
             self.stop()
 
     @discord.ui.button(label="❌ Từ Chối", style=discord.ButtonStyle.danger)
     async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content="❌ Lời mời bị khước từ.", view=None)
-        active_battles.discard(str(self.initiator_id)); active_battles.discard(str(self.target_id))
+        await interaction.response.edit_message(content="❌ Lời mời đã bị khước từ.", view=None)
+        active_battles.discard(str(self.initiator_id))
+        active_battles.discard(str(self.target_id))
         self.stop()
 
-# --- LỆNH BOSS CHÍNH ---
-@bot.tree.command(name="boss", description="Đại chiến Ma Thần")
-@app_commands.describe(member="Đồng đội", ten_boss="Chọn Ma Thần")
+# --- LỆNH SLASH BOSS ---
+@bot.tree.command(name="boss", description="Đại chiến Ma Thần - Cần 2 người tổ đội")
+@app_commands.describe(member="Đồng đội cùng tham chiến", ten_boss="Chọn Ma Thần muốn thảo phạt")
 @app_commands.choices(ten_boss=[app_commands.Choice(name=k, value=k) for k in BOSS_CONFIG.keys()])
 async def boss_hunt(interaction: discord.Interaction, member: discord.Member, ten_boss: str):
-    # BƯỚC 1: DEFER NGAY LẬP TỨC
+    # Phản hồi ngay để tránh lỗi treo lệnh
     await interaction.response.defer()
 
     uid1, uid2 = str(interaction.user.id), str(member.id)
-    if uid1 == uid2 or uid1 in active_battles or uid2 in active_battles:
-        return await interaction.followup.send("❌ Không thể thực hiện (Trùng người hoặc đang bận).")
-
-    # BƯỚC 2: KIỂM TRA LƯỢT VÀ LC
-    u1 = await users_col.find_one({"_id": uid1})
-    u2 = await users_col.find_one({"_id": uid2})
     today = datetime.now().strftime("%Y-%m-%d")
 
-    if u1.get("last_boss") == today or u2.get("last_boss") == today:
-        return await interaction.followup.send("❌ Một trong hai vị đã hết lượt hôm nay.")
+    if uid1 == uid2:
+        return await interaction.followup.send("❌ Đạo hữu không thể tự mời bản thân đi vào chỗ chết!")
 
-    # BƯỚC 3: TÍNH TOÁN (Đưa vào try để tránh crash ngang)
+    if member.bot:
+        return await interaction.followup.send("❌ Không thể mời linh thể (Bot) tham chiến!")
+
+    if uid1 in active_battles or uid2 in active_battles:
+        return await interaction.followup.send("⚠️ Một trong hai vị đang trong một trận chiến khác!")
+
+    # Truy vấn dữ liệu
+    u1, u2 = await asyncio.gather(
+        users_col.find_one({"_id": uid1}),
+        users_col.find_one({"_id": uid2})
+    )
+
+    if not u1 or not u2:
+        return await interaction.followup.send("⚠️ Một trong hai đạo hữu chưa có tên trong sổ sinh tử (chưa có hồ sơ).")
+    
+    if u1.get("last_boss") == today or u2.get("last_boss") == today:
+        return await interaction.followup.send("❌ Một trong hai đã hết lượt thảo phạt hôm nay.")
+
+    # Đưa vào danh sách bận
+    active_battles.add(uid1)
+    active_battles.add(uid2)
+
     try:
-        active_battles.add(uid1); active_battles.add(uid2)
         config = BOSS_CONFIG[ten_boss]
-        
-        # Công thức tính LC dựa trên config của đạo hữu
+        # Tính toán LC Boss và Tỉ lệ thắng dựa trên hàm calc_power có sẵn
         p1 = await calc_power(uid1)
         p2 = await calc_power(uid2)
         boss_p = int((800 * config['multiplier']) + config['base'])
+        
         win_rate = max(0.01, min(0.95, (p1 + p2) / ((p1 + p2) + boss_p)))
 
         view = BossInviteView(member.id, interaction.user.id, ten_boss, boss_p, win_rate, config)
+        
         await interaction.followup.send(
-            f"⚔️ **{interaction.user.display_name}** mời **{member.mention}** đấu **{ten_boss}**!\n"
-            f"👿 **Ma Thần LC:** `{boss_p:,}` | 📈 **Thắng:** `{win_rate*100:.1f}%`",
+            f"⚔️ **{interaction.user.display_name}** mời **{member.mention}** thảo phạt **{ten_boss}**!\n"
+            f"👿 **Sức mạnh Boss:** `{boss_p:,}` | 📈 **Tỉ lệ thắng dự kiến:** `{win_rate*100:.1f}%`",
             view=view
         )
     except Exception as e:
-        active_battles.discard(uid1); active_battles.discard(uid2)
-        print(f"Lỗi lệnh Boss: {e}")
-        await interaction.followup.send(f"⚠️ Linh mạch trục trặc: {e}")
+        active_battles.discard(uid1)
+        active_battles.discard(uid2)
+        print(f"Lỗi Boss: {e}")
+        await interaction.followup.send(f"⚠️ Pháp trận trục trặc: {e}")
 
 @bot.tree.command(name="thanthu", description="Thần thú thị uy chân ngôn (Chỉ dành cho người có linh thú)")
 async def pet_show(interaction: discord.Interaction):
@@ -2013,6 +2040,7 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
