@@ -1819,37 +1819,103 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member, te
         if u2.get("last_boss") == today:
             return await interaction.followup.send(f"❌ **{member.display_name}** đã hết lượt.")
 
-        # Thêm vào danh sách bận sau khi đã check hết điều kiện
-        active_battles.add(uid1)
-        active_battles.add(uid2)
+# --- CLASS VIEW XỬ LÝ LỜI MỜI (CÓ TỰ ĐỘNG GIẢI PHÓNG) ---
+class BossInviteView(discord.ui.View):
+    def __init__(self, target_id, initiator_id, ten_boss, boss_p, win_rate, config):
+        super().__init__(timeout=60) # Thời gian chờ là 60 giây
+        self.target_id = target_id
+        self.initiator_id = initiator_id
+        self.ten_boss = ten_boss
+        self.boss_p = boss_p
+        self.win_rate = win_rate
+        self.config = config
+        self.message = None # Lưu tin nhắn để chỉnh sửa khi timeout
 
-        # Lấy cấu hình Boss và tính lực chiến
-        config = BOSS_CONFIG[ten_boss]
-        boss_p = int((800 * config['multiplier']) + config['base'] + random.randint(1000, 5000))
+    # HÀM QUAN TRỌNG: Tự động chạy khi hết 60 giây
+    async def on_timeout(self):
+        # Dọn dẹp danh sách bận cho cả 2 người
+        active_battles.discard(str(self.initiator_id))
+        active_battles.discard(str(self.target_id))
         
-        # Tính LC (Truy vấn DB tiếp)
+        # Cập nhật tin nhắn báo hết hạn nếu có thể
+        try:
+            if self.message:
+                await self.message.edit(content=f"⌛ Lời mời thảo phạt **{self.ten_boss}** đã hết hạn. Hai vị tu sĩ đã được giải phóng!", view=None)
+        except:
+            pass
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.target_id:
+            await interaction.response.send_message("❌ Đây không phải lời mời dành cho đạo hữu!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="✅ Tiếp Chiến", style=discord.ButtonStyle.success)
+    async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="⚔️ **TRẬN CHIẾN BẮT ĐẦU!**", view=None)
+        
+        uid1, uid2 = str(self.initiator_id), str(self.target_id)
+        try:
+            # Logic tính toán thắng thua giữ nguyên như cũ...
+            is_win = random.random() < self.win_rate
+            embed = discord.Embed(title=f"⚔️ CHIẾN BÁO: {self.ten_boss}", color=self.config['color'])
+            
+            today = datetime.now().strftime("%Y-%m-%d")
+            await users_col.update_many({"_id": {"$in": [uid1, uid2]}}, {"$set": {"last_boss": today}})
+
+            if is_win:
+                min_r, max_r = self.config['reward']
+                gift = random.randint(min_r, max_r)
+                await users_col.update_many({"_id": {"$in": [uid1, uid2]}}, {"$inc": {"linh_thach": gift}})
+                embed.description = f"🎉 **CHIẾN THẮNG!**\n🎁 Nhận: **{gift}** 💎 Linh Thạch."
+                embed.color = discord.Color.green()
+            else:
+                loss_exp = self.config['penalty']
+                await users_col.update_many({"_id": {"$in": [uid1, uid2]}}, {"$inc": {"exp": -loss_exp}})
+                for tid in [uid1, uid2]: await check_level_down(tid)
+                embed.description = f"💀 **THẤT BẠI!**\n⚠️ Phản phệ: **{loss_exp:,}** EXP."
+                embed.color = discord.Color.red()
+
+            await interaction.followup.send(content=f"<@{uid1}> <@{uid2}>", embed=embed)
+        finally:
+            active_battles.discard(uid1)
+            active_battles.discard(uid2)
+            self.stop()
+
+    @discord.ui.button(label="❌ Từ Chối", style=discord.ButtonStyle.danger)
+    async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="❌ Lời mời bị khước từ. Hai vị đã được giải phóng.", view=None)
+        active_battles.discard(str(self.initiator_id))
+        active_battles.discard(str(self.target_id))
+        self.stop()
+
+# --- LỆNH BOSS (Cập nhật phần gửi tin nhắn) ---
+@bot.tree.command(name="boss", description="Thảo phạt Ma Thần")
+async def boss_hunt(interaction: discord.Interaction, member: discord.Member, ten_boss: str):
+    await interaction.response.defer()
+    
+    uid1, uid2 = str(interaction.user.id), str(member.id)
+    if uid1 == uid2 or uid1 in active_battles or uid2 in active_battles:
+        return await interaction.followup.send("❌ Không thể thực hiện (Trùng người hoặc đang bận).")
+
+    active_battles.add(uid1); active_battles.add(uid2)
+
+    try:
+        config = BOSS_CONFIG[ten_boss]
         p1 = await calc_power(uid1)
         p2 = await calc_power(uid2)
-        total_p = p1 + p2
-        
-        win_rate = max(0.01, min(0.95, total_p / (total_p + boss_p)))
-        
-        # Tạo View mời
+        boss_p = int((800 * config['multiplier']) + config['base'])
+        win_rate = max(0.01, min(0.95, (p1 + p2) / ((p1 + p2) + boss_p)))
+
         view = BossInviteView(member.id, interaction.user.id, ten_boss, boss_p, win_rate, config)
-        
-        # Gửi tin nhắn mời
-        await interaction.followup.send(
-            f"⚔️ **{interaction.user.display_name}** mời **{member.mention}** thảo phạt **{ten_boss}**!\n"
-            f"👿 **Ma Thần Lực Chiến:** `{boss_p:,}`\n"
-            f"📈 **Tỉ lệ thắng dự kiến:** `{win_rate*100:.1f}%`",
+        # Gán tin nhắn vào view để xử lý timeout
+        view.message = await interaction.followup.send(
+            f"⚔️ **{interaction.user.display_name}** mời **{member.mention}** đấu **{ten_boss}**!",
             view=view
         )
-
     except Exception as e:
-        print(f"Lỗi Boss: {e}")
-        active_battles.discard(uid1)
-        active_battles.discard(uid2)
-        await interaction.followup.send("❌ Đã xảy ra lỗi khi kết nối linh mạch.")
+        active_battles.discard(uid1); active_battles.discard(uid2)
+        await interaction.followup.send(f"⚠️ Lỗi: {e}")
 
 @bot.tree.command(name="thanthu", description="Thần thú thị uy chân ngôn (Chỉ dành cho người có linh thú)")
 async def pet_show(interaction: discord.Interaction):
@@ -2053,6 +2119,7 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
