@@ -1359,7 +1359,7 @@ class ShopView(discord.ui.View):
             options=[
                 discord.SelectOption(
                     label=name, 
-                    description=f"Giá: 80 Linh thạch - {config[name]['desc'][:50]}..."
+                    description=f"Giá: 120 Linh thạch - {config[name]['desc'][:50]}..."
                 ) for name in available_tk[:25]
             ]
         )
@@ -1377,7 +1377,7 @@ class ShopView(discord.ui.View):
         
         # 2. Kiểm tra linh thạch (Giá 80)
         u = await self.users_col.find_one({"_id": self.uid})
-        if not u or u.get("linh_thach", 0) < 80:
+        if not u or u.get("linh_thach", 0) < 120:
             return await interaction.response.send_message("❌ Đạo hữu không đủ 80 Linh thạch!", ephemeral=True)
 
         # 3. Thực hiện giao dịch
@@ -1385,7 +1385,7 @@ class ShopView(discord.ui.View):
             {"_id": self.uid},
             {
                 "$set": {"than_khi": selected_tk},
-                "$inc": {"linh_thach": -80} # Trừ đúng 80
+                "$inc": {"linh_thach": -120} # Trừ đúng 80
             }
         )
         
@@ -1419,7 +1419,7 @@ async def shop(interaction: discord.Interaction):
     # 3. Khởi tạo View với danh sách có sẵn (Tránh dùng add_option bên ngoài gây treo)
     view = ShopView(uid, users_col, THAN_KHI_CONFIG, available_tk)
     
-    await interaction.followup.send("🏛️ **LINH BẢO CÁC** 🏛️\nNơi trao đổi những món thần vật thượng cổ (Giá: 80 Linh thạch).", view=view)
+    await interaction.followup.send("🏛️ **LINH BẢO CÁC** 🏛️\nNơi trao đổi những món thần vật thượng cổ (Giá: 120 Linh thạch).", view=view)
 @bot.tree.command(name="captcha", description="Lệnh chấp pháp của riêng Admin để kiểm tra tu sĩ")
 async def captcha(interaction: discord.Interaction, target: discord.Member):
     # 1. Kiểm tra ID người dùng
@@ -1972,6 +1972,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
