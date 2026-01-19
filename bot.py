@@ -114,7 +114,6 @@ PET_CONFIG = {
         "color": 0xff99cc,
         "icon": "🦊"
     },
-    "Rồng Hoa Thánh":{"icon": 🐉}
 }
 
 # ========== UTIL FUNCTIONS (THUẦN MONGODB) ==========
@@ -1924,6 +1923,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
