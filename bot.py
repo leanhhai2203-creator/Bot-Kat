@@ -126,7 +126,7 @@ BOSS_CONFIG = {
     },
     "Lôi Âm Tôn Sứ": {
         "multiplier": 35, # Tăng từ 30 -> 35
-        "base": 35000,   # Tăng từ 20,000 -> 25,000
+        "base": 50000,   # Tăng từ 20,000 -> 25,000
         "reward": (12, 18), # Tăng nhẹ thưởng để xứng tầm
         "penalty": 1500, # Tăng phạt (vượt ngưỡng rớt cấp nhanh hơn)
         "color": 0xe67e22,
@@ -134,7 +134,7 @@ BOSS_CONFIG = {
     },
     "Mục Dã Di": {
         "multiplier": 55, # Tăng mạnh từ 40 -> 55
-        "base": 65000,   # Tăng mạnh từ 40,000 -> 55,000
+        "base": 80000,   # Tăng mạnh từ 40,000 -> 55,000
         "reward": (20, 25), # Thưởng xứng đáng cho đại nạn
         "penalty": 3000, # Phạt cực nặng (5k EXP thường là rớt thẳng 1-2 cấp)
         "color": 0x992d22,
@@ -1957,6 +1957,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
