@@ -62,6 +62,64 @@ THAN_KHI_CONFIG = {
     "Không Đồng Ấn": {"desc": "Dấu ấn của định mệnh khắc lên dòng chảy sinh mệnh, là quyền năng nắm giữ sự bất biến giữa cõi vô thường.", "atk": 200, "color": 0x1F1F1F},
     "Hiện Thân Thần Vật - Côn Lôn Kính":{"desc": "Sức mạnh từ bản thể Côn Lôn Kính - nguồn: Thanh Thanh", "atk": 150, "color": 0xECF0F1}
 }
+THANH_GIAP_CONFIG = {
+    "Long Lân Thánh Giáp": {
+        "desc": "Đúc từ vảy của Thái Cổ Chân Long, vạn tiễn bất xâm.",
+        "hp": 2500,
+        "color": 0xFFD700 # Vàng
+    },
+    "Phượng Hoàng Niết Bàn Y": {
+        "desc": "Hỏa diệm bất diệt, sinh mệnh dồi dào như được tái sinh.",
+        "hp": 2500,
+        "color": 0xFF4500 # Đỏ cam
+    },
+    "Huyền Vũ Minh Giáp": {
+        "desc": "Sự kiên cố của phương Bắc, vững chãi như đại địa.",
+        "hp": 2500,
+        "color": 0x2F4F4F # Xanh thẫm
+    },
+    "Bạch Hổ Sát Thần Khải": {
+        "desc": "Sát khí hộ thân, nhiễu loạn tâm trí kẻ thù.",
+        "hp": 2500,
+        "color": 0xF5F5F5 # Trắng sữa
+    },
+    "Thiên Hà Tinh Thần Bào": {
+        "desc": "Dệt từ ánh sáng vạn vì sao, sinh mệnh hòa cùng thiên địa.",
+        "hp": 2500,
+        "color": 0x4169E1 # Xanh hoàng gia
+    },
+    "Hỗn Nguyên Thánh Y": {
+        "desc": "Chứa đựng sức mạnh sơ khai, giúp tinh huyết bất tận.",
+        "hp": 2500,
+        "color": 0x9370DB # Tím
+    },
+    "Lôi Đình Chiến Giáp": {
+        "desc": "Sấm sét thiên kiếp rèn giũa thân thể kim cang.",
+        "hp": 2500,
+        "color": 0xFFFF00 # Vàng lôi điện
+    },
+    "Thanh Liên Pháp Y": {
+        "desc": "Đóa sen xanh thanh lọc cơ thể, gia tăng thọ mệnh.",
+        "hp": 2500,
+        "color": 0x00FF7F # Xanh lá sen
+    },
+    "Vô Cực Ma Giáp": {
+        "desc": "Hấp thụ u minh lực để gia cố sinh mệnh.",
+        "hp": 2500,
+        "color": 0x1A1A1A # Đen
+    },
+    "Cửu Thiên Huyền Nữ Bào": {
+        "desc": "Mềm mại nhưng bền bỉ, mang theo tiên khí bảo mệnh.",
+        "hp": 2500,
+        "color": 0xFFB6C1 # Hồng phấn
+    },
+    "Vạn Cổ Quy Nguyên - Thiên Đạo Bất Diệt Khải": {
+        "desc": "Trấn Thế Chi Bảo. Kẻ mặc giáp này thân ngoài ngũ hành, lôi phạt không thể chạm đến.",
+        "hp": 5000,
+        "color": 0xFFFFFF, # Trắng hào quang
+        "special": "khang_loi_phat"
+    }
+}
 THAN_CHU_THIEN_PHAT = [
     "📜 Thiên đạo vô tình, coi vạn vật là chó rơm! THIÊN PHẠT GIÁNG LÂM!!!",
     "⚡ Ta nắm giữ lôi đình trong tay, nhân danh Thiên Đạo: TRỪ KHỬ TU VI!",
@@ -877,7 +935,7 @@ async def dotpha(interaction: discord.Interaction):
     if exp < needed:
         return await interaction.followup.send(f"❌ Tu vi chưa đủ! (Cần {int(exp)}/{needed} EXP)")
 
-    required_lt = 1 if lv < 30 else (3 if lv < 60 else (6 if lv < 80 else 12))
+    required_lt = 2 if lv < 30 else (5 if lv < 60 else (10 if lv < 80 else 20))
     if linh_thach < required_lt:
         return await interaction.followup.send(f"❌ Cần **{required_lt} Linh thạch**.")
 
@@ -2119,6 +2177,7 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
