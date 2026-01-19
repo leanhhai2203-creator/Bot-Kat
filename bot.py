@@ -1714,6 +1714,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
     await interaction.followup.send(embed=embed)
 
 # --- CLASS XỬ LÝ NÚT BẤM BOSS ---
+# --- CLASS XỬ LÝ NÚT BẤM BOSS (Đã tối ưu) ---
 class BossInviteView(discord.ui.View):
     def __init__(self, target_id, initiator_id):
         super().__init__(timeout=60)
@@ -1730,7 +1731,7 @@ class BossInviteView(discord.ui.View):
     @discord.ui.button(label="✅ Tiếp Chiến", style=discord.ButtonStyle.success)
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.accepted = True
-        # Phải dùng edit_message để xác nhận tương tác nút bấm
+        # Cập nhật tin nhắn để xóa nút bấm ngay lập tức
         await interaction.response.edit_message(content="⚔️ **TRẬN CHIẾN BẮT ĐẦU!** Đang tính toán thiên cơ...", view=None)
         self.stop()
 
@@ -1739,7 +1740,8 @@ class BossInviteView(discord.ui.View):
         self.accepted = False
         await interaction.response.edit_message(content="❌ Lời mời đã bị khước từ.", view=None)
         self.stop()
-# --- LỆNH BOSS CHÍNH ---
+
+# --- LỆNH BOSS CHÍNH (Sửa lỗi treo) ---
 @bot.tree.command(name="boss", description="Đại chiến Ma Thần - Tỉ lệ Solo - Có rớt cấp")
 @app_commands.describe(member="Đồng đội cùng tham chiến", ten_boss="Chọn Ma Thần muốn khiêu chiến")
 @app_commands.choices(ten_boss=[
@@ -1748,13 +1750,11 @@ class BossInviteView(discord.ui.View):
     app_commands.Choice(name="Mục Dã Di (Khó - Phạt 5000 EXP)", value="Mục Dã Di")
 ])
 async def boss_hunt(interaction: discord.Interaction, member: discord.Member, ten_boss: str):
-    # 1. Phản hồi ngay lập tức để tránh lỗi 10062
     await interaction.response.defer() 
 
     uid1, uid2 = str(interaction.user.id), str(member.id)
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # Kiểm tra trạng thái bận
     if uid1 in active_battles or uid2 in active_battles:
         return await interaction.followup.send("⚠️ Một trong hai vị đang bận hoặc đang chờ xác nhận!")
 
@@ -1765,7 +1765,6 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member, te
     active_battles.add(uid2)
 
     try:
-        # Truy vấn dữ liệu 2 tu sĩ
         u1, u2 = await asyncio.gather(
             users_col.find_one({"_id": uid1}),
             users_col.find_one({"_id": uid2})
@@ -1775,7 +1774,6 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member, te
             active_battles.discard(uid1); active_battles.discard(uid2)
             return await interaction.followup.send("⚠️ Một trong hai vị chưa có hồ sơ tu tiên.")
 
-        # Kiểm tra lượt đánh trong ngày
         if u1.get("last_boss") == today:
             active_battles.discard(uid1); active_battles.discard(uid2)
             return await interaction.followup.send("❌ Đạo hữu đã hết lượt hôm nay!")
@@ -1784,7 +1782,6 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member, te
             active_battles.discard(uid1); active_battles.discard(uid2)
             return await interaction.followup.send(f"❌ **{member.display_name}** đã hết lượt.")
 
-        # Lấy cấu hình Boss và tính lực chiến
         config = BOSS_CONFIG[ten_boss]
         boss_p = (800 * config['multiplier']) + config['base'] + random.randint(1000, 5000)
         
@@ -1795,9 +1792,9 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member, te
         win_rate_raw = total_p / (total_p + boss_p)
         win_rate = max(0.01, min(0.95, win_rate_raw))
         
-        # Gửi lời mời và đợi nút bấm
         view = BossInviteView(member.id, interaction.user.id)
-        await interaction.followup.send(
+        # Gửi tin nhắn mời và lưu vào biến để có thể chỉnh sửa nếu cần
+        sent_msg = await interaction.followup.send(
             f"⚔️ **{interaction.user.display_name}** mời **{member.mention}** thảo phạt **{ten_boss}**!\n"
             f"👿 **Ma Thần Lực Chiến:** `{boss_p:,}`\n"
             f"📈 **Tỉ lệ thắng dự kiến:** `{win_rate*100:.1f}%`\n"
@@ -1805,11 +1802,16 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member, te
             view=view
         )
 
-        await view.wait()
+        # Chờ đợi phản hồi từ View
+        is_timeout = await view.wait()
+
+        # Xử lý nếu hết thời gian (treo là ở đây)
+        if is_timeout:
+            active_battles.discard(uid1); active_battles.discard(uid2)
+            return await interaction.followup.send(f"⌛ Lời mời thảo phạt **{ten_boss}** đã hết hạn do không có phản hồi.")
 
         # Xử lý sau khi nhấn nút
         if view.accepted is True:
-            # Cập nhật lượt đánh ngay lập tức
             await users_col.update_many({"_id": {"$in": [uid1, uid2]}}, {"$set": {"last_boss": today}})
             
             is_win = random.random() < win_rate
@@ -1823,7 +1825,6 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member, te
             else:
                 loss_exp = config['penalty']
                 drop_msg = ""
-                # Logic trừ EXP và kiểm tra rớt cấp cho từng người
                 for tid in [uid1, uid2]:
                     await users_col.update_one({"_id": tid}, {"$inc": {"exp": -loss_exp}})
                     if await check_level_down(tid):
@@ -1835,14 +1836,20 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member, te
             embed.add_field(name="👥 Tu Sĩ", value=f"Tổng LC: `{total_p:,}`", inline=True)
             embed.add_field(name="👿 Ma Thần", value=f"LC: `{boss_p:,}`", inline=True)
             
-            # Gửi kết quả cuối cùng
             await interaction.followup.send(content=f"{interaction.user.mention} {member.mention}", embed=embed)
+        
+        # Nếu view.accepted là False (bị từ chối), code sẽ tự kết thúc mượt mà nhờ finally
 
     except Exception as e:
         print(f"Lỗi Boss: {e}")
+        # Gửi thông báo lỗi cho người dùng thay vì để bot im lặng
+        try:
+            await interaction.followup.send("❌ Pháp trận gặp trục trặc, thảo phạt thất bại!", ephemeral=True)
+        except: pass
     finally:
         active_battles.discard(uid1)
         active_battles.discard(uid2)
+
 @bot.tree.command(name="thanthu", description="Thần thú thị uy chân ngôn (Chỉ dành cho người có linh thú)")
 async def pet_show(interaction: discord.Interaction):
     # 1. Khởi động pháp trận (Defer) để tránh treo lệnh
@@ -2045,6 +2052,7 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
