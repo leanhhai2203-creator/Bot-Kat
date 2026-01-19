@@ -1983,49 +1983,55 @@ async def show_thankhi(interaction: discord.Interaction):
         print(f"Lỗi: {e}")
         if not interaction.responses.is_done():
             await interaction.followup.send(f"⚠️ Pháp trận lỗi: {str(e)}")
-@bot.tree.command(name="addthankhi", description="Ban tặng Thần Khí cho tu sĩ (Chỉ dành cho Admin)")
-@app_commands.describe(tu_si="Chọn tu sĩ muốn ban tặng", ten_than_khi="Nhập tên Thần Khí")
-@app_commands.checks.has_permissions(administrator=True) # Chỉ Admin mới dùng được
-async def add_than_khi(interaction: discord.Interaction, tu_si: discord.Member, ten_than_khi: str):
-    await interaction.response.defer()
-    uid = str(tu_si.id)
+@bot.tree.command(name="addthankhi", description="[ADMIN] Ban tặng Thần Khí thượng cổ cho tu sĩ")
+@app_commands.describe(target="Tu sĩ được ban tặng", ten_than_khi="Chọn Thần Khí từ danh sách")
+# Tự động tạo danh sách lựa chọn từ các Key trong THAN_KHI_CONFIG
+@app_commands.choices(ten_than_khi=[
+    app_commands.Choice(name=name, value=name) for name in THAN_KHI_CONFIG.keys()
+])
+async def add_than_khi(interaction: discord.Interaction, target: discord.Member, ten_than_khi: str):
+    # 1. Kiểm tra quyền Admin (Sử dụng ADMIN_ID của đạo hữu)
+    if interaction.user.id != ADMIN_ID:
+        return await interaction.response.send_message("❌ **THIÊN PHẠT!** Đạo hữu không có quyền năng của Thiên Đạo.", ephemeral=True)
 
-    # Kiểm tra hồ sơ tu sĩ
+    await interaction.response.defer()
+    uid = str(target.id)
+
+    # 2. Kiểm tra hồ sơ tu sĩ trong Database
     user = await users_col.find_one({"_id": uid})
     if not user:
-        return await interaction.followup.send(f"❌ Tu sĩ {tu_si.mention} chưa có hồ sơ tu tiên, không thể nhận Thần Khí!")
+        return await interaction.followup.send(f"❌ Tu sĩ {target.mention} chưa có tên trong sổ sinh tử (chưa có hồ sơ).")
 
     try:
-        # Cập nhật trường than_khi trong Database
+        # 3. Lấy thông tin thần khí từ Config để hiển thị
+        config = THAN_KHI_CONFIG[ten_than_khi]
+        
+        # 4. Cập nhật vào Database
         await users_col.update_one(
             {"_id": uid},
             {"$set": {"than_khi": ten_than_khi}}
         )
 
+        # 5. Tạo Embed thông báo trang trọng
         embed = discord.Embed(
-            title="🔱 THIÊN ĐẠO BAN THƯỞNG 🔱",
-            description=f"Chúc mừng tu sĩ {tu_si.mention} đã nhận được Thần Khí thượng cổ!",
-            color=discord.Color.red()
+            title="🔱 THIÊN ĐẠO BAN VẬT 🔱",
+            description=f"Chúc mừng tu sĩ **{target.display_name}** đã được ban tặng **{ten_than_khi}**!",
+            color=config['color'] # Lấy màu sắc tương ứng từ Config
         )
-        embed.add_field(name="🗡️ Thần Khí:", value=f"**[{ten_than_khi}]**", inline=False)
-        embed.add_field(name="✨ Uy lực:", value="Lực chiến sẽ được gia tăng và xuất hiện hiệu ứng đặc biệt khi Solo!", inline=False)
-        embed.set_thumbnail(url=tu_si.display_avatar.url)
-        embed.set_footer(text="Khí phách hiên ngang, trấn áp quần hùng!")
+        embed.add_field(name="📜 Truyền thuyết:", value=f"*{config['desc']}*", inline=False)
+        embed.add_field(name="⚔️ Sức mạnh:", value=f"Tăng thêm **{config['atk']}** lực chiến.", inline=True)
+        embed.set_thumbnail(url=target.display_avatar.url)
+        embed.set_footer(text="Khí vận đại tăng, chấn động bát hoang!")
 
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(content=target.mention, embed=embed)
 
     except Exception as e:
         print(f"Lỗi add thần khí: {e}")
-        await interaction.followup.send("❌ Đã xảy ra lỗi trong quá trình ban tặng Thần Khí.")
-
-# Xử lý lỗi nếu người không có quyền cố tình dùng lệnh
-@add_than_khi.error
-async def add_than_khi_error(interaction: discord.Interaction, error):
-    if isinstance(error, app_commands.errors.MissingPermissions):
-        await interaction.response.send_message("⚠️ Đạo hữu không có quyền hạn của Thiên Đạo để sử dụng lệnh này!", ephemeral=True)
+        await interaction.followup.send("❌ Đã xảy ra lỗi khi cập nhật thần khí vào pháp trận.")
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
