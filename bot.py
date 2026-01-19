@@ -128,7 +128,7 @@ BOSS_CONFIG = {
         "multiplier": 35, # Tăng từ 30 -> 35
         "base": 35000,   # Tăng từ 20,000 -> 25,000
         "reward": (12, 18), # Tăng nhẹ thưởng để xứng tầm
-        "penalty": 1000, # Tăng phạt (vượt ngưỡng rớt cấp nhanh hơn)
+        "penalty": 1500, # Tăng phạt (vượt ngưỡng rớt cấp nhanh hơn)
         "color": 0xe67e22,
         "desc": "Hộ pháp đọa lạc, lôi điện quanh thân, thực lực không thể coi thường."
     },
@@ -136,7 +136,7 @@ BOSS_CONFIG = {
         "multiplier": 55, # Tăng mạnh từ 40 -> 55
         "base": 65000,   # Tăng mạnh từ 40,000 -> 55,000
         "reward": (20, 25), # Thưởng xứng đáng cho đại nạn
-        "penalty": 2000, # Phạt cực nặng (5k EXP thường là rớt thẳng 1-2 cấp)
+        "penalty": 3000, # Phạt cực nặng (5k EXP thường là rớt thẳng 1-2 cấp)
         "color": 0x992d22,
         "desc": "Thượng cổ Ma Thần, sức mạnh đủ để hủy thiên diệt địa."
     }
@@ -1719,7 +1719,7 @@ class BossInviteView(discord.ui.View):
 @app_commands.describe(member="Đồng đội cùng tham chiến", ten_boss="Chọn Ma Thần muốn khiêu chiến")
 @app_commands.choices(ten_boss=[
     app_commands.Choice(name="Hồng Tụ (Dễ - Phạt 500 EXP)", value="Hồng Tụ"),
-    app_commands.Choice(name="Lôi Âm (Thường - Phạt 1200 EXP)", value="Lôi Âm"),
+    app_commands.Choice(name="Lôi Âm (Thường - Phạt 1500 EXP)", value="Lôi Âm"),
     app_commands.Choice(name="Mục Dã Di (Khó - Phạt 3000 EXP)", value="Mục Dã Di")
 ])
 async def boss_hunt(interaction: discord.Interaction, member: discord.Member, ten_boss: str):
@@ -1972,6 +1972,7 @@ async def show_thankhi(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
