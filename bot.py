@@ -147,7 +147,7 @@ PET_CONFIG = {
         "effect": " tăng 5% tỷ lệ thắng mọi trận đấu.",
         "icon": "🌀",
         "color": 0x4B0082
-    }
+    },
 }
     "Băng Tinh Hổ": {
         "atk": 170,
@@ -2099,6 +2099,7 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
