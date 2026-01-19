@@ -218,45 +218,59 @@ def get_monster_data(lv: int):
     elif lv <= 60: return "Linh thú", 0.25, (4, 7)
     else: return "Cổ thú", 0.30, (6, 9)
 async def calc_power(uid: str) -> int:
+async def calc_power(uid: str) -> int:
     uid = str(uid)
     u = await users_col.find_one({"_id": uid})
     if not u: return 0
     
     eq = await eq_col.find_one({"_id": uid}) or {}
-    lv, pet_name = u.get("level", 1), u.get("pet")
+    lv = u.get("level", 1)
+    pet_name = u.get("pet")
     than_khi_name = u.get("than_khi") 
+    thanh_giap_name = u.get("thanh_giap") # Lấy thông tin Thánh Giáp
     
-    # 1. Chỉ số gốc từ Level (lv * 5)
+    # 1. Chỉ số gốc từ Level
     atk, hp = lv * 5, lv * 50
     
-    # 2. Cộng chỉ số từ Trang bị
+    # 2. Cộng chỉ số từ Trang bị thường
     for t in EQ_TYPES:
         eq_lv = eq.get(t, 0)
         
         if t == "Kiếm":
-            # CHỈ cộng Atk Kiếm nếu KHÔNG có Thần Khí
+            # Chỉ cộng Atk Kiếm nếu KHÔNG có Thần Khí
             if not than_khi_name:
                 atk += eq_lv * 15
         
+        elif t == "Giáp":
+            # CHỈ cộng HP Giáp thường nếu KHÔNG có Thánh Giáp
+            if not thanh_giap_name:
+                hp += eq_lv * 150
+                
         elif t == "Nhẫn":
-            # LUÔN cộng Atk Nhẫn trong mọi trường hợp
+            # Nhẫn luôn cộng Atk
             atk += eq_lv * 15
             
         else: 
-            # Các trang bị còn lại (Giáp, v.v.) cộng HP
+            # Các trang bị khác (Mũ, Giày...) cộng HP bình thường
             hp += eq_lv * 150
             
-    # 3. Cộng chỉ số Thần Khí (Nếu có)
-    if than_khi_name:
-        atk += 200 # Cộng 200 ATK từ Thần Khí
+    # 3. Cộng chỉ số từ Cực phẩm (Thần Khí & Thánh Giáp)
+    if than_khi_name in THAN_KHI_CONFIG:
+        # Lấy ATK từ config thần khí
+        atk += THAN_KHI_CONFIG[than_khi_name].get("atk", 200)
             
-    # 4. Chỉ số từ Pet (Giữ nguyên)
+    if thanh_giap_name in THANH_GIAP_CONFIG:
+        # Lấy HP từ config thánh giáp (Mặc định 2500 hoặc 5000)
+        hp += THANH_GIAP_CONFIG[thanh_giap_name].get("hp", 2500)
+
+    # 4. Chỉ số từ Pet
     if pet_name in PET_CONFIG:
         pet_stats = PET_CONFIG[pet_name]
         atk += pet_stats.get("atk", 0)
         hp += pet_stats.get("hp", 0) 
 
-    # 5. Tính toán Lực chiến tổng hợp (Power)
+    # 5. Tổng lực chiến (Power)
+    # Công thức: (Công * 10) + Thủ + Biến số thiên cơ
     power = (atk * 10) + hp + random.randint(0, 100)
     return int(power)
 async def add_exp(uid: str, amount: int):
@@ -2070,6 +2084,7 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
