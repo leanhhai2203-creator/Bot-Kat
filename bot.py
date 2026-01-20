@@ -1204,7 +1204,6 @@ async def bxhlc(interaction: discord.Interaction):
     )
     
     embed.set_footer(text=f"Yêu cầu bởi: {interaction.user.display_name}")
-    embed.set_thumbnail(url="https://i.imgur.com/K6Y0X9E.gif")
 
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="bxh", description="Xem bảng xếp hạng các đại năng tu tiên")
@@ -1253,9 +1252,6 @@ async def bxh(interaction: discord.Interaction):
     )
     
     embed.set_footer(text="Khổ luyện thành tài - Danh toại bảng vàng")
-    # Đạo hữu có thể thay đổi link ảnh thumbnail dưới đây nếu muốn
-    embed.set_thumbnail(url="https://i.imgur.com/8S9UvY6.png")
-
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="resetday", description="ADMIN: Reset ngày")
 async def resetday(interaction: discord.Interaction):
@@ -2220,6 +2216,7 @@ async def phong_than_bang(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
