@@ -558,7 +558,7 @@ async def broadcast_anomaly(bot, title, message, color, thumbnail_url=None):
 @bot.tree.command(name="check", description="Xem hồ sơ tu tiên & lực chiến chính xác")
 async def info(interaction: discord.Interaction):
     try:
-        # 1. Chống treo lệnh: Báo cho Discord Bot đang xử lý
+        # 1. Chống treo lệnh
         await interaction.response.defer()
         uid = str(interaction.user.id)
         
@@ -571,13 +571,13 @@ async def info(interaction: discord.Interaction):
         level = u.get("level", 1)
         cur_exp = u.get("exp", 0)
         than_khi_name = u.get("than_khi")
+        thanh_giap_name = u.get("thanh_giap") # Lấy tên Thánh Giáp từ Database
         pet_name = u.get("pet")
 
-        # 3. GỌI HÀM TÍNH POWER (Đảm bảo đồng nhất số liệu)
-        # Bần đạo gọi hàm calc_power mà đạo hữu đã cung cấp
+        # 3. GỌI HÀM TÍNH POWER
         total_power = await calc_power(uid)
 
-        # 4. TÍNH TOÁN CẢNH GIỚI (Lv.X - Cảnh giới tầng Y)
+        # 4. TÍNH TOÁN CẢNH GIỚI
         stages = ["Luyện Khí", "Trúc Cơ", "Kết Đan", "Nguyên Anh", "Hóa Thần", 
                   "Luyện Hư", "Hợp Thể", "Đại Thừa", "Đại Tiên", "Thiên Tiên"]
         idx = (level - 1) // 10
@@ -586,28 +586,36 @@ async def info(interaction: discord.Interaction):
         tang = (level - 1) % 10 + 1
         display_canh_gioi = f"Lv.{level} - {current_stage} tầng {tang}"
 
-        # 5. XỬ LÝ HIỂN THỊ VŨ KHÍ & MÀU SẮC
-        # Lấy cấp độ các trang bị để hiển thị (đúng tên đạo hữu yêu cầu)
+        # 5. XỬ LÝ HIỂN THỊ TRANG BỊ & MÀU SẮC
         kiem_lv = eq.get("Kiếm", 0)
         nhan_lv = eq.get("Nhẫn", 0)
         giap_lv = eq.get("Giáp", 0)
         tay_lv = eq.get("Tay", 0)
         ung_lv = eq.get("Ủng", 0)
 
+        # Thiết lập màu sắc Embed (Ưu tiên Thần Khí rồi đến Thánh Giáp)
         embed_color = discord.Color.blue()
         if than_khi_name:
-            weapon_display = f"🌟 **{than_khi_name}**"
-            # Giả sử đạo hữu có bảng màu trong config, nếu không mặc định màu Vàng Kim
             embed_color = discord.Color.gold()
+        elif thanh_giap_name:
+            embed_color = discord.Color.from_rgb(255, 215, 0) # Màu vàng kim cho Thánh Giáp
+
+        # Hiển thị Vũ khí (Thần Khí vs Kiếm thường)
+        if than_khi_name:
+            weapon_display = f"🌟 **{than_khi_name}**"
         else:
             weapon_display = f"⚔️ Kiếm Cấp {kiem_lv}" if kiem_lv > 0 else "⚔️ Vô nhận kiếm"
 
-        # 6. HIỂN THỊ EXP (Đã chỉnh sửa để khớp với hàm check_level_up)
-        # Theo logic check_level_up: Đạt mốc % 10 thì dừng thăng cấp (Đỉnh Phong)
+        # --- LOGIC MỚI: HIỂN THỊ THÁNH GIÁP THAY THẾ GIÁP THƯỜNG ---
+        if thanh_giap_name:
+            giap_display = f"🛡️ **{thanh_giap_name}**"
+        else:
+            giap_display = f"🛡️ Giáp Cấp {giap_lv}" if giap_lv > 0 else "🛡️ Bố y"
+
+        # 6. HIỂN THỊ EXP
         if level % 10 == 0:
             exp_display = f"`{int(cur_exp):,} / Đỉnh Phong (Cần Đột Phá)`"
         else:
-            # SỬ DỤNG HÀM exp_needed(level) ĐỂ ĐỒNG BỘ VỚI LỆNH LEVEL UP
             needed = exp_needed(level) 
             exp_display = f"`{int(cur_exp):,} / {int(needed):,}`"
 
@@ -623,7 +631,7 @@ async def info(interaction: discord.Interaction):
         trang_bi_str = (
             f"Vũ khí: {weapon_display}\n"
             f"💍 Nhẫn: Cấp {nhan_lv}\n"
-            f"🛡️ Giáp: Cấp {giap_lv}\n"
+            f"{giap_display}\n" # Hiển thị logic Thánh Giáp mới ở đây
             f"🧤 Tay: Cấp {tay_lv}\n"
             f"👢 Ủng: Cấp {ung_lv}"
         )
@@ -633,13 +641,7 @@ async def info(interaction: discord.Interaction):
         # 8. Gửi phản hồi cuối cùng
         await interaction.followup.send(embed=embed)
 
-    except Exception as e:
-        print(f"❌ Lỗi lệnh check: {e}")
-        # Nếu lỗi xảy ra, cố gắng báo cho người dùng thay vì treo
-        try:
-            await interaction.followup.send("⚠️ Linh lực hỗn loạn, không thể xem hồ sơ lúc này!")
-        except:
-            pass
+    except Exception as e
 @bot.tree.command(name="diemdanh", description="Điểm danh nhận cơ duyên thăng 1 cấp")
 async def diemdanh(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -2216,6 +2218,7 @@ async def phong_than_bang(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
