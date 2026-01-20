@@ -1529,27 +1529,7 @@ class ShopView(discord.ui.View):
         await interaction.response.send_message(embed=embed)
         self.stop()
 
-@bot.tree.command(name="shop", description="Cửa hàng Thần Khí Thượng Cổ (80 Linh thạch/món)")
-async def shop(interaction: discord.Interaction):
-    await interaction.response.defer()
-    uid = str(interaction.user.id)
-    
-    # 1. Lấy danh sách chưa có chủ
-    owned_tk = await users_col.distinct("than_khi", {"than_khi": {"$ne": None}})
-    available_tk = [name for name in THAN_KHI_CONFIG.keys() if name not in owned_tk]
-    
-    if not available_tk:
-        return await interaction.followup.send("🏮 Cửa hàng hiện đã trống rỗng!")
 
-    # 2. Kiểm tra sở hữu
-    user_data = await users_col.find_one({"_id": uid})
-    if user_data and user_data.get("than_khi"):
-        return await interaction.followup.send("⚠️ Đạo hữu đã sở hữu Thần Khí, không thể mua thêm!")
-
-    # 3. Khởi tạo View với danh sách có sẵn (Tránh dùng add_option bên ngoài gây treo)
-    view = ShopView(uid, users_col, THAN_KHI_CONFIG, available_tk)
-    
-    await interaction.followup.send("🏛️ **LINH BẢO CÁC** 🏛️\nNơi trao đổi những món thần vật thượng cổ (Giá: 120 Linh thạch).", view=view)
 @bot.tree.command(name="captcha", description="Lệnh chấp pháp của riêng Admin để kiểm tra tu sĩ")
 async def captcha(interaction: discord.Interaction, target: discord.Member):
     # 1. Kiểm tra ID người dùng
@@ -2120,9 +2100,91 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
     except Exception as e:
         print(f"Lỗi add thần khí: {e}")
         await interaction.followup.send("❌ Đã xảy ra lỗi khi cập nhật thần khí vào pháp trận.")
+@bot.tree.command(name="phongthanbang", description="Bảng phong thần: Vinh danh những tu sĩ sở hữu nhiều báu vật nhất")
+async def phong_than_bang(interaction: discord.Interaction):
+    await interaction.response.defer()
+    
+    try:
+        # 1. LẤY TẤT CẢ TU SĨ CÓ BÁU VẬT
+        # Tìm những người có (than_khi hoặc thanh_giap hoặc pet) không phải None/Empty
+        cursor = users_col.find({
+            "$or": [
+                {"than_khi": {"$ne": None, "$exists": True}},
+                {"thanh_giap": {"$ne": None, "$exists": True}},
+                {"pet": {"$ne": None, "$exists": True}}
+            ]
+        })
+        
+        users_list = await cursor.to_list(length=100)
+        
+        if not users_list:
+            return await interaction.followup.send("🥀 Hiện tại chưa có tu sĩ nào sở hữu báu vật độc bản.")
+
+        # 2. TÍNH TOÁN VÀ PHÂN LOẠI
+        leaderboard = []
+        for u in users_list:
+            tk = u.get("than_khi")
+            tg = u.get("thanh_giap")
+            pet = u.get("pet")
+            
+            # Tính tổng số lượng
+            count = 0
+            details = []
+            if tk: 
+                count += 1
+                details.append(f"⚔️ `{tk}`")
+            if tg: 
+                count += 1
+                details.append(f"🛡️ `{tg}`")
+            if pet: 
+                count += 1
+                details.append(f"🐾 `{pet}`")
+            
+            if count > 0:
+                leaderboard.append({
+                    "id": u["_id"],
+                    "count": count,
+                    "details": " | ".join(details)
+                })
+
+        # 3. SẮP XẾP: NHIỀU ĐẾN ÍT
+        leaderboard.sort(key=lambda x: x["count"], reverse=True)
+
+        # 4. TẠO EMBED HIỂN THỊ
+        embed = discord.Embed(
+            title="✨ PHONG THẦN BẢNG - LỤC ĐẠO CHÍ TÔN ✨",
+            description="*Danh sách những tu sĩ nắm giữ thiên cơ, sở hữu báu vật hiếm nhất thế gian.*",
+            color=0xFFD700
+        )
+        
+        top_str = ""
+        for i, entry in enumerate(leaderboard[:15]): # Lấy top 15 người
+            # Lấy tên member từ cache hoặc fetch
+            member = interaction.guild.get_member(int(entry["id"]))
+            name = member.display_name if member else f"Ẩn sĩ ({entry['id']})"
+            
+            # Huy hiệu cho top 3
+            medal = ""
+            if i == 0: medal = "🥇 "
+            elif i == 1: medal = "🥈 "
+            elif i == 2: medal = "🥉 "
+            else: medal = f"**#{i+1}** "
+            
+            top_str += f"{medal} **{name}** — 💎 **{entry['count']}** báu vật\n╰┈➤ {entry['details']}\n\n"
+
+        embed.add_field(name="🏆 Thứ Hạng Tu Sĩ", value=top_str, inline=False)
+        embed.set_thumbnail(url="https://i.imgur.com/your_image_url.png") # Thay bằng icon lệnh hoặc logo server
+        embed.set_footer(text="Hào quang vạn trượng - Khí vận hanh thông")
+
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        print(f"Lỗi Phong Thần Bảng: {e}")
+        await interaction.followup.send("⚠️ Pháp trận bị nhiễu loạn, không thể xem bảng phong thần.")
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
