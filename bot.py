@@ -39,7 +39,7 @@ NOTIFY_CHANNELS = [1455081842473697362, 1455837230332641280, 1454793019160006783
 CHANNEL_EXP_RATES = {
     1455081842473697362: 0.5, 1455837230332641280: 0.5,
     1454793019160006783: 0.5, 1454793109094268948: 0.5,
-    1454506037779369986: 1, 1461017212365181160: 1.5, 1462672263911313439: 1.25
+    1454506037779369986: 1, 1461017212365181160: 1.5, 1462672263911313439: 0.5
 }
 
 # --- CẤU HÌNH CẢNH GIỚI & LINH THÚ ---
@@ -194,7 +194,7 @@ BOSS_CONFIG = {
     "Hồng Tụ Tôn Sứ": {
         "multiplier": 20, 
         "base": 10000, 
-        "reward": (10, 15), 
+        "reward": (10, 20), 
         "penalty": 500, 
         "color": 0x3498db,
         "desc": "Yêu nữ am tường ảo thuật, thích hợp cho tu sĩ mới vào nghề."
@@ -202,7 +202,7 @@ BOSS_CONFIG = {
     "Lôi Âm Tôn Sứ": {
         "multiplier": 35, # Tăng từ 30 -> 35
         "base": 40000,   # Tăng từ 20,000 -> 25,000
-        "reward": (15, 20), # Tăng nhẹ thưởng để xứng tầm
+        "reward": (20, 30), # Tăng nhẹ thưởng để xứng tầm
         "penalty": 1500, # Tăng phạt (vượt ngưỡng rớt cấp nhanh hơn)
         "color": 0xe67e22,
         "desc": "Hộ pháp đọa lạc, lôi điện quanh thân, thực lực không thể coi thường."
@@ -210,7 +210,7 @@ BOSS_CONFIG = {
     "Mục Dã Di": {
         "multiplier": 55, # Tăng mạnh từ 40 -> 55
         "base": 70000,   # Tăng mạnh từ 40,000 -> 55,000
-        "reward": (20, 30), # Thưởng xứng đáng cho đại nạn
+        "reward": (30, 40), # Thưởng xứng đáng cho đại nạn
         "penalty": 3000, # Phạt cực nặng (5k EXP thường là rớt thẳng 1-2 cấp)
         "color": 0x992d22,
         "desc": "Thượng cổ Ma Thần, sức mạnh đủ để hủy thiên diệt địa."
@@ -2248,6 +2248,7 @@ async def phong_than_bang(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
