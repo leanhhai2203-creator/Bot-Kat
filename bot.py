@@ -64,60 +64,71 @@ THAN_KHI_CONFIG = {
 }
 THANH_GIAP_CONFIG = {
     "Long Lân Thánh Giáp": {
+        "quote": "『 LONG LÂN HỘ THỂ - BẤT DIỆT KIM THÂN 』",
         "desc": "Đúc từ vảy của Thái Cổ Chân Long, vạn tiễn bất xâm.",
         "hp": 2500,
-        "color": 0xFFD700 # Vàng
+        "color": 0xFFD700
     },
     "Phượng Hoàng Niết Bàn Y": {
+        "quote": "『 PHƯỢNG DIỆM TRÙNG SINH - VĨNH CỬU TRƯỜNG SINH 』",
         "desc": "Hỏa diệm bất diệt, sinh mệnh dồi dào như được tái sinh.",
         "hp": 2500,
-        "color": 0xFF4500 # Đỏ cam
+        "color": 0xFF4500
     },
     "Huyền Vũ Minh Giáp": {
+        "quote": "『 TRẤN THỦ BẮC MINH - PHÒNG NGỰ TUYỆT ĐỐI 』",
         "desc": "Sự kiên cố của phương Bắc, vững chãi như đại địa.",
         "hp": 2500,
-        "color": 0x2F4F4F # Xanh thẫm
+        "color": 0x2F4F4F
     },
     "Bạch Hổ Sát Thần Khải": {
+        "quote": "『 BẠCH HỔ SÁT QUÂN - CHIẾN Ý THÔNG THIÊN 』",
         "desc": "Sát khí hộ thân, nhiễu loạn tâm trí kẻ thù.",
         "hp": 2500,
-        "color": 0xF5F5F5 # Trắng sữa
+        "color": 0xF5F5F5
     },
     "Thiên Hà Tinh Thần Bào": {
+        "quote": "『 TINH TÚ GIÁNG TRẦN - NHẤT NIỆM VĨNH HẰNG 』",
         "desc": "Dệt từ ánh sáng vạn vì sao, sinh mệnh hòa cùng thiên địa.",
         "hp": 2500,
-        "color": 0x4169E1 # Xanh hoàng gia
+        "color": 0x4169E1
     },
     "Hỗn Nguyên Thánh Y": {
+        "quote": "『 HỖN NGUYÊN NHẤT KHÍ - ĐẠO PHÁP TỰ NHIÊN 』",
         "desc": "Chứa đựng sức mạnh sơ khai, giúp tinh huyết bất tận.",
         "hp": 2500,
-        "color": 0x9370DB # Tím
+        "color": 0x9370DB
     },
     "Lôi Đình Chiến Giáp": {
+        "quote": "『 VẠN LÔI TỀ PHÁT - THẾ NHƯ CỬU THIÊN 』",
         "desc": "Sấm sét thiên kiếp rèn giũa thân thể kim cang.",
         "hp": 2500,
-        "color": 0xFFFF00 # Vàng lôi điện
+        "color": 0xFFFF00
     },
     "Thanh Liên Pháp Y": {
+        "quote": "『 THANH LIÊN BẤT NHIỄM - TỊNH HÓA THÂN TÂM 』",
         "desc": "Đóa sen xanh thanh lọc cơ thể, gia tăng thọ mệnh.",
         "hp": 2500,
-        "color": 0x00FF7F # Xanh lá sen
+        "color": 0x00FF7F
     },
     "Vô Cực Ma Giáp": {
+        "quote": "『 VÔ CỰC MA TÂM - HẤP THỤ THIÊN ĐỊA 』",
         "desc": "Hấp thụ u minh lực để gia cố sinh mệnh.",
         "hp": 2500,
-        "color": 0x1A1A1A # Đen
+        "color": 0x1A1A1A
     },
     "Cửu Thiên Huyền Nữ Bào": {
+        "quote": "『 HUYỀN NỮ GIÁNG THẾ - PHỦ TRƯỚNG TIÊN KHÍ 』",
         "desc": "Mềm mại nhưng bền bỉ, mang theo tiên khí bảo mệnh.",
         "hp": 2500,
-        "color": 0xFFB6C1 # Hồng phấn
+        "color": 0xFFB6C1
     },
     "Vạn Cổ Quy Nguyên - Thiên Đạo Bất Diệt Khải": {
-        "desc": "Trấn Thế Chi Bảo. Kẻ mặc giáp này thân ngoài ngũ hành, lôi phạt không thể chạm đến.",
+        "quote": "『 VẠN CỔ QUY NGUYÊN - THIÊN ĐẠO BẤT DIỆT 』",
+        "desc": "Trấn Thế Chi Bảo. Thân ngoài ngũ hành, lôi phạt không thể chạm đến.",
         "hp": 5000,
-        "color": 0xFFFFFF, # Trắng hào quang
-        "special": "khang_loi_phat"
+        "color": 0xFFFFFF,
+        "effect": "khang_loi_phat"
     }
 }
 THAN_CHU_THIEN_PHAT = [
@@ -1991,68 +2002,79 @@ async def pet_show(interaction: discord.Interaction):
     embed_res.set_footer(text="Khí thế chấn động bát hoang!")
 
     await interaction.followup.send(content=f"📡 **Thông cáo thiên hạ:**", embed=embed_res)
-@bot.tree.command(name="thankhi", description="Thị uy Thần Khí và kiểm tra báu vật thất lạc")
+@bot.tree.command(name="thankhi", description="Thị uy Thần Khí, Thánh Giáp và kiểm tra báu vật thất lạc")
 async def show_thankhi(interaction: discord.Interaction):
-    # Bước 1: Phải có dòng này đầu tiên để Discord không ngắt kết nối
     await interaction.response.defer()
-    
     uid = str(interaction.user.id)
 
-    # Bước 2: Dữ liệu cứng (Hardcode) ngay trong hàm để bot không phải tìm biến ngoài
+    # 1. DỮ LIỆU THẦN KHÍ (Giữ nguyên Khẩu ngữ của đạo hữu)
     THAN_KHI_DATA = {
-        "Hiên Viên Kiếm": {"quote": "『 THÁNH ĐẠO PHỤC HƯNG - VẠN KIẾM QUY TÔNG 』", "desc": "Ý chí của thánh đạo ngưng tụ thành hình, nơi ánh sáng và công lý giao thoa.", "color": 0xFFD700, "icon": "⚔️"},
-        "Thần Nông Đỉnh": {"quote": "『 SINH LINH VẠN ĐẠI - NHẤT ĐỈNH TRƯỜNG SINH 』", "desc": "Sự tĩnh lặng của vạn vật trước lúc khai sinh, hơi thở của sự sống ẩn mình.", "color": 0x2ECC71, "icon": "🧪"},
-        "Hạo Thiên Tháp": {"quote": "『 THÁP TRẤN BÁT HOANG - YÊU MA PHỤC DIỆT 』", "desc": "Một điểm tựa giữa dòng thời gian vô tận, nơi trật tự ngự trị.", "color": 0x3498DB, "icon": "🗼"},
-        "Đông Hoàng Chung": {"quote": "『 CHUÔNG VANG CỬU GIỚI - CHẤN NHIẾP THIÊN THẦN 』", "desc": "Tiếng vọng từ thuở sơ khai tan vào hư không, dư chấn của thực tại vĩnh hằng.", "color": 0xE67E22, "icon": "🔔"},
-        "Phục Hy Cầm": {"quote": "『 CẦM TẤU HUYỀN CƠ - LOẠN THẾ BÌNH AN 』", "desc": "Giai điệu của những vì sao lạc lối, sợi dây liên kết tâm thức và vũ trụ.", "color": 0x9B59B6, "icon": "🪕"},
-        "Bàn Cổ Phủ": {"quote": "『 KHAI THIÊN LẬP ĐỊA - PHÁ VỠ HỒNG MÔNG 』", "desc": "Ranh giới mỏng manh giữa tồn tại và hư diệt, vết rách đầu tiên của bóng đêm.", "color": 0x7E5109, "icon": "🪓"},
-        "Luyện Yêu Hồ": {"quote": "『 THU NẠP CÀN KHÔN - LUYỆN HÓA VẠN QUỶ 』", "desc": "Cõi mộng nằm gọn trong lòng bàn tay, nơi thực và ảo đan xen.", "color": 0x1ABC9C, "icon": "🏺"},
-        "Côn Lôn Kính": {"quote": "『 KÍNH CHIẾU LUÂN HỒI - THẤU TẬN CHÂN TÂM 』", "desc": "Ánh nhìn phản chiếu từ chiều không gian khác, soi rọi sự thật bị chôn vùi.", "color": 0xECF0F1, "icon": "🪞"},
-        "Nữ Oa Thạch": {"quote": "『 NGŨ SẮC VÁ TRỜI - TÁI TẠO NHÂN GIAN 』", "desc": "Mảnh vỡ của bầu trời vỡ nát, mang hơi ấm bàn tay cứu rỗi thuở hồng hoang.", "color": 0xE91E63, "icon": "💎"},
-        "Không Đồng Ấn": {"quote": "『 ĐẾ VƯƠNG VĨNH HẰNG - KHÍ VẬN VÔ CƯƠNG 』", "desc": "Khối đá vĩnh cửu mang sức mạnh trường tồn, ấn chứng sự hưng thịnh vạn đại.", "color": 0xBDC3C7, "icon": "📜"}
+        "Hiên Viên Kiếm": {"quote": "『 THÁNH ĐẠO PHỤC HƯNG - VẠN KIẾM QUY TÔNG 』", "desc": "Ý chí của thánh đạo ngưng tụ thành hình.", "color": 0xFFD700, "icon": "⚔️"},
+        "Thần Nông Đỉnh": {"quote": "『 SINH LINH VẠN ĐẠI - NHẤT ĐỈNH TRƯỜNG SINH 』", "desc": "Hơi thở của sự sống ẩn mình.", "color": 0x2ECC71, "icon": "🧪"},
+        "Hạo Thiên Tháp": {"quote": "『 THÁP TRẤN BÁT HOANG - YÊU MA PHỤC DIỆT 』", "desc": "Một điểm tựa giữa dòng thời gian vô tận.", "color": 0x3498DB, "icon": "🗼"},
+        "Đông Hoàng Chung": {"quote": "『 CHUÔNG VANG CỬU GIỚI - CHẤN NHIẾP THIÊN THẦN 』", "desc": "Tiếng vọng từ thuở sơ khai tan vào hư không.", "color": 0xE67E22, "icon": "🔔"},
+        "Phục Hy Cầm": {"quote": "『 CẦM TẤU HUYỀN CƠ - LOẠN THẾ BÌNH AN 』", "desc": "Giai điệu của những vì sao lạc lối.", "color": 0x9B59B6, "icon": "🪕"},
+        "Bàn Cổ Phủ": {"quote": "『 KHAI THIÊN LẬP ĐỊA - PHÁ VỠ HỒNG MÔNG 』", "desc": "Ranh giới mỏng manh giữa tồn tại và hư diệt.", "color": 0x7E5109, "icon": "🪓"},
+        "Luyện Yêu Hồ": {"quote": "『 THU NẠP CÀN KHÔN - LUYỆN HÓA VẠN QUỶ 』", "desc": "Cõi mộng nằm gọn trong lòng bàn tay.", "color": 0x1ABC9C, "icon": "🏺"},
+        "Côn Lôn Kính": {"quote": "『 KÍNH CHIẾU LUÂN HỒI - THẤU TẬN CHÂN TÂM 』", "desc": "Ánh nhìn phản chiếu từ chiều không gian khác.", "color": 0xECF0F1, "icon": "🪞"},
+        "Nữ Oa Thạch": {"quote": "『 NGŨ SẮC VÁ TRỜI - TÁI TẠO NHÂN GIAN 』", "desc": "Mảnh vỡ của bầu trời vỡ nát.", "color": 0xE91E63, "icon": "💎"},
+        "Không Đồng Ấn": {"quote": "『 ĐẾ VƯƠNG VĨNH HẰNG - KHÍ VẬN VÔ CƯƠNG 』", "desc": "Khối đá vĩnh cửu mang sức mạnh trường tồn.", "color": 0xBDC3C7, "icon": "📜"}
     }
 
     try:
-        # Bước 3: Lấy thông tin bản thân (find_one rất nhanh)
+        # 2. TRUY VẤN DỮ LIỆU TỪ DATABASE
         u = await users_col.find_one({"_id": uid})
-        current_tk = u.get("than_khi") if u else None
+        my_tk = u.get("than_khi")
+        my_tg = u.get("thanh_giap")
 
-        # Bước 4: Lấy danh sách thần khí đã có chủ bằng distinct() 
-        # Cực kỳ nhanh, không cần dùng vòng lặp for hay async for
-        owned_names = await users_col.distinct("than_khi", {"than_khi": {"$ne": None}})
+        # Quét chủ nhân hiện tại của cực phẩm trên toàn server
+        owned_tk = await users_col.distinct("than_khi", {"than_khi": {"$ne": None}})
+        owned_tg = await users_col.distinct("thanh_giap", {"thanh_giap": {"$ne": None}})
+
+        # Lọc danh sách vô chủ (Chỉ lấy tên)
+        avail_tk = [name for name in THAN_KHI_DATA.keys() if name not in owned_tk]
+        avail_tg = [name for name in THANH_GIAP_CONFIG.keys() if name not in owned_tg]
+
+        # 3. KHỞI TẠO EMBED
+        embed = discord.Embed(title="🏛️ LINH BẢO MINH BẢNG", color=0x2F3136)
+        embed.set_author(name=f"Tu sĩ: {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
+
+        # --- HIỂN THỊ THẦN KHÍ ---
+        if my_tk in THAN_KHI_DATA:
+            tk = THAN_KHI_DATA[my_tk]
+            embed.add_field(name=f"{tk['icon']} Thần Khí: {my_tk}", value=f"**{tk['quote']}**\n*{tk['desc']}*", inline=False)
+            embed.color = tk['color']
+        else:
+            embed.add_field(name="⚔️ Thần Khí", value="🥀 *Cơ duyên chưa tới, báu vật chưa tìm.*", inline=True)
+
+        # --- HIỂN THỊ THÁNH GIÁP (Chỉ lấy khẩu ngữ desc) ---
+        # Hiển thị Thánh Giáp cá nhân
+        if my_tg in THANH_GIAP_CONFIG:
+            tg = THANH_GIAP_CONFIG[my_tg]
+            # Hiển thị Quote (Khẩu ngữ) và Desc (Mô tả)
+            embed.add_field(
+                name=f"🛡️ Thánh Giáp: {my_tg}", 
+                value=f"## {tg.get('quote', '『 HÀO QUANG VẠN TRƯỢNG 』')}\n\n*{tg['desc']}*", 
+                inline=False
+            )
+            if not my_tk: embed.color = tg['color']
+        else:
+            embed.add_field(name="🛡️ Thánh Giáp", value="🥀 *Thân đơn bóng chiếc, chưa mặc giáp trụ.*", inline=True)
+        # --- DANH SÁCH VẬT PHẨM CHƯA CÓ CHỦ ---
+        if avail_tk:
+            embed.add_field(name="🏛️ Thần Khí Vô Chủ", value=", ".join([f"**{t}**" for t in avail_tk]), inline=False)
         
-        # Lọc danh sách còn trống
-        available = [tk for tk in THAN_KHI_DATA.keys() if tk not in owned_names]
+        if avail_tg:
+            # Liệt kê tên các bộ giáp đang thất lạc
+            tg_text = ", ".join([f"**{t}**" for t in avail_tg])
+            embed.add_field(name="🛡️ Thánh Giáp Thất Lạc", value=tg_text, inline=False)
 
-        # Bước 5: Tạo Embed
-        embed = discord.Embed(color=0x2F3136)
-
-        if current_tk in THAN_KHI_DATA:
-            data = THAN_KHI_DATA[current_tk]
-            embed.title = f"{data['icon']} THỊ UY: {current_tk.upper()}"
-            embed.description = f"## {data['quote']}\n\n*{data['desc']}*"
-            embed.color = data['color']
-            embed.set_thumbnail(url=interaction.user.display_avatar.url)
-            embed.set_author(name=f"Chủ nhân: {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
-        else:
-            embed.title = "📜 THẦN KHÍ MINH BẢNG"
-            embed.description = "🥀 Đạo hữu chưa có duyên sở hữu Thần khí.\n*Cơ duyên do trời, chớ nên cưỡng cầu.*"
-
-        # Bước 6: Field danh sách báu vật thất lạc
-        if available:
-            list_str = "\n".join([f"✨ **{tk}**" for tk in available])
-            embed.add_field(name="🏛️ Thần Khí Thất Lạc (Vô chủ):", value=list_str, inline=False)
-        else:
-            embed.add_field(name="🏛️ Thần Khí:", value="✅ Toàn bộ đã có chủ nhân.", inline=False)
-
-        # Bước 7: Gửi kết quả cuối cùng
-        await interaction.followup.send(content="🔔 **Thông cáo lục đạo:**", embed=embed)
+        embed.set_footer(text="Hào quang vạn trượng, chỉ dành cho kẻ có chân mệnh thiên tử.")
+        await interaction.followup.send(embed=embed)
 
     except Exception as e:
-        # Nếu vẫn lỗi, nó sẽ hiện lỗi cụ thể lên Discord để đạo hữu biết đường sửa
-        print(f"Lỗi: {e}")
-        if not interaction.responses.is_done():
-            await interaction.followup.send(f"⚠️ Pháp trận lỗi: {str(e)}")
+        print(f"Lỗi lệnh thankhi: {e}")
+        await interaction.followup.send("⚠️ Thiên địa nhiễu loạn, minh bảng tạm thời bị che khuất.")
 @bot.tree.command(name="addthankhi", description="[ADMIN] Ban tặng Thần Khí thượng cổ cho tu sĩ")
 @app_commands.describe(target="Tu sĩ được ban tặng", ten_than_khi="Chọn Thần Khí từ danh sách")
 # Tự động tạo danh sách lựa chọn từ các Key trong THAN_KHI_CONFIG
@@ -2101,6 +2123,7 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
