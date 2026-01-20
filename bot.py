@@ -2210,7 +2210,6 @@ async def phong_than_bang(interaction: discord.Interaction):
             top_str += f"{medal} **{name}** — 💎 **{entry['count']}** báu vật\n╰┈➤ {entry['details']}\n\n"
 
         embed.add_field(name="🏆 Thứ Hạng Tu Sĩ", value=top_str, inline=False)
-        embed.set_thumbnail(url="https://i.imgur.com/your_image_url.png") # Thay bằng icon lệnh hoặc logo server
         embed.set_footer(text="Hào quang vạn trượng - Khí vận hanh thông")
 
         await interaction.followup.send(embed=embed)
@@ -2221,6 +2220,7 @@ async def phong_than_bang(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
