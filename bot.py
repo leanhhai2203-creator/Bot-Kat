@@ -753,29 +753,66 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
     final_color = discord.Color.blue()
     current_user_tg = u.get("thanh_giap")
 
-    # --- VÒNG LẶP GACHA ---
+    # --- 1. KHỞI TẠO BIẾN (PHẢI NẰM NGOÀI VÒNG LẶP) ---
+    # Những biến này chỉ được tạo 1 lần trước khi quay
+    got_tg_this_turn = False    # Chốt chặn trúng Thánh Giáp trong cụm x10
+    got_pet_this_turn = False   # Chốt chặn trúng Linh Thú trong cụm x10
+
+    # Lấy dữ liệu hiện tại của user để kiểm tra điều kiện sở hữu
+    current_user_tg = u.get("thanh_giap")
+    current_user_pet = u.get("pet")
+    
+    list_pets = [] # Khởi tạo danh sách pet trúng
+
+    # --- 2. VÒNG LẶP GACHA (BẮT ĐẦU TỪ ĐÂY) ---
     for _ in range(lan):
-        # A. LOGIC THÁNH GIÁP (0.5% - Độc bản)
+        
+        # 1. LOGIC THÁNH GIÁP (0.5% - Độc bản toàn server)
+        # Điều kiện: User chưa có giáp AND chưa trúng giáp trong lượt quay x10 này
         if not current_user_tg and not got_tg_this_turn and random.random() <= 0.005:
             try:
+                # Quét danh sách các Thánh Giáp đã có chủ trên toàn server
                 owned_tg = await users_col.distinct("thanh_giap", {"thanh_giap": {"$ne": None}})
+                # Lọc ra những bộ còn trống trong CONFIG
                 available_tg = [tg for tg in THANH_GIAP_CONFIG.keys() if tg not in owned_tg]
+                
                 if available_tg:
                     new_tg = random.choice(available_tg)
+                    # Cập nhật ngay lập tức vào DB để xác nhận chủ quyền
                     await users_col.update_one({"_id": uid}, {"$set": {"thanh_giap": new_tg}})
-                    current_user_tg = new_tg # Đánh dấu đã có để không quay trúng nữa
+                    
                     got_tg_this_turn = True
+                    current_user_tg = new_tg # Chặn không cho trúng thêm ở các lượt for sau
                     tg_msg = f"\n\n🛡️ **THÁNH VẬT XUẤT THẾ: [{new_tg}]**"
                     final_color = 0xFFD700
-            except: pass
+            except Exception as e:
+                print(f"Lỗi Gacha Thánh Giáp: {e}")
 
-        # B. LOGIC LINH THÚ (0.2%)
-        if random.random() <= 0.002:
-            p_name = random.choice(list(PET_CONFIG.keys()))
-            list_pets.append(f"{PET_CONFIG[p_name].get('icon','🐾')} {p_name}")
-            await users_col.update_one({"_id": uid}, {"$set": {"pet": p_name}})
-            if p_name == "U Minh Tước" and not got_tg_this_turn:
-                final_color = 0x4B0082
+        # 2. LOGIC LINH THÚ (0.2% - Mỗi người chỉ mang 1 con)
+        # Điều kiện: User chưa có Linh thú trên người AND chưa trúng con nào trong lượt x10 này
+        if not current_user_pet and not got_pet_this_turn and random.random() <= 0.002:
+            try:
+                # Chọn linh thú ngẫu nhiên từ cấu hình
+                p_name = random.choice(list(PET_CONFIG.keys()))
+                p_icon = PET_CONFIG[p_name].get('icon', '🐾')
+                
+                # Cập nhật linh thú vào DB
+                await users_col.update_one({"_id": uid}, {"$set": {"pet": p_name}})
+                
+                got_pet_this_turn = True
+                current_user_pet = p_name # Chặn không cho trúng thêm ở các lượt for sau
+                list_pets.append(f"{p_icon} {p_name}")
+                
+                # Chỉ đổi màu nếu không trúng Thánh Giáp (Thánh giáp ưu tiên màu Vàng)
+                if not got_tg_this_turn:
+                    final_color = 0x4B0082 if p_name == "U Minh Tước" else 0xFFAC33
+            except Exception as e:
+                print(f"Lỗi Gacha Linh Thú: {e}")
+
+        # 3. LOGIC TRANG BỊ THƯỜNG (Tiếp tục tại đây...)
+
+    # 3. LOGIC TRANG BỊ THƯỜNG (Chỉ chạy nếu không trúng 2 món trên hoặc tùy hỉ đạo hữu)
+    # ... (Giữ nguyên phần rã đồ nhận EXP của đạo hữu)
 
         # C. LOGIC TRANG BỊ
         eq_type = random.choice(EQ_TYPES)
@@ -2184,6 +2221,7 @@ async def phong_than_bang(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
