@@ -702,10 +702,14 @@ async def diemdanh(interaction: discord.Interaction):
         await interaction.followup.send("⚠️ Pháp trận điểm danh gặp trục trặc, hãy thử lại sau!")
 
 
-@bot.tree.command(name="gacha", description="Gacha trang bị & Linh thú & Thần khí (Tốn 1 Linh thạch sau 3 lượt)")
-async def gacha(interaction: discord.Interaction):
-    global bot
+@bot.tree.command(name="gacha", description="Tầm bảo: Trang bị, Linh thú & Thánh giáp")
+@app_commands.describe(lan="Chọn số lần quay (1 hoặc 10)")
+async def gacha(interaction: discord.Interaction, lan: int = 1):
     await interaction.response.defer()
+    
+    if lan not in [1, 10]:
+        return await interaction.followup.send("❌ Đạo hữu chỉ có thể quay 1 hoặc 10 lần!")
+
     uid = str(interaction.user.id)
     today = datetime.now().strftime("%Y-%m-%d")
     user_name = interaction.user.display_name
@@ -716,97 +720,98 @@ async def gacha(interaction: discord.Interaction):
         u = {"_id": uid, "level": 1, "exp": 0, "linh_thach": 10, "gacha_count": 0, "last_gacha_day": ""}
         await users_col.insert_one(u)
 
+    # Tính toán lượt miễn phí
     gacha_count = u.get("gacha_count", 0) if u.get("last_gacha_day") == today else 0
-    linh_thach = u.get("linh_thach", 0)
-    cost = 0 if gacha_count < 3 else 1
-
-    if linh_thach < cost:
-        return await interaction.followup.send(f"❌ Đạo hữu không đủ **{cost} Linh thạch** để tiếp tục.")
-
-    # 2. LOGIC GACHA THẦN KHÍ (0.5%)
-    tk_msg = ""
-    got_new_tk = False
-    current_user_tk = u.get("than_khi")
     
-    if not current_user_tk and random.random() <= 0.005: 
-        owned_tk = await users_col.distinct("than_khi", {"than_khi": {"$ne": None}})
-        available_tk = [tk for tk in THAN_KHI_CONFIG.keys() if tk not in owned_tk]
-        
-        if available_tk:
-            current_user_tk = random.choice(available_tk) 
-            await users_col.update_one({"_id": uid}, {"$set": {"than_khi": current_user_tk}})
-            
-            tk_data = THAN_KHI_CONFIG[current_user_tk]
-            tk_msg = f"\n\n🔥 **DỊ TƯỢNG XUẤT THẾ!**\n{tk_data['quote']}\nChúc mừng đạo hữu thu phục được Thần Khí: **[{current_user_tk}]**!"
-            got_new_tk = True
-            # ĐÃ LOẠI BỎ BROADCAST TOÀN SERVER TẠI ĐÂY
-
-    # 3. LOGIC GACHA LINH THÚ (0.2%)
-    pet_msg = ""
-    if not u.get("pet") and random.random() <= 0.002: 
-        owned_pets = await users_col.distinct("pet", {"pet": {"$ne": None}})
-        available_pets = [p for p in PET_CONFIG.keys() if p not in owned_pets]
-        
-        if available_pets:
-            pet_got = random.choice(available_pets)
-            await users_col.update_one({"_id": uid}, {"$set": {"pet": pet_got}})
-            pet_msg = f"\n\n🎊 **THIÊN CƠ CHIẾU RỌI!**\nĐạo hữu đã thuần hóa được Linh thú hiếm: **{pet_got}**!"
-            # ĐÃ LOẠI BỎ BROADCAST TOÀN SERVER TẠI ĐÂY
-
-    # 4. LOGIC GACHA TRANG BỊ
-    eq_type = random.choice(EQ_TYPES)
-    lv = random.choices(range(1, 11), weights=[25, 20, 15, 10, 10, 8, 5, 3, 3, 1])[0]
-    
-    current_eq = await eq_col.find_one({"_id": uid}) or {}
-    old_lv = current_eq.get(eq_type, 0)
-    
-    exp_bonus = 0
-    msg = ""
-
-    if eq_type == "Kiếm" and current_user_tk:
-        exp_bonus = lv * 10
-        msg = f"⚔️ Uy áp từ **[{current_user_tk}]** khiến **Kiếm cấp {lv}** vụn nát, rã nhận **{exp_bonus} EXP**."
-    elif lv > old_lv:
-        await eq_col.update_one({"_id": uid}, {"$set": {eq_type: lv}}, upsert=True)
-        msg = f"🎁 Nhận được **{eq_type} cấp {lv}**"
+    # Tính phí: lượt miễn phí chỉ áp dụng cho Quay 1. Quay 10 mặc định tốn 10 LT.
+    # Hoặc nếu đạo hữu muốn ưu đãi: quay 10 tốn 9 LT (Mua 10 tặng 1)
+    if lan == 1:
+        cost = 0 if gacha_count < 3 else 1
     else:
-        exp_bonus = lv * 10
-        msg = f"🗑️ **{eq_type} cấp {lv}** quá yếu, rã nhận **{exp_bonus} EXP**"
+        cost = 10 # Quay 10 lần tốn 10 linh thạch
 
-    # 5. CẬP NHẬT DATABASE
-    new_gacha_count = gacha_count + 1
+    if u.get("linh_thach", 0) < cost:
+        return await interaction.followup.send(f"❌ Đạo hữu không đủ **{cost} Linh thạch** để thực hiện {lan} lần quay.")
+
+    # --- KHỞI TẠO BIẾN TỔNG HỢP ---
+    tg_msg = ""
+    list_pets = []
+    total_exp_bonus = 0
+    new_eq_msg = ""
+    got_tg_this_turn = False
+    final_color = discord.Color.blue()
+    current_user_tg = u.get("thanh_giap")
+
+    # --- VÒNG LẶP GACHA ---
+    for _ in range(lan):
+        # A. LOGIC THÁNH GIÁP (0.5% - Độc bản)
+        if not current_user_tg and not got_tg_this_turn and random.random() <= 0.005:
+            try:
+                owned_tg = await users_col.distinct("thanh_giap", {"thanh_giap": {"$ne": None}})
+                available_tg = [tg for tg in THANH_GIAP_CONFIG.keys() if tg not in owned_tg]
+                if available_tg:
+                    new_tg = random.choice(available_tg)
+                    await users_col.update_one({"_id": uid}, {"$set": {"thanh_giap": new_tg}})
+                    current_user_tg = new_tg # Đánh dấu đã có để không quay trúng nữa
+                    got_tg_this_turn = True
+                    tg_msg = f"\n\n🛡️ **THÁNH VẬT XUẤT THẾ: [{new_tg}]**"
+                    final_color = 0xFFD700
+            except: pass
+
+        # B. LOGIC LINH THÚ (0.2%)
+        if random.random() <= 0.002:
+            p_name = random.choice(list(PET_CONFIG.keys()))
+            list_pets.append(f"{PET_CONFIG[p_name].get('icon','🐾')} {p_name}")
+            await users_col.update_one({"_id": uid}, {"$set": {"pet": p_name}})
+            if p_name == "U Minh Tước" and not got_tg_this_turn:
+                final_color = 0x4B0082
+
+        # C. LOGIC TRANG BỊ
+        eq_type = random.choice(EQ_TYPES)
+        lv = random.choices(range(1, 11), weights=[25, 20, 15, 10, 10, 8, 5, 3, 3, 1])[0]
+        
+        # Kiểm tra rã đồ (Nếu có thánh giáp thì rã Giáp thường)
+        if eq_type == "Giáp" and current_user_tg:
+            total_exp_bonus += lv * 10
+        else:
+            # Lấy level đồ cũ để so sánh
+            cur_eq = await eq_col.find_one({"_id": uid}) or {}
+            if lv > cur_eq.get(eq_type, 0):
+                await eq_col.update_one({"_id": uid}, {"$set": {eq_type: lv}}, upsert=True)
+                new_eq_msg = f"🎁 Nhận trang bị mới: **{eq_type} cấp {lv}**"
+            else:
+                total_exp_bonus += lv * 10
+
+    # --- CẬP NHẬT DATABASE ---
+    new_count = gacha_count + lan
     await users_col.update_one(
         {"_id": uid},
         {
-            "$set": {"gacha_count": new_gacha_count, "last_gacha_day": today},
+            "$set": {"gacha_count": new_count, "last_gacha_day": today},
             "$inc": {"linh_thach": -cost}
         }
     )
-
-    if exp_bonus > 0:
-        await add_exp(uid, exp_bonus)
+    
+    if total_exp_bonus > 0:
+        await add_exp(uid, total_exp_bonus)
         await check_level_up(uid, interaction.channel, user_name)
 
-    # 6. HIỂN THỊ KẾT QUẢ CHO NGƯỜI QUAY
-    status = f"🎰 Lượt: **{new_gacha_count}/3** (Miễn phí)" if new_gacha_count <= 3 else f"💎 Phí: **1 Linh thạch**"
-    
-    # Xác định màu sắc Embed
-    color = discord.Color.blue()
-    if got_new_tk: 
-        color = THAN_KHI_CONFIG[current_user_tk]["color"]
-    elif pet_msg:
-        color = 0xFFAC33
+    # --- HIỂN THỊ ---
+    pet_str = f"\n🐾 **Linh thú:** {', '.join(list_pets)}" if list_pets else ""
+    exp_str = f"\n♻️ **Rã đồ thừa nhận:** {total_exp_bonus} EXP" if total_exp_bonus > 0 else ""
+    status = f"🎰 Lượt: {new_count}/3 (Miễn phí)" if new_count <= 3 and lan == 1 else f"💎 Chi phí: {cost} Linh thạch"
 
     embed = discord.Embed(
-        title="🔮 KẾT QUẢ GACHA 🔮",
-        description=f"{msg}{tk_msg}{pet_msg}\n\n{status}",
-        color=color
+        title=f"🔮 KẾT QUẢ GACHA x{lan} 🔮",
+        description=f"{new_eq_msg}{tg_msg}{pet_str}{exp_str}\n\n{status}",
+        color=final_color
     )
     
-    if got_new_tk:
-        embed.set_footer(text=f"Mô tả: {THAN_KHI_CONFIG[current_user_tk]['desc']}")
+    if got_tg_this_turn:
+        embed.set_footer(text=f"Thánh vật: {THANH_GIAP_CONFIG[new_tg].get('effect', 'Vô song')}")
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
     else:
-        embed.set_footer(text="Thiên địa xoay vần, vận may tại tâm.")
+        embed.set_footer(text="Cơ duyên do trời, vận mệnh tại ta.")
 
     await interaction.followup.send(embed=embed)
 @bot.tree.command(name="solo", description="Thách đấu người chơi khác (Ẩn lực chiến, cược linh thạch)")
@@ -2096,6 +2101,7 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
