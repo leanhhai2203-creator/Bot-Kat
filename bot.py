@@ -641,7 +641,12 @@ async def info(interaction: discord.Interaction):
         # 8. Gửi phản hồi cuối cùng
         await interaction.followup.send(embed=embed)
 
-    except Exception as e
+    except Exception as e:
+        print(f"❌ Lỗi lệnh check: {e}")
+        try:
+            await interaction.followup.send("⚠️ Linh lực hỗn loạn, không thể xem hồ sơ lúc này!")
+        except:
+            pass
 @bot.tree.command(name="diemdanh", description="Điểm danh nhận cơ duyên thăng 1 cấp")
 async def diemdanh(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -940,17 +945,42 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
             special_msg = ""
             embed_title = "⚔️ TRẬN THƯ HÙNG KẾT THÚC ⚔️"
 
-            # Hiệu ứng nếu có cả 2
-            if winner_tk and winner_pet:
-                embed_color = discord.Color.from_rgb(255, 0, 255) # Tím huyền ảo
+           # --- TÍNH TOÁN HIỆU ỨNG CHIẾN THẮNG (SẮP XẾP LẠI ƯU TIÊN) ---
+            winner_tg = winner_data.get("thanh_giap")
+            winner_tk = winner_data.get("than_khi")
+            winner_pet = winner_data.get("pet")
+
+            # 1. COMBO CỰC PHẨM: CÓ CẢ 3 MÓN
+            if winner_tk and winner_tg and winner_pet:
+                embed_color = discord.Color.from_rgb(255, 255, 255) # Trắng bạc
+                embed_title = "🌌 THIÊN ĐẠO CHÍ TÔN - ĐỘC CÔ CẦU BẠI 🌌"
+                special_msg = f"🌌 **KHÍ VẬN NGHỊCH THIÊN!** {winner_name} mặc **{winner_tg}**, tay cầm **{winner_tk}**, cưỡi **{winner_pet}** quét sạch bát hoang!"
+
+            # 2. COMBO CÔNG THỦ TOÀN DIỆN: THẦN KHÍ + THÁNH GIÁP
+            elif winner_tk and winner_tg:
+                embed_color = discord.Color.from_rgb(255, 140, 0) # Cam đậm (Hỏa long)
+                embed_title = "⚔️ CÔNG THỦ TOÀN DIỆN - CHIẾN THẮNG ⚔️"
+                special_msg = f"🔥 **Vô đối thiên hạ!** Với sức mạnh của **{winner_tk}** và sự kiên cố của **{winner_tg}**, {winner_name} là bất khả chiến bại!"
+
+            # 3. COMBO TUYỆT THẾ: THẦN KHÍ + LINH THÚ
+            elif winner_tk and winner_pet:
+                embed_color = discord.Color.from_rgb(255, 0, 255) # Tím
                 embed_title = "🔥 TUYỆT THẾ VÔ SONG - CHIẾN THẮNG 🔥"
                 special_msg = f"🌟 **Hào quang vạn trượng!** {winner_name} cùng linh thú **{winner_pet}** xuất kích, tay cầm **{winner_tk}** trấn áp quần hùng!"
-            # Hiệu ứng chỉ có Thần Khí
+
+            # 4. CHỈ CÓ THÁNH GIÁP
+            elif winner_tg:
+                embed_color = discord.Color.from_rgb(0, 255, 255) # Xanh Cyan
+                embed_title = "🛡️ THÁNH GIÁP BẤT DIỆT - CHIẾN THẮNG 🛡️"
+                special_msg = f"🛡️ **{winner_tg}** tỏa ra hào quang hộ thể, khiến mọi đòn tấn công của đối phương đều trở nên vô dụng!"
+
+            # 5. CHỈ CÓ THẦN KHÍ
             elif winner_tk:
                 embed_color = discord.Color.red()
                 embed_title = "🔱 THẦN KHÍ GIÁNG THẾ - CHIẾN THẮNG 🔱"
                 special_msg = f"🔱 **{winner_tk}** phát ra uy áp khủng khiếp, khiến đối phương không kịp trở tay!"
-            # Hiệu ứng chỉ có Linh Thú
+
+            # 6. CHỈ CÓ LINH THÚ
             elif winner_pet:
                 embed_color = discord.Color.blue()
                 embed_title = "🐾 LINH THÚ HỘ THỂ - CHIẾN THẮNG 🐾"
@@ -2218,6 +2248,7 @@ async def phong_than_bang(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
