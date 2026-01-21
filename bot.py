@@ -383,30 +383,44 @@ async def check_level_down(uid):
     lv = user.get("level", 1)
     exp = user.get("exp", 0)
     
-    # 1. Nếu EXP vẫn >= 0 hoặc đang ở cấp 1 thì không cần xử lý
+    # 1. Nếu EXP vẫn >= 0 hoặc đang ở tân thủ (lv 1) thì không xử lý
     if exp >= 0 or lv <= 1: 
         return False
 
-    # 2. THIẾT LẬP CÁC MỐC KHÓA (Checkpoints)
-    # Nếu đang ở các mốc này, dù EXP âm cũng không bị lùi cấp
-    checkpoints = [21, 31, 41, 51, 61] 
+    # 2. KIỂM TRA MỐC KHÓA (Checkpoints)
+    # Ví dụ: 11 (Trúc Cơ), 21 (Kết Đan)... 
+    # Nếu lv là mốc đầu của một cảnh giới mới, không cho rớt xuống cảnh giới cũ
+    checkpoints = [11, 21, 31, 41, 51, 61, 71, 81, 91] 
     if lv in checkpoints:
-        # Thay vì rớt cấp, ta chỉ reset EXP về 0 để cảnh cáo
+        # Giữ nguyên cấp, nhưng reset EXP về 0 để phạt
         await users_col.update_one({"_id": uid}, {"$set": {"exp": 0}})
-        return False
+        return "reset"
 
-    # 3. LOGIC GIẢM CẤP
+    # 3. LOGIC GIẢM CẤP (PHẢN PHỆ)
     new_lv = lv - 1
     
-    # Lấy EXP cần thiết của cấp mới để tính toán số dư
-    # (Ví dụ: đang âm 500, cấp mới cần 1000 -> sẽ còn 500/1000)
-    req_exp_new_lv = exp_needed(new_lv) 
+    # Lấy EXP cần có của cấp mới (cấp vừa lùi xuống)
+    # Giả sử hàm exp_needed là hàm đồng bộ (sync), nếu là async hãy thêm await
+    try:
+        req_exp_new_lv = exp_needed(new_lv) 
+    except Exception as e:
+        print(f"❌ Lỗi hàm exp_needed: {e}")
+        return False
+
+    # Tính toán EXP còn lại sau khi lùi cấp
+    # Ví dụ: Cấp 10 cần 1000 EXP. Đang cấp 11 bị âm 200.
+    # New_exp = 1000 + (-200) = 800. Người chơi sẽ ở Lv 10 (800/1000)
     new_exp = req_exp_new_lv + exp 
+    
+    # Đảm bảo EXP không bị âm sau khi tính toán
+    final_exp = max(0, new_exp)
     
     await users_col.update_one(
         {"_id": uid},
-        {"$set": {"level": new_lv, "exp": max(0, new_exp)}}
+        {"$set": {"level": new_lv, "exp": final_exp}}
     )
+    
+    print(f"💀 Đạo hữu {uid} bị phản phệ, rớt xuống cấp {new_lv}")
     return True
 # ========== VÒNG LẶP THIÊN Ý (MONGODB) ==========
 @tasks.loop(hours=4.8)
@@ -2248,6 +2262,7 @@ async def phong_than_bang(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
