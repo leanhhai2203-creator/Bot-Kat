@@ -473,27 +473,27 @@ async def update_server_avg():
 @bot.event
 async def on_ready():
     try:
-        # 1. Đồng bộ lệnh Slash trước để tu sĩ có thể dùng lệnh ngay
+        # --- TỐI ƯU HÓA DB: TẠO INDEX ---
+        # Giúp tìm kiếm theo level, thần khí, pet cực nhanh
+        print("⏳ Đang tối ưu hóa Database (Tạo Index)...")
+        await users_col.create_index([("level", -1)])
+        await users_col.create_index([("exp", -1)])
+        await users_col.create_index([("than_khi", 1)])
+        await users_col.create_index([("thanh_giap", 1)])
+        await users_col.create_index([("pet", 1)])
+        
         synced = await bot.tree.sync()
         print(f"✅ Đã đồng bộ {len(synced)} lệnh Slash.")
-
-        # 2. Chạy tính toán Level trung bình LẦN ĐẦU TIÊN ngay lập tức
-        # Điều này đảm bảo server_avg_lv có giá trị đúng trước khi Bot nhận tin nhắn
+        
         await update_server_avg() 
-
-        # 3. Sau đó mới bắt đầu các vòng lặp định kỳ
-        if not update_server_avg.is_running():
-            update_server_avg.start()
-        if not thien_y_loop.is_running():
-            thien_y_loop.start()
+        if not update_server_avg.is_running(): update_server_avg.start()
+        if not thien_y_loop.is_running(): thien_y_loop.start()
             
-        # 4. Thông báo trạng thái cuối cùng
         print(f"✅ Đã đăng nhập: {bot.user}")
-        print(f"✨ Level trung bình Top 10 (Khởi tạo): {server_avg_lv:.2f}")
-        print("🚀 Bot đã sẵn sàng nhận lệnh và ban phúc!")
+        print("🚀 Bot đã sẵn sàng và chạy mượt hơn!")
 
     except Exception as e:
-        print(f"❌ Lỗi nghiêm trọng khi khởi động Bot: {e}")
+        print(f"❌ Lỗi khởi động: {e}")
 @bot.event
 async def on_message(message):
     if message.author.bot: return
@@ -2211,86 +2211,71 @@ async def add_than_khi(interaction: discord.Interaction, target: discord.Member,
     except Exception as e:
         print(f"Lỗi add thần khí: {e}")
         await interaction.followup.send("❌ Đã xảy ra lỗi khi cập nhật thần khí vào pháp trận.")
-@bot.tree.command(name="phongthanbang", description="Bảng phong thần: Vinh danh những tu sĩ sở hữu nhiều báu vật nhất")
+@bot.tree.command(name="phongthanbang", description="Bảng phong thần: Vinh danh chủ nhân báu vật")
 async def phong_than_bang(interaction: discord.Interaction):
     await interaction.response.defer()
     
     try:
-        # 1. LẤY TẤT CẢ TU SĨ CÓ BÁU VẬT
-        # Tìm những người có (than_khi hoặc thanh_giap hoặc pet) không phải None/Empty
+        # Sử dụng query tối ưu hơn
+        # Lưu ý: Đảm bảo đã chạy Bước 1 (Tạo Index) thì lệnh này mới nhanh
         cursor = users_col.find({
             "$or": [
-                {"than_khi": {"$ne": None, "$exists": True}},
-                {"thanh_giap": {"$ne": None, "$exists": True}},
-                {"pet": {"$ne": None, "$exists": True}}
+                {"than_khi": {"$exists": True, "$ne": None}},
+                {"thanh_giap": {"$exists": True, "$ne": None}},
+                {"pet": {"$exists": True, "$ne": None}}
             ]
         })
         
-        users_list = await cursor.to_list(length=100)
+        # Giới hạn lấy 50 người để tránh timeout
+        users_list = await cursor.to_list(length=50)
         
         if not users_list:
-            return await interaction.followup.send("🥀 Hiện tại chưa có tu sĩ nào sở hữu báu vật độc bản.")
+            return await interaction.followup.send("🥀 Chưa có tu sĩ nào sở hữu báu vật.")
 
-        # 2. TÍNH TOÁN VÀ PHÂN LOẠI
         leaderboard = []
         for u in users_list:
             tk = u.get("than_khi")
             tg = u.get("thanh_giap")
             pet = u.get("pet")
             
-            # Tính tổng số lượng
-            count = 0
             details = []
-            if tk: 
-                count += 1
-                details.append(f"⚔️ `{tk}`")
-            if tg: 
-                count += 1
-                details.append(f"🛡️ `{tg}`")
-            if pet: 
-                count += 1
-                details.append(f"🐾 `{pet}`")
+            if tk: details.append(f"⚔️ `{tk}`")
+            if tg: details.append(f"🛡️ `{tg}`")
+            if pet: details.append(f"🐾 `{pet}`")
             
-            if count > 0:
+            if details:
                 leaderboard.append({
                     "id": u["_id"],
-                    "count": count,
+                    "count": len(details),
                     "details": " | ".join(details)
                 })
 
-        # 3. SẮP XẾP: NHIỀU ĐẾN ÍT
+        # Sắp xếp
         leaderboard.sort(key=lambda x: x["count"], reverse=True)
 
-        # 4. TẠO EMBED HIỂN THỊ
-        embed = discord.Embed(
-            title="✨ PHONG THẦN BẢNG - LỤC ĐẠO CHÍ TÔN ✨",
-            description="*Danh sách những tu sĩ nắm giữ thiên cơ, sở hữu báu vật hiếm nhất thế gian.*",
-            color=0xFFD700
-        )
-        
+        embed = discord.Embed(title="✨ PHONG THẦN BẢNG ✨", color=0xFFD700)
         top_str = ""
-        for i, entry in enumerate(leaderboard[:15]): # Lấy top 15 người
-            # Lấy tên member từ cache hoặc fetch
-            member = interaction.guild.get_member(int(entry["id"]))
-            name = member.display_name if member else f"Ẩn sĩ ({entry['id']})"
-            
-            # Huy hiệu cho top 3
-            medal = ""
-            if i == 0: medal = "🥇 "
-            elif i == 1: medal = "🥈 "
-            elif i == 2: medal = "🥉 "
-            else: medal = f"**#{i+1}** "
-            
-            top_str += f"{medal} **{name}** — 💎 **{entry['count']}** báu vật\n╰┈➤ {entry['details']}\n\n"
+        
+        # Chỉ hiển thị Top 15
+        for i, entry in enumerate(leaderboard[:15]):
+            try:
+                # Dùng fetch_member nếu get_member (cache) thất bại, nhưng để tránh chậm thì dùng fallback
+                member = interaction.guild.get_member(int(entry["id"]))
+                name = member.display_name if member else f"Ẩn danh ({entry['id'][-4:]})"
+            except:
+                name = f"Tu sĩ ({entry['id'][-4:]})"
 
-        embed.add_field(name="🏆 Thứ Hạng Tu Sĩ", value=top_str, inline=False)
-        embed.set_footer(text="Hào quang vạn trượng - Khí vận hanh thông")
+            medal = ["🥇", "🥈", "🥉"][i] if i < 3 else f"**#{i+1}**"
+            top_str += f"{medal} **{name}**\n╰ {entry['details']}\n\n"
 
+        if not top_str: top_str = "Chưa có dữ liệu hiển thị."
+        
+        embed.description = top_str
         await interaction.followup.send(embed=embed)
 
     except Exception as e:
         print(f"Lỗi Phong Thần Bảng: {e}")
-        await interaction.followup.send("⚠️ Pháp trận bị nhiễu loạn, không thể xem bảng phong thần.")
+        await interaction.followup.send("⚠️ Lỗi hệ thống, vui lòng thử lại sau.")
 @bot.tree.command(name="bicanh", description="Khám phá Bí Cảnh (Tích hợp Thăng cấp & Phản phệ)")
 @app_commands.describe(dong_doi="Mời đồng đội trợ chiến")
 async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = None):
@@ -2432,6 +2417,7 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
