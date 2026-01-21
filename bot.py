@@ -140,7 +140,30 @@ THAN_CHU_THIEN_PHAT = [
 ]
 
 EQ_TYPES = ["Kiếm", "Nhẫn", "Giáp", "Tay", "Ủng"]
-
+# --- 1. CẤU HÌNH BÍ CẢNH ---
+BI_CANH_CONFIG = {
+    "tcn": {
+        "name": "Tiên Cư Nguyên",
+        "boss_power": 20000,
+        "boss_chance": 0.3, "trap_chance": 0.1, "treasure_chance": 0.2,
+        "exp": 500, "lt": 10, "trap_penalty": 500,
+        "gear_rate": [6, 7]
+    },
+    "nmq": {
+        "name": "Nhạn Môn Quan",
+        "boss_power": 40000,
+        "boss_chance": 0.4, "trap_chance": 0.2, "treasure_chance": 0.25,
+        "exp": 750, "lt": 15, "trap_penalty": 750,
+        "gear_rate": [7, 8]
+    },
+    "bctl": {
+        "name": "Biên Cảnh Tống Liêu",
+        "boss_power": 60000,
+        "boss_chance": 0.35, "trap_chance": 0.3, "treasure_chance": 0.35,
+        "exp": 1000, "lt": 20, "trap_penalty": 1500,
+        "gear_rate": [8, 9]
+    }
+}
 PET_CONFIG = {
     "Tiểu Hỏa Phượng": {
         "atk": 180, 
@@ -1130,67 +1153,76 @@ async def dotpha(interaction: discord.Interaction):
             color=discord.Color.red()
         )
         await interaction.followup.send(embed=fail_embed)
-@bot.tree.command(name="huongdan", description="Cẩm nang tu tiên toàn tập")
+@bot.tree.command(name="huongdan", description="Xem bí kíp tu tiên - Hướng dẫn chi tiết cách chơi")
 async def huongdan(interaction: discord.Interaction):
-    # Tạo Embed chính
     embed = discord.Embed(
-        title="📜 CẨM NANG TU TIÊN TOÀN TẬP",
-        description="Chào mừng đạo hữu bước vào con đường tu chân. Dưới đây là những quy tắc cơ bản để đắc đạo thành tiên.",
-        color=discord.Color.blue()
+        title="📜 THÁI THƯỢNG BÍ KÍP - HƯỚNG DẪN TU TIÊN",
+        description="Chào mừng đạo hữu bước chân vào con đường nghịch thiên cải mệnh. Hãy nắm vững các quy tắc sau để sớm ngày phi thăng!",
+        color=discord.Color.from_rgb(255, 215, 0) # Màu Vàng Kim
     )
+    
+    embed.set_thumbnail(url=bot.user.avatar.url if bot.user.avatar else None)
 
-    # 1. Cơ chế Tu vi & Đột phá
+    # 1. Cơ chế Linh Khí (EXP)
     embed.add_field(
-        name="🔮 Tu Vi & Đột Phá",
+        name="🧘 1. Tu Luyện (Nhận EXP)",
         value=(
-            "• **Kiếm EXP:** Nhắn tin tại các kênh linh địa hoặc dùng `/attack` đánh quái.\n"
-            "• **Bình cảnh:** Khi đạt cấp **10, 20, 30...** đạo hữu sẽ bị chặn EXP.\n"
-            "• **Đột phá:** Dùng lệnh `/dotpha`. Tỉ lệ thành công là 50%. Thất bại sẽ bị phản phệ (mất lượt)!"
+            "- **Nhắn tin**: Mỗi tin nhắn > 7 ký tự nhận được Linh Khí.\n"
+            "- **Hồi chiêu**: 20 giây giữa mỗi lần nhắn để tránh tâm ma.\n"
+            "- **Hệ số Kênh**: Tùy kênh mà EXP nhận được sẽ khác nhau.\n"
+            "- **Thiên Đạo Trợ Lực**: Tu sĩ cấp thấp nhận x2 EXP cho đến khi đuổi kịp đại năng."
         ),
         inline=False
     )
 
-    # 2. Hệ thống Linh Thú
+    # 2. Cảnh Giới & Đột Phá
     embed.add_field(
-        name="🐾 Linh Thú Hộ Thân",
+        name="⚡ 2. Cảnh Giới & Đột Phá",
         value=(
-            "• **Sở hữu:** Có tỉ lệ 1% nhận được khi dùng lệnh `/gacha`.\n"
-            "• **Lợi ích:** Mỗi linh thú tăng mạnh **Lực chiến** và có buff riêng (Ví dụ: Thôn Phệ Thú tăng 15% EXP).\n"
-            "• **Lưu ý:** Mỗi tu sĩ chỉ có thể sở hữu **duy nhất một** linh thú."
+            "- Hệ thống gồm nhiều đại cảnh giới: Luyện Khí, Trúc Cơ, Kết Đan...\n"
+            "- **Mốc Khóa (Checkpoints)**: Cấp **11, 21, 31...** là mốc bảo mệnh. Khi đạt mốc này, nếu gặp đại nạn (Boss/Solo) khiến EXP âm, đạo hữu chỉ bị reset EXP về 0 chứ không rớt xuống cảnh giới cũ."
         ),
         inline=False
     )
 
-    # 3. Gacha & Trang bị
+    # 3. Trang Bị & Lực Chiến
     embed.add_field(
-        name="🎁 Gacha & Linh Thạch",
+        name="⚔️ 3. Trang Bị & Lực Chiến",
         value=(
-            "• **Lượt miễn phí:** Có 3 lượt `/gacha` miễn phí mỗi ngày.\n"
-            "• **Linh thạch:** Sau khi hết lượt free, tốn **2 Linh thạch** cho mỗi lần quay tiếp theo.\n"
-            "• **Trang bị:** Giúp tăng chỉ số ATK/HP để tính Lực chiến tổng."
+            "- **Lực Chiến**: Quyết định tỷ lệ thắng khi Solo và săn Boss.\n"
+            "- **Thần Khí**: Vũ khí cực phẩm tăng mạnh Tấn Công.\n"
+            "- **Thánh Giáp**: Bộ giáp thần thánh tăng lượng lớn Sinh Mệnh.\n"
+            "- **Thân Pháp (Ủng)**: Cấp độ Ủng càng cao, đạo hữu càng có khả năng né tránh/hóa giải uy áp của đối phương khi Solo."
         ),
         inline=False
     )
 
-    # 4. Các lệnh quan trọng
+    # 4. Hoạt Động Daily & Boss
     embed.add_field(
-        name="📜 Danh sách khẩu quyết (Lệnh)",
+        name="👺 4. Săn Boss & Solo",
         value=(
-            "`/check`: Xem trạng thái, tu vi và Linh thú của bản thân.\n"
-            "`/attack`: Đi săn quái vật kiếm EXP và Linh thạch.\n"
-            "`/diemdanh`: Nhận linh thạch và EXP mỗi ngày.\n"
-            "`/bxh`: Xem bảng xếp hạng cường giả trong server."
+            "- **Solo**: Thách đấu người khác, có thể cược Linh Thạch.\n"
+            "- **Săn Boss**: Chiến đấu với thủ lĩnh quái vật. Thắng nhận bảo vật, bại bị **Phản Phệ** trừ EXP và có xác suất rớt cấp!\n"
+            "- **Daily**: Điểm danh mỗi ngày để nhận Linh Thạch và 1 Cấp độ miễn phí."
         ),
         inline=False
     )
 
-    # Hình ảnh minh họa và Footer
-    embed.set_footer(text="Chúc đạo hữu sớm ngày phi thăng!")
-    # Đạo hữu có thể thêm ảnh minh họa tiên cảnh ở đây
-    embed.set_thumbnail(url="https://i.postimg.cc/sx0d4pWy/Bxh.jpg") 
+    # 5. Lệnh Thường Dùng
+    embed.add_field(
+        name="🛠️ 5. Các Lệnh Cần Nhớ",
+        value=(
+            "`/check`: Xem hồ sơ, trang bị & LC.\n"
+            "`/gacha`: Quay tầm bảo (Free 3 lượt/ngày).\n"
+            "`/solo`: Thách đấu tu sĩ khác.\n"
+            "`/diemdanh`: Nhận quà hàng ngày."
+        ),
+        inline=False
+    )
 
+    embed.set_footer(text="Chúc đạo hữu khí vận hanh thông, sớm ngày đắc đạo!")
+    
     await interaction.response.send_message(embed=embed)
-import asyncio
 @bot.tree.command(name="bxhlc", description="Vinh danh Top 10 cao thủ có Lực chiến cao nhất server")
 async def bxhlc(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -2259,9 +2291,152 @@ async def phong_than_bang(interaction: discord.Interaction):
     except Exception as e:
         print(f"Lỗi Phong Thần Bảng: {e}")
         await interaction.followup.send("⚠️ Pháp trận bị nhiễu loạn, không thể xem bảng phong thần.")
+@bot.tree.command(name="bicanh", description="Khám phá Bí Cảnh (Tích hợp logic rã đồ Gacha)")
+@app_commands.describe(dong_doi="Mời đồng đội trợ chiến (Nếu dính bẫy, cả hai sẽ bị khóa lượt)")
+async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = None):
+    uid = str(interaction.user.id)
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # 1. Kiểm tra hồ sơ & lượt đi
+    user_data = await users_col.find_one({"_id": uid})
+    if not user_data: 
+        return await interaction.response.send_message("❌ Đạo hữu chưa có hồ sơ tu tiên!", ephemeral=True)
+    
+    u_bicanh = user_data.get("bicanh_daily", {"date": "", "count": 0})
+    if u_bicanh["date"] == today and u_bicanh["count"] >= 3:
+        return await interaction.response.send_message("❌ Hôm nay đạo hữu đã kiệt sức hoặc đang trọng thương!", ephemeral=True)
+
+    # 2. Kiểm tra đồng đội
+    tid = str(dong_doi.id) if dong_doi else None
+    if tid:
+        if tid == uid: return await interaction.response.send_message("❌ Không thể tự mời chính mình!", ephemeral=True)
+        target_data = await users_col.find_one({"_id": tid})
+        if not target_data: return await interaction.response.send_message(f"❌ {dong_doi.display_name} chưa tu hành!", ephemeral=True)
+        t_bicanh = target_data.get("bicanh_daily", {"date": "", "count": 0})
+        if t_bicanh["date"] == today and t_bicanh["count"] >= 3:
+            # SỬA LỖI: interaction. Halresponse -> interaction.response
+            return await interaction.response.send_message(f"❌ **{dong_doi.display_name}** đang trọng thương!", ephemeral=True)
+
+    class BiCanhView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+
+        @discord.ui.select(
+            placeholder="Chọn Bí Cảnh để khởi hành...",
+            options=[
+                discord.SelectOption(label="Tiên Cư Nguyên", value="tcn", emoji="🌿"),
+                discord.SelectOption(label="Nhạn Môn Quan", value="nmq", emoji="🏯"),
+                discord.SelectOption(label="Biên Cảnh Tống Liêu", value="bctl", emoji="🚩"),
+            ]
+        )
+        async def callback(self, i: discord.Interaction, select: discord.ui.Select):
+            if str(i.user.id) != uid: return await i.response.send_message("❌ Không phải hành trình của bạn!", ephemeral=True)
+            
+            choice = select.values[0]
+            cfg = BI_CANH_CONFIG[choice]
+            await i.response.defer()
+
+            p1_pwr = await calc_power(uid)
+            p2_pwr = await calc_power(tid) if tid else 0
+            total_pwr = p1_pwr + p2_pwr
+
+            roll = random.random()
+            msg = ""
+            color = discord.Color.blue()
+            current_count = u_bicanh["count"] if u_bicanh["date"] == today else 0
+            new_count = current_count + 1
+
+            # --- LOGIC BIẾN CỐ ---
+
+            # A. DÍNH BẪY (PHẾ CẢ ĐỘI)
+            if roll < cfg["trap_chance"]:
+                penalty = cfg["penalty"]
+                await users_col.update_one({"_id": uid}, {"$inc": {"exp": -penalty}, "$set": {"bicanh_daily": {"date": today, "count": 3}}})
+                if tid: await users_col.update_one({"_id": tid}, {"$set": {"bicanh_daily": {"date": today, "count": 3}}})
+                msg = f"🕸️ **DÍNH BẪY:** Cả hai bị trọng thương! **{i.user.display_name}** tổn thất `-{penalty}` EXP và bị khóa lượt hôm nay."
+                color = discord.Color.red()
+
+            # B. THẮNG BOSS
+            elif roll < (cfg["trap_chance"] + cfg["boss_chance"]):
+                win_rate = min(total_pwr / (cfg["boss_pwr"] * 1), 0.9)
+                if random.random() < win_rate:
+                    base_exp = cfg["exp"]
+                    base_lt = cfg["lt"]
+                    
+                    # SỬA LỖI: EQ_TYPES (Cập nhật danh sách loại trang bị của đạo hữu)
+                    EQ_TYPES = ["Kiếm", "Tay", "Giáp", "Nhẫn", "Ủng"]
+                    eq_type = random.choice(EQ_TYPES)
+                    new_lv = random.choice([7, 8, 9]) # Đạo hữu đang để [7, 9], bần đạo thêm 8 cho đều
+                    
+                    # SỬA LỖI: Định nghĩa biến check từ user_data
+                    has_thanh_giap = user_data.get("thanh_giap", False)
+                    has_than_khi = user_data.get("than_khi", False)
+                    
+                    gear_msg = ""
+                    bonus_exp_from_gear = 0
+                    should_scrap = False
+                    
+                    # Logic bảo vệ đồ cực phẩm
+                    if eq_type == "Giáp" and has_thanh_giap:
+                        should_scrap = True
+                        gear_msg = f"\n♻️ Đạo hữu đang mặc **Thánh Giáp**, rã Giáp cấp {new_lv} thành `+{new_lv * 10}` EXP."
+                    elif eq_type == "Kiếm" and has_than_khi:
+                        should_scrap = True
+                        gear_msg = f"\n♻️ Đạo hữu đang cầm **Thần Khí**, rã Kiếm cấp {new_lv} thành `+{new_lv * 10}` EXP."
+
+                    # 2. So sánh đồ thường nếu không có đồ cực phẩm
+                    if not should_scrap:
+                        cur_eq = await eq_col.find_one({"_id": uid}) or {}
+                        if new_lv > cur_eq.get(eq_type, 0):
+                            await eq_col.update_one({"_id": uid}, {"$set": {eq_type: new_lv}}, upsert=True)
+                            gear_msg = f"\n🎁 Nhận trang bị mới: **{eq_type} cấp {new_lv}**"
+                        else:
+                            should_scrap = True
+                            gear_msg = f"\n♻️ Đã có trang bị cao hơn, rã đồ cấp {new_lv} thành `+{new_lv * 10}` EXP."
+
+                    # 3. Tính toán tổng thưởng
+                    if should_scrap:
+                        bonus_exp_from_gear = new_lv * 10
+                    
+                    total_exp = base_exp + bonus_exp_from_gear
+                    await users_col.update_one(
+                        {"_id": uid},
+                        {
+                            "$inc": {"exp": total_exp, "linh_thach": base_lt}, 
+                            "$set": {"bicanh_daily": {"date": today, "count": new_count}}
+                        }
+                    )
+                    
+                    msg = f"⚔️ **THẮNG BOSS:** Nhận `+{base_exp}` EXP, `+{base_lt}` 💎.{gear_msg}"
+                    color = discord.Color.green()
+                else:
+                    # THẤT BẠI KHI ĐÁNH BOSS
+                    penalty = cfg["penalty"] // 2
+                    await users_col.update_one({"_id": uid}, {"$inc": {"exp": -penalty}, "$set": {"bicanh_daily": {"date": today, "count": new_count}}})
+                    msg = f"💀 **BẠI TRẬN:** Boss quá mạnh, tổn thất `-{penalty}` EXP!"
+                    color = discord.Color.dark_red()
+
+            # C. KHO BÁU / LANG THANG
+            elif roll < (cfg["trap_chance"] + cfg["boss_chance"] + cfg["treasure_chance"]):
+                lt = cfg["lt"]
+                await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": lt}, "$set": {"bicanh_daily": {"date": today, "count": new_count}}})
+                msg = f"💰 **KHO BÁU:** Nhận được `+{lt}` Linh Thạch!"
+                color = discord.Color.gold()
+            else:
+                exp = cfg["exp"]
+                await users_col.update_one({"_id": uid}, {"$inc": {"exp": exp}, "$set": {"bicanh_daily": {"date": today, "count": new_count}}})
+                msg = f"🚶 **LANG THANG:** Tịnh tâm tu luyện nhận `+{exp}` EXP."
+                color = discord.Color.blue()
+
+            emb = discord.Embed(title=f"🏔️ BÍ CẢNH: {cfg['name']}", description=msg, color=color)
+            if dong_doi: emb.set_footer(text=f"Trợ chiến: {dong_doi.display_name}")
+            await i.edit_original_response(content=None, embed=emb, view=None)
+
+    await interaction.response.send_message(f"🧗 **{interaction.user.display_name}** đang vào Bí Cảnh...", view=BiCanhView())
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
