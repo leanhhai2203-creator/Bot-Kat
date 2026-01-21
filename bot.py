@@ -1083,7 +1083,7 @@ async def dotpha(interaction: discord.Interaction):
     if exp < needed:
         return await interaction.followup.send(f"❌ Tu vi chưa đủ! (Cần {int(exp)}/{needed} EXP)")
 
-    required_lt = 5 if lv < 30 else (10 if lv < 60 else (15 if lv < 80 else 20))
+    required_lt = 3 if lv < 30 else (10 if lv < 60 else (15 if lv < 80 else 20))
     if linh_thach < required_lt:
         return await interaction.followup.send(f"❌ Cần **{required_lt} Linh thạch**.")
 
@@ -2432,6 +2432,7 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
