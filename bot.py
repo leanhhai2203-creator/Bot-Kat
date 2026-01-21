@@ -144,22 +144,22 @@ EQ_TYPES = ["Kiếm", "Nhẫn", "Giáp", "Tay", "Ủng"]
 BI_CANH_CONFIG = {
     "tcn": {
         "name": "Tiên Cư Nguyên",
-        "boss_power": 20000,
-        "boss_chance": 0.3, "trap_chance": 0.1, "treasure_chance": 0.2,
+        "boss_power": 35000,
+        "boss_chance": 0.4, "trap_chance": 0.1, "treasure_chance": 0.2,
         "exp": 500, "lt": 10, "trap_penalty": 500,
         "gear_rate": [6, 7]
     },
     "nmq": {
         "name": "Nhạn Môn Quan",
-        "boss_power": 40000,
+        "boss_power": 50000,
         "boss_chance": 0.4, "trap_chance": 0.2, "treasure_chance": 0.25,
         "exp": 750, "lt": 15, "trap_penalty": 750,
         "gear_rate": [7, 8]
     },
     "bctl": {
         "name": "Biên Cảnh Tống Liêu",
-        "boss_power": 60000,
-        "boss_chance": 0.35, "trap_chance": 0.3, "treasure_chance": 0.35,
+        "boss_power": 70000,
+        "boss_chance": 0.5, "trap_chance": 0.3, "treasure_chance": 0.2,
         "exp": 1000, "lt": 20, "trap_penalty": 1500,
         "gear_rate": [8, 9]
     }
@@ -2436,6 +2436,7 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
