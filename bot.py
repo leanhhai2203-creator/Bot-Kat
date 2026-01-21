@@ -813,7 +813,7 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
         
         # 1. LOGIC THÁNH GIÁP (0.5% - Độc bản toàn server)
         # Điều kiện: User chưa có giáp AND chưa trúng giáp trong lượt quay x10 này
-        if not current_user_tg and not got_tg_this_turn and random.random() <= 0.005:
+        if not current_user_tg and not got_tg_this_turn and random.random() <= 0.004:
             try:
                 # Quét danh sách các Thánh Giáp đã có chủ trên toàn server
                 owned_tg = await users_col.distinct("thanh_giap", {"thanh_giap": {"$ne": None}})
@@ -834,7 +834,7 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
 
         # 2. LOGIC LINH THÚ (0.2% - Mỗi người chỉ mang 1 con)
         # Điều kiện: User chưa có Linh thú trên người AND chưa trúng con nào trong lượt x10 này
-        if not current_user_pet and not got_pet_this_turn and random.random() <= 0.002:
+        if not current_user_pet and not got_pet_this_turn and random.random() <= 0.0015:
             try:
                 # Chọn linh thú ngẫu nhiên từ cấu hình
                 p_name = random.choice(list(PET_CONFIG.keys()))
@@ -2432,6 +2432,7 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
