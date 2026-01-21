@@ -2373,16 +2373,40 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
                     msg = f"💀 **BẠI TRẬN:** Tổn thất `-{penalty}` EXP!"
                     color = discord.Color.dark_red()
 
-            # C. KHO BÁU / LANG THANG
+            # C. KHO BÁU (Thực nhận 50%)
             elif roll < (cfg["trap_chance"] + cfg["boss_chance"] + cfg["treasure_chance"]):
-                await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": cfg["lt"]}, "$set": {"bicanh_daily": {"date": today, "count": new_count}}})
-                msg, color = f"💰 **KHO BÁU:** Nhận `+{cfg['lt']}` 💎!", discord.Color.gold()
+                # 1. Tính toán 50% linh thạch thực nhận
+                lt_reward = cfg["lt"] // 2
+                # 2. Cập nhật Database: Sử dụng lt_reward thay vì cfg["lt"]
+                await users_col.update_one(
+                    {"_id": uid}, 
+                    {
+                        "$inc": {"linh_thach": lt_reward}, 
+                        "$set": {"bicanh_daily": {"date": today, "count": new_count}}
+                    }
+                )
+                
+                # 3. Gán thông báo (Phải thụt lề vào trong elif)
+                msg = f"💰 **KHO BÁU:** Tìm thấy rương cổ bị vỡ, đạo hữu thu dọn được `+{lt_reward}` 💎 (Thất thoát 50%)!"
+                color = discord.Color.gold()
+            # D. LANG THANG
             else:
-                await users_col.update_one({"_id": uid}, {"$inc": {"exp": cfg["exp"]}, "$set": {"bicanh_daily": {"date": today, "count": new_count}}})
-                msg = f"🚶 **LANG THANG:** Nhận `+{cfg['exp']}` EXP."
+                await users_col.update_one(
+                    {"_id": uid}, 
+                    {
+                        "$inc": {"exp": cfg["exp"]}, 
+                        "$set": {"bicanh_daily": {"date": today, "count": new_count}}
+                    }
+                )
+                msg = f"🚶 **LANG THANG:** Tịnh tâm tu luyện nhận `+{cfg['exp']}` EXP."
+                color = discord.Color.blue() # Thêm màu xanh cho nhánh else này
 
-            await i.edit_original_response(content=None, embed=discord.Embed(title=f"🏔️ {cfg['name']}", description=msg, color=color), view=None)
-
+            # Gửi kết quả cuối cùng
+            await i.edit_original_response(
+                content=None, 
+                embed=discord.Embed(title=f"🏔️ {cfg['name']}", description=msg, color=color), 
+                view=None
+            )
     # VIEW XÁC NHẬN (Cải tiến để không bị treo)
     class ConfirmView(discord.ui.View):
         def __init__(self):
@@ -2403,6 +2427,7 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
