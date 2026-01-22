@@ -2392,31 +2392,36 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
                 await users_col.update_one({"_id": uid}, {"$inc": {"exp": -penalty}, "$set": {"bicanh_daily": {"date": today, "count": 3}}})
                 if tid: await users_col.update_one({"_id": tid}, {"$set": {"bicanh_daily": {"date": today, "count": 3}}})
                 res_down = await check_level_down(uid)
+                status_notif = ""
                 if res_down is True: status_notif = "\n💀 **PHẢN PHỆ:** Tu vi đại tổn, rớt cấp!"
                 elif res_down == "reset": status_notif = "\n🛡️ **CẢNH BÁO:** Chạm mốc khóa, EXP về 0!"
                 msg, color = f"🕸️ **DÍNH BẪY:** Mất `{penalty}` EXP & khóa lượt.{status_notif}", discord.Color.red()
 
-           # B. CHIẾN BOSS
-elif roll < (cfg["trap_chance"] + cfg["boss_chance"]):
-    win_rate = min(total_pwr / (cfg["boss_power"] * 1.0), 0.9)
-    if random.random() < win_rate:
-        # --- [GIỮ NGUYÊN] Logic Gacha đồ ---
-        EQ_TYPES = ["Kiếm", "Tay", "Giáp", "Nhẫn", "Ủng"]
-        eq_type = random.choice(EQ_TYPES)
-        new_lv_gear = random.choice(cfg["gear_rate"])
-        
-        # --- [GIỮ NGUYÊN] Kiểm tra rã đồ ---
-        cur_eq = await eq_col.find_one({"_id": uid}) or {}
-        has_better = cur_eq.get(eq_type, 0) >= new_lv_gear
-        is_special = (eq_type == "Giáp" and user_data.get("thanh_giap")) or (eq_type == "Kiếm" and user_data.get("than_khi"))
-        
-        if has_better or is_special:
-            bonus_exp = new_lv_gear * 10
-            gear_msg = f"\n♻️ Rã trang bị nhận `+{bonus_exp}` EXP."
-        else:
-            bonus_exp = 0
-            await eq_col.update_one({"_id": uid}, {"$set": {eq_type: new_lv_gear}}, upsert=True)
-            gear_msg = f"\n🎁 Nhận: **{eq_type} cấp {new_lv_gear}**"
+            # B. CHIẾN BOSS
+            elif roll < (cfg["trap_chance"] + cfg["boss_chance"]):
+                win_rate = min(total_pwr / (cfg["boss_power"] * 1.0), 0.9)
+                if random.random() < win_rate:
+                    # --- [GIỮ NGUYÊN] Logic Gacha đồ ---
+                    EQ_TYPES = ["Kiếm", "Tay", "Giáp", "Nhẫn", "Ủng"]
+                    eq_type = random.choice(EQ_TYPES)
+                    new_lv_gear = random.choice(cfg["gear_rate"])
+                    
+                    # Kiểm tra trang bị hiện tại
+                    cur_eq = await eq_col.find_one({"_id": uid}) or {}
+                    has_better = cur_eq.get(eq_type, 0) >= new_lv_gear
+                    is_special = (eq_type == "Giáp" and user_data.get("thanh_giap")) or (eq_type == "Kiếm" and user_data.get("than_khi"))
+                    
+                    if has_better or is_special:
+                        bonus_exp = new_lv_gear * 10
+                        gear_msg = f"\n♻️ Rã trang bị nhận `+{bonus_exp}` EXP."
+                    else:
+                        bonus_exp = 0
+                        await eq_col.update_one({"_id": uid}, {"$set": {eq_type: new_lv_gear}}, upsert=True)
+                        gear_msg = f"\n🎁 Nhận: **{eq_type} cấp {new_lv_gear}**"
+
+                    # --- [THÊM MỚI] Logic rơi Tiên Thạch từ Config ---
+                    tien_thach_msg = ""
+                    drop_chance = cfg.get("tien_thach_chance",
 
       # --- Logic rơi Tiên Thạch linh hoạt (ĐÃ SỬA LỖI) ---
         tien_thach_msg = ""
@@ -2500,6 +2505,7 @@ elif roll < (cfg["trap_chance"] + cfg["boss_chance"]):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
