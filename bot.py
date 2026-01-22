@@ -47,7 +47,7 @@ REALMS = [
     ("Luyện Khí", 10), ("Trúc Cơ", 20), ("Kết Đan", 30),
     ("Nguyên Anh", 40), ("Hóa Thần", 50), ("Luyện Hư", 60),
     ("Hợp Thể", 70), ("Đại Thừa", 80),
-    ("Đại Tiên", 90), ("Thiên Tiên", 100)
+    ("Chân Tiên", 90), ("Kim Tiên", 100)
 ]
 THAN_KHI_CONFIG = {
     "Hiên Viên Kiếm": {"desc": "Là ý chí của thánh đạo ngưng tụ thành hình, nơi ánh sáng và công lý giao thoa giữa cõi hư vô.", "atk": 200, "color": 0xFFD700},
@@ -622,7 +622,7 @@ async def info(interaction: discord.Interaction):
 
         # 4. TÍNH TOÁN CẢNH GIỚI
         stages = ["Luyện Khí", "Trúc Cơ", "Kết Đan", "Nguyên Anh", "Hóa Thần", 
-                  "Luyện Hư", "Hợp Thể", "Đại Thừa", "Đại Tiên", "Thiên Tiên"]
+                  "Luyện Hư", "Hợp Thể", "Đại Thừa", "Chân Tiên", "Kim Tiên"]
         idx = (level - 1) // 10
         idx = max(0, min(idx, len(stages) - 1))
         current_stage = stages[idx]
@@ -2481,6 +2481,7 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
