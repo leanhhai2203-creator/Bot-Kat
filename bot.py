@@ -648,9 +648,9 @@ async def info(interaction: discord.Interaction):
             weapon_display = f"⚔️ Kiếm Cấp {kiem_lv}" if kiem_lv > 0 else "⚔️ Vô nhận kiếm"
 
         if thanh_giap_name:
-            giap_display = f"🛡️ **{thanh_giap_name}**"
+            giap_display = f"🧥 **{thanh_giap_name}**"
         else:
-            giap_display = f"🛡️ Giáp Cấp {giap_lv}" if giap_lv > 0 else "🛡️ Bố y"
+            giap_display = f"🧥 Giáp Cấp {giap_lv}" if giap_lv > 0 else "🛡️ Bố y"
 
         # 6. HIỂN THỊ EXP
         if level % 10 == 0:
@@ -834,7 +834,7 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
                     
                     got_tg_this_turn = True
                     current_user_tg = new_tg # Chặn không cho trúng thêm ở các lượt for sau
-                    tg_msg = f"\n\n🛡️ **THÁNH VẬT XUẤT THẾ: [{new_tg}]**"
+                    tg_msg = f"\n\n🧥 **THÁNH VẬT XUẤT THẾ: [{new_tg}]**"
                     final_color = 0xFFD700
             except Exception as e:
                 print(f"Lỗi Gacha Thánh Giáp: {e}")
@@ -2481,6 +2481,7 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
