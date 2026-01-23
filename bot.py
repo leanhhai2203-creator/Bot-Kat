@@ -1222,68 +1222,78 @@ async def huongdan(interaction: discord.Interaction):
         description="Chào mừng đạo hữu bước chân vào con đường nghịch thiên cải mệnh. Hãy nắm vững các quy tắc sau để sớm ngày phi thăng!",
         color=discord.Color.from_rgb(255, 215, 0) # Màu Vàng Kim
     )
-    
     embed.set_thumbnail(url=bot.user.avatar.url if bot.user.avatar else None)
-
     # 1. Cơ chế Linh Khí (EXP)
     embed.add_field(
         name="🧘 1. Tu Luyện (Nhận EXP)",
         value=(
             "- **Nhắn tin**: Mỗi tin nhắn > 7 ký tự nhận được Linh Khí.\n"
-            "- **Hồi chiêu**: 20 giây giữa mỗi lần nhắn để tránh tâm ma.\n"
-            "- **Hệ số Kênh**: Tùy kênh mà EXP nhận được sẽ khác nhau.\n"
-            "- **Thiên Đạo Trợ Lực**: Tu sĩ cấp thấp nhận x2 EXP cho đến khi đuổi kịp đại năng."
+            "- **Hồi chiêu**: 20 giây giữa mỗi lần nhắn.\n"
+            "- **Thiên Đạo Trợ Lực**: Tu sĩ cấp thấp nhận x2 EXP."
         ),
-        inline=False
+        inline=True
     )
-
     # 2. Cảnh Giới & Đột Phá
     embed.add_field(
         name="⚡ 2. Cảnh Giới & Đột Phá",
         value=(
-            "- Hệ thống gồm nhiều đại cảnh giới: Luyện Khí, Trúc Cơ, Kết Đan...\n"
-            "- **Mốc Khóa (Checkpoints)**: Cấp **11, 21, 31...** là mốc bảo mệnh. Khi đạt mốc này, nếu gặp đại nạn (Boss/Solo) khiến EXP âm, đạo hữu chỉ bị reset EXP về 0 chứ không rớt xuống cảnh giới cũ."
+            "- Các mốc bảo mệnh: **11, 21, 31...**\n"
+            "- Khi đạt mốc này, nếu thất bại chỉ bị reset EXP về 0 chứ không rớt cấp cũ."
+        ),
+        inline=True
+    )
+    # 3. Tài Nguyên Cao Cấp (MỚI)
+    embed.add_field(
+        name="💎 3. Linh Thạch & Tiên Thạch",
+        value=(
+            "- **Linh Thạch**: Tiền tệ phổ thông dùng mua trang bị, đúc Ấn bước đầu.\n"
+            "- **Tiên Thạch**: Tài nguyên cực hiếm, dùng để đúc Ấn giai đoạn cuối (bước 8-10) và nâng cấp Thánh Vật."
         ),
         inline=False
     )
-
-    # 3. Trang Bị & Lực Chiến
+    # 4. Hệ Thống Đúc Ấn (MỚI)
     embed.add_field(
-        name="⚔️ 3. Trang Bị & Lực Chiến",
+        name="👑 4. Lò Luyện Ấn Đế (Đế Cách)",
         value=(
-            "- **Lực Chiến**: Quyết định tỷ lệ thắng khi Solo và săn Boss.\n"
-            "- **Thần Khí**: Vũ khí cực phẩm tăng mạnh Tấn Công.\n"
-            "- **Thánh Giáp**: Bộ giáp thần thánh tăng lượng lớn Sinh Mệnh.\n"
-            "- **Thân Pháp (Ủng)**: Cấp độ Ủng càng cao, đạo hữu càng có khả năng né tránh/hóa giải uy áp của đối phương khi Solo."
+            "- Sử dụng `/ducan` để tích lũy tiến độ (10 tầng).\n"
+            "- **Tiến độ 1-7**: Tốn 100 Linh Thạch/lần.\n"
+            "- **Tiến độ 8-10**: Tốn 1 Tiên Thạch/lần.\n"
+            "- Khi đủ 10/10, ngẫu nhiên nhận 1 trong **Ngũ Đại Ấn**: Thương Long, Bạch Hổ, Chu Tước, Huyền Vũ hoặc **Kỳ Lân Đế Ấn** (Cực phẩm)."
         ),
         inline=False
     )
-
-    # 4. Hoạt Động Daily & Boss
+    # 5. Hái Dược (MỚI)
     embed.add_field(
-        name="👺 4. Săn Boss & Solo",
+        name="🌿 5. Hái Dược & Thảo Dược",
         value=(
-            "- **Solo**: Thách đấu người khác, có thể cược Linh Thạch.\n"
-            "- **Săn Boss**: Chiến đấu với thủ lĩnh quái vật. Thắng nhận bảo vật, bại bị **Phản Phệ** trừ EXP và có xác suất rớt cấp!\n"
-            "- **Daily**: Điểm danh mỗi ngày để nhận Linh Thạch và 1 Cấp độ miễn phí."
+            "- Sử dụng `/haiduoc` tại các linh sơn.\n"
+            "- Nhận được thảo dược dùng để luyện đan hoặc bán lấy Linh Thạch.\n"
+            "- Cẩn thận: Có xác suất gặp yêu quái canh giữ dược điền!"
         ),
         inline=False
     )
-
-    # 5. Lệnh Thường Dùng
+    # 6. Trang Bị & Lực Chiến
     embed.add_field(
-        name="🛠️ 5. Các Lệnh Cần Nhớ",
+        name="⚔️ 6. Trang Bị Cực Phẩm",
         value=(
-            "`/check`: Xem hồ sơ, trang bị & LC.\n"
-            "`/gacha`: Quay tầm bảo (Free 3 lượt/ngày).\n"
-            "`/solo`: Thách đấu tu sĩ khác.\n"
+            "- **Thần Khí / Thánh Giáp / Thánh Nhẫn**: Trang bị có tên riêng, tăng chỉ số vượt trội.\n"
+            "- **Ấn Đế**: Trang bị duy nhất tăng cả Tấn Công và Sinh Mệnh theo phần trăm cực lớn."
+        ),
+        inline=False
+    )
+    # 7. Lệnh Thường Dùng (CẬP NHẬT)
+    embed.add_field(
+        name="🛠️ 7. Các Lệnh Cần Nhớ",
+        value=(
+            "`/check`: Xem hồ sơ & Ấn Đế.\n"
+            "`/ducan`: Luyện đúc Đế Cách.\n"
+            "`/haiduoc`: Tìm kiếm thảo dược.\n"
+            "`/gacha`: Quay tầm bảo.\n"
             "`/diemdanh`: Nhận quà hàng ngày."
         ),
         inline=False
     )
-
     embed.set_footer(text="Chúc đạo hữu khí vận hanh thông, sớm ngày đắc đạo!")
-    
     await interaction.response.send_message(embed=embed)
 @bot.tree.command(name="bxhlc", description="Vinh danh Top 10 cao thủ có Lực chiến cao nhất server")
 async def bxhlc(interaction: discord.Interaction):
@@ -2733,6 +2743,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
