@@ -1256,7 +1256,7 @@ async def huongdan(interaction: discord.Interaction):
         name="👑 4. Lò Luyện Ấn Đế (Đế Cách)",
         value=(
             "- Sử dụng `/ducan` để tích lũy tiến độ (10 tầng).\n"
-            "- **Tiến độ 1-7**: Tốn 100 Linh Thạch/lần.\n"
+            "- **Tiến độ 1-7**: Tốn 15 Linh Thạch/lần.\n"
             "- **Tiến độ 8-10**: Tốn 1 Tiên Thạch/lần.\n"
             "- Khi đủ 10/10, ngẫu nhiên nhận 1 trong **Ngũ Đại Ấn**: Thương Long, Bạch Hổ, Chu Tước, Huyền Vũ hoặc **Kỳ Lân Đế Ấn** (Cực phẩm)."
         ),
@@ -2743,6 +2743,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
