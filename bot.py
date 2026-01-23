@@ -2365,24 +2365,35 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
     uid = str(interaction.user.id)
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # 1. Kiểm tra hồ sơ & lượt đi người mời
+    # 1. Kiểm tra hồ sơ & lượt đi người mời (UID)
     user_data = await users_col.find_one({"_id": uid})
     if not user_data: 
         return await interaction.response.send_message("❌ Đạo hữu chưa có hồ sơ tu tiên!", ephemeral=True)
     
     u_bc = user_data.get("bicanh_daily", {"date": "", "count": 0})
+    
+    # Người mời (Chủ phòng) BẮT BUỘC phải còn lượt (< 3)
     if u_bc["date"] == today and u_bc["count"] >= 3:
-        return await interaction.response.send_message("❌ Đã hết lượt đi hôm nay!", ephemeral=True)
+        # Kiểm tra xem là dính bẫy (count=3) hay đi hết lượt tự nhiên
+        # Nếu đạo hữu muốn dính bẫy thì khóa luôn, còn đi hết lượt thì thôi
+        return await interaction.response.send_message("❌ Đạo hữu đã hết lượt đi hôm nay hoặc đang trọng thương!", ephemeral=True)
 
-    # 2. Kiểm tra đồng đội
+    # 2. Kiểm tra đồng đội (TID)
     tid = str(dong_doi.id) if dong_doi else None
     if tid:
         if tid == uid: return await interaction.response.send_message("❌ Không thể tự mời mình!", ephemeral=True)
         target_data = await users_col.find_one({"_id": tid})
         if not target_data: return await interaction.response.send_message(f"❌ {dong_doi.display_name} chưa tu hành!", ephemeral=True)
+        
         t_bc = target_data.get("bicanh_daily", {"date": "", "count": 0})
-        if t_bc["date"] == today and t_bc["count"] >= 3:
-            return await interaction.response.send_message(f"❌ {dong_doi.display_name} đang trọng thương!", ephemeral=True)
+        
+        # LOGIC MỚI: Đồng đội chỉ bị cấm nếu họ "Dính Bẫy" (Trọng thương)
+        # Chúng ta giả định rằng nếu count == 3 và cùng ngày là bị trọng thương
+        # Nhưng nếu đạo hữu muốn họ đi hết 3 lượt vẫn trợ chiến được, ta chỉ chặn khi họ "Dính bẫy" 
+        # (Bạn cần một field riêng như 'trong_thuong': True khi dính bẫy để check chính xác nhất)
+        
+        if t_bc.get("trong_thuong") is True and t_bc.get("date") == today:
+             return await interaction.response.send_message(f"❌ {dong_doi.display_name} đang trọng thương do dính bẫy, không thể trợ chiến!", ephemeral=True)
 
     # --- VIEW CHỌN BÍ CẢNH ---
     class BiCanhSelectView(discord.ui.View):
@@ -2585,6 +2596,7 @@ async def thuhoach(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
