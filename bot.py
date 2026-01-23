@@ -260,63 +260,59 @@ def get_monster_data(lv: int):
     else: return "Cổ thú", 0.30, (6, 9)
 async def calc_power(uid: str) -> int:
     uid = str(uid)
-    # Truy vấn dữ liệu từ Database
+    
+    # 1. Truy vấn dữ liệu song song (Tối ưu tốc độ)
+    # Thay vì await lần lượt, ta lấy dữ liệu user và trang bị cùng lúc nếu cần thiết, 
+    # nhưng ở đây giữ nguyên luồng logic đơn giản để dễ debug.
     u = await users_col.find_one({"_id": uid})
     if not u: 
         return 0
     
-    # Lấy dữ liệu trang bị, nếu không có thì mặc định là dictionary trống
+    # Lấy dữ liệu trang bị, mặc định là dict rỗng nếu chưa có
     eq = await eq_col.find_one({"_id": uid}) or {}
     
-    # Khai báo các thông tin cơ bản
+    # 2. Khởi tạo biến dữ liệu
     lv = u.get("level", 1)
     pet_name = u.get("pet")
     than_khi_name = u.get("than_khi") 
     thanh_giap_name = u.get("thanh_giap")
     
-    # 1. Chỉ số gốc từ Level (Lv 1: Atk 5, HP 50)
-    atk, hp = lv * 5, lv * 50
+    # --- BƯỚC 1: TÍNH CHỈ SỐ GỐC TỪ LEVEL ---
+    # Lv 1: Atk 5, HP 50
+    atk = lv * 5
+    hp = lv * 50
     
-    # 2. Cộng chỉ số từ Trang bị rèn đúc (EQ_TYPES)
-    # Giả định EQ_TYPES gồm: Kiếm, Giáp, Nhẫn, Mũ, Giày...
+    # --- BƯỚC 2: CỘNG DỒN CHỈ SỐ TRANG BỊ (Equipment) ---
+    # Logic mới: Cộng thẳng vào, không quan tâm có Thần Khí hay không
     for t in EQ_TYPES:
         eq_lv = eq.get(t, 0)
-        if eq_lv <= 0: continue # Không có trang bị hoặc cấp 0 thì bỏ qua
+        if eq_lv <= 0: continue 
         
-        if t == "Kiếm":
-            # NẾU CÓ Thần Khí: Kiếm thường không còn tác dụng (bị đè)
-            if not than_khi_name:
-                atk += eq_lv * 15
-        
-        elif t == "Giáp":
-            # NẾU CÓ Thánh Giáp: Giáp thường không còn tác dụng (bị đè)
-            if not thanh_giap_name:
-                hp += eq_lv * 150
-                
-        elif t == "Nhẫn":
-            # Nhẫn luôn luôn cộng Atk (Không bị Thần Khí đè)
+        # Phân loại trang bị để cộng chỉ số tương ứng
+        if t in ["Kiếm", "Nhẫn"]:
+            # Kiếm và Nhẫn tăng Tấn Công (ATK)
             atk += eq_lv * 15
-            
-        else: 
-            # Các trang bị còn lại (Mũ, Giày, Hộ cổ...) cộng HP bình thường
+        else:
+            # Giáp, Tay, Ủng (và các loại khác) tăng Máu (HP)
             hp += eq_lv * 150
             
-    # 3. Cộng chỉ số từ Cực phẩm (Sử dụng .get() để tránh lỗi crash nếu config thiếu)
+    # --- BƯỚC 3: CỘNG DỒN CHỈ SỐ CỰC PHẨM (Thần Khí & Thánh Giáp) ---
+    # Logic mới: Luôn luôn cộng thêm nếu sở hữu
     if than_khi_name and than_khi_name in THAN_KHI_CONFIG:
-        # Lấy chỉ số ATK từ config, mặc định 200 nếu không ghi rõ
+        # Lấy atk từ config, an toàn với .get()
         atk += THAN_KHI_CONFIG[than_khi_name].get("atk", 200)
             
     if thanh_giap_name and thanh_giap_name in THANH_GIAP_CONFIG:
-        # Lấy chỉ số HP từ config, mặc định 2500 nếu không ghi rõ
+        # Lấy hp từ config
         hp += THANH_GIAP_CONFIG[thanh_giap_name].get("hp", 2500)
 
-    # 4. Cộng chỉ số từ Linh Thú (Pet)
+    # --- BƯỚC 4: CỘNG DỒN CHỈ SỐ LINH THÚ (Pet) ---
     if pet_name and pet_name in PET_CONFIG:
         p_stats = PET_CONFIG[pet_name]
         atk += p_stats.get("atk", 0)
         hp += p_stats.get("hp", 0) 
 
-    # 5. Tổng lực chiến (Power)
+    # --- BƯỚC 5: TỔNG HỢP LỰC CHIẾN ---
     # Công thức Thiên Đạo: (Công * 10) + Thủ + Biến số thiên cơ (0-100)
     total_power = (atk * 10) + hp + random.randint(0, 100)
     
@@ -658,10 +654,13 @@ async def info(interaction: discord.Interaction):
         else:
             weapon_display = f"⚔️ Kiếm Cấp {kiem_lv}" if kiem_lv > 0 else "⚔️ Vô nhận kiếm"
 
+       icon_giap = "<:emoji_31:1464123093579731005>"
         if thanh_giap_name:
-            giap_display = f"🧥 **{thanh_giap_name}**"
+            # Nếu có Thánh Giáp
+            giap_display = f"{icon_giap} **{thanh_giap_name}**"
         else:
-            giap_display = f"🧥 Giáp Cấp {giap_lv}" if giap_lv > 0 else "🛡️ Bố y"
+            # Nếu dùng Giáp thường hoặc Bố y
+            giap_display = f"{icon_giap} Giáp Cấp {giap_lv}" if giap_lv > 0 else f"{icon_giap} Bố y"
 
         # 6. HIỂN THỊ EXP
         if level % 10 == 0:
@@ -2615,6 +2614,7 @@ async def thuhoach(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
