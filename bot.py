@@ -2590,7 +2590,7 @@ async def thuhoach(interaction: discord.Interaction):
 
     # 3. Đủ thời gian -> Phát thưởng
     lt_reward = random.choices([1, 2], weights=[70, 30], k=1)[0]
-    exp_reward = random.randint(200, 500)
+    exp_reward = random.randint(0, 300)
     
     rare_msg = ""
     # 1% tỉ lệ rơi Tiên Thạch
@@ -2620,6 +2620,7 @@ async def thuhoach(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
