@@ -1567,47 +1567,45 @@ async def attack(interaction: discord.Interaction):
 # --- LỆNH CHUYỂN LINH THẠCH CÓ XÁC NHẬN ---
 
 class ConfirmTransfer(discord.ui.View):
-    def __init__(self, sender, receiver, amount):
-        super().__init__(timeout=30)  # Nút bấm tồn tại trong 30 giây
-        self.sender = sender
-        self.receiver = receiver
+    def __init__(self, sender, receiver, amount, resource_type, label):
+        super().__init__(timeout=30)
+        self.sender = sender      # Người gửi (Member object)
+        self.receiver = receiver  # Người nhận (Member object)
         self.amount = amount
+        self.resource_type = resource_type
+        self.label = label
 
     @discord.ui.button(label="Xác Nhận", style=discord.ButtonStyle.green, emoji="✅")
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Chỉ người gửi mới có quyền nhấn xác nhận
+    async def confirm_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # 1. Chỉ người gửi mới có quyền nhấn nút
         if interaction.user.id != self.sender.id:
-            return await interaction.response.send_message("❌ Đây không phải giao dịch của bạn!", ephemeral=True)
-        
-        # Kiểm tra và trừ tiền người gửi (đảm bảo linh_thach >= số tiền chuyển)
-        res1 = await users_col.update_one(
-            {"_id": str(self.sender.id), "linh_thach": {"$gte": self.amount}},
-            {"$inc": {"linh_thach": -self.amount}}
+            return await interaction.response.send_message("❌ Đây không phải pháp trận của đạo hữu!", ephemeral=True)
+
+        # 2. Kiểm tra lại số dư thực tế trong DB một lần cuối (phòng trường hợp người chơi spam)
+        uid = str(self.sender.id)
+        u_data = await users_col.find_one({"_id": uid})
+        if not u_data or u_data.get(self.resource_type, 0) < self.amount:
+            return await interaction.response.edit_message(content="❌ Giao dịch thất bại: Số dư của đạo hữu đã thay đổi!", view=None)
+
+        # 3. Thực hiện chuyển tài nguyên
+        # Trừ người gửi
+        await users_col.update_one({"_id": uid}, {"$inc": {self.resource_type: -self.amount}})
+        # Cộng người nhận (Tạo mới profile nếu người nhận chưa có - upsert)
+        await users_col.update_one({"_id": str(self.receiver.id)}, {"$inc": {self.resource_type: self.amount}}, upsert=True)
+
+        # 4. Thông báo thành công
+        await interaction.response.edit_message(
+            content=f"✅ **GIAO DỊCH THÀNH CÔNG**\nĐạo hữu **{self.sender.mention}** đã chuyển thành công `{self.amount}` {self.label} cho **{self.receiver.mention}**.",
+            view=None
         )
-        
-        if res1.modified_count > 0:
-            # Cộng tiền cho người nhận
-            await users_col.update_one(
-                {"_id": str(self.receiver.id)},
-                {"$inc": {"linh_thach": self.amount}},
-                upsert=True
-            )
-            
-            # Cập nhật thông báo thành công và xóa nút bấm
-            await interaction.response.edit_message(
-                content=f"✅ **Giao dịch thành công!**\nĐạo hữu **{self.sender.display_name}** đã chuyển `{self.amount}` Linh thạch cho **{self.receiver.display_name}**.",
-                view=None
-            )
-        else:
-            await interaction.edit_original_response(content="❌ **Thất bại!** Bạn không đủ linh thạch để thực hiện giao dịch này.", view=None)
         self.stop()
 
-    @discord.ui.button(label="Hủy Bỏ", style=discord.ButtonStyle.red, emoji="✖️")
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Hủy", style=discord.ButtonStyle.red, emoji="✖️")
+    async def cancel_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.sender.id:
-            return await interaction.response.send_message("❌ Bạn không có quyền hủy!", ephemeral=True)
+            return await interaction.response.send_message("❌ Chỉ người gửi mới có thể hủy!", ephemeral=True)
             
-        await interaction.response.edit_message(content="🚫 **Giao dịch đã bị hủy bỏ.**", view=None)
+        await interaction.response.edit_message(content="🗑️ Giao dịch đã bị hủy bỏ.", view=None)
         self.stop()
 #shop
 class ShopView(discord.ui.View):
@@ -2587,6 +2585,7 @@ async def thuhoach(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
