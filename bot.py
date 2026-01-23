@@ -2494,10 +2494,89 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
         await interaction.response.send_message(content=f"📜 {interaction.user.mention} mời {dong_doi.mention} trợ chiến Bí Cảnh! (Hiệu lực: 30s)", view=ConfirmView(interaction))
     else:
         await interaction.response.send_message(content="🏔️ Chọn Bí Cảnh thám hiểm:", view=BiCanhSelectView())
+#full lệnh hái dược
+@bot.tree.command(name="haiduoc", description="Khởi hành vào Linh Sơn hái thuốc")
+async def haiduoc(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    user_data = await users_col.find_one({"_id": uid})
+    
+    if not user_data:
+        return await interaction.response.send_message("❌ Đạo hữu chưa có hồ sơ tu tiên!", ephemeral=True)
+
+    now = time.time()
+    finish_time = user_data.get("haiduoc_time", 0)
+
+    # Kiểm tra xem có đang đi hái thuốc dở dang không
+    if finish_time > 0:
+        if now < finish_time:
+            remaining = int((finish_time - now) / 60)
+            return await interaction.response.send_message(f"🧗 Đạo hữu đang trong rừng rồi, vui lòng đợi thêm **{remaining} phút** nữa mới có thể dùng `/thuhoach`!", ephemeral=True)
+        else:
+            return await interaction.response.send_message(f"🌿 Đạo hữu đã hái đầy gùi thuốc rồi! Hãy dùng lệnh `/thuhoach` để trở về nhận thưởng.", ephemeral=True)
+
+    # Nếu chưa đi, bắt đầu đặt thời gian chờ (30 phút = 1800 giây)
+    COOLDOWN = 3600 
+    new_finish_time = now + COOLDOWN
+    
+    await users_col.update_one({"_id": uid}, {"$set": {"haiduoc_time": new_finish_time}})
+    
+    await interaction.response.send_message(
+        f"🧗 **KHỞI HÀNH:** Đạo hữu đã đeo gùi tiến vào Linh Sơn.\n"
+        f"Dự kiến thám hiểm mất **60 phút**. Sau thời gian này, hãy dùng lệnh `/thuhoach` để nhận linh thạch!"
+    )
+@bot.tree.command(name="thuhoach", description="Trở về từ Linh Sơn và bán thảo dược")
+async def thuhoach(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    user_data = await users_col.find_one({"_id": uid})
+    
+    if not user_data:
+        return await interaction.response.send_message("❌ Đạo hữu chưa có hồ sơ tu tiên!", ephemeral=True)
+
+    now = time.time()
+    finish_time = user_data.get("haiduoc_time", 0)
+
+    # 1. Kiểm tra xem đã dùng lệnh /haiduoc chưa
+    if finish_time == 0:
+        return await interaction.response.send_message("❌ Đạo hữu hiện không có thuốc để thu hoạch. Hãy dùng `/haiduoc` trước!", ephemeral=True)
+
+    # 2. Kiểm tra xem đã đủ thời gian chưa
+    if now < finish_time:
+        remaining = int((finish_time - now) / 60)
+        return await interaction.response.send_message(f"⏳ Thuốc chưa chín hoặc gùi chưa đầy! Cần thêm khoảng **{remaining} phút** nữa.", ephemeral=True)
+
+    # 3. Đủ thời gian -> Phát thưởng
+    lt_reward = random.randint(1, 2)
+    exp_reward = random.randint(200, 500)
+    
+    rare_msg = ""
+    # 1% tỉ lệ rơi Tiên Thạch
+    if random.random() < 0.01:
+        await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": 1}})
+        rare_msg = "\n🔮 **CƠ DUYÊN:** Đạo hữu nhặt được một viên **Tiên Thạch** ẩn dưới gốc linh chi!"
+
+    # Cập nhật database: Cộng quà và reset haiduoc_time về 0
+    await users_col.update_one(
+        {"_id": uid}, 
+        {
+            "$inc": {"linh_thach": lt_reward, "exp": exp_reward},
+            "$set": {"haiduoc_time": 0} 
+        }
+    )
+    
+    # Gọi hàm check lên cấp (nếu có)
+    await check_level_up(uid, interaction.channel, interaction.user.display_name)
+    
+    await interaction.response.send_message(
+        f"✅ **THU HOẠCH THÀNH CÔNG**\n"
+        f"Đạo hữu đã trở về an toàn và bán thảo dược cho hiệu thuốc:\n"
+        f"💎 `+{lt_reward}` Linh Thạch\n"
+        f"✨ `+{exp_reward}` Kinh nghiệm{rare_msg}"
+    )
 
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
