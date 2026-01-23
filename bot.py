@@ -2673,12 +2673,24 @@ async def ducan(interaction: discord.Interaction):
     # Nếu tiến độ từ 0-6 (đang đúc lên bước 1-7): Tốn Linh Thạch
     # Nếu tiến độ từ 7-9 (đang đúc lên bước 8-10): Tốn Tiên Thạch
     if current_progress < 7:
+        # Từ 0->1 đến 6->7: Tốn 15 Linh Thạch
         cost_type = "linh_thach"
         cost_value = 15
         cost_name = "Linh Thạch"
-    else:
+    elif current_progress == 7:
+        # Từ 7 lên 8: Tốn 1 Tiên Thạch
         cost_type = "tien_thach"
         cost_value = 1
+        cost_name = "Tiên Thạch"
+    elif current_progress == 8:
+        # Từ 8 lên 9: Tốn 2 Tiên Thạch
+        cost_type = "tien_thach"
+        cost_value = 2
+        cost_name = "Tiên Thạch"
+    else:
+        # Từ 9 lên 10: Tốn 3 Tiên Thạch
+        cost_type = "tien_thach"
+        cost_value = 3
         cost_name = "Tiên Thạch"
     # 3. Kiểm tra tài sản tương ứng
     user_balance = u.get(cost_type, 0)
@@ -2726,13 +2738,16 @@ async def ducan(interaction: discord.Interaction):
         bar = "▰" * new_progress + "▱" * (10 - new_progress)
         # Gợi ý cho người chơi biết bước tiếp theo tốn gì
         next_step_info = ""
-        if new_progress == 7:
-            next_step_info = "\n⚠️ **Chú ý:** Từ bậc này trở đi, đạo hữu cần **Tiên Thạch** để đúc!"
-        elif new_progress > 7:
-            next_step_info = f"\n💎 Chi phí tiếp theo: **1 Tiên Thạch**"
-        else:
+        if new_progress < 7:
             next_step_info = f"\n💰 Chi phí tiếp theo: **15 Linh Thạch**"
-
+        elif new_progress == 7:
+            next_step_info = "\n⚠️ **Cảnh báo:** Phôi ấn đã hình thành. Từ bậc này cần **1 Tiên Thạch** để đúc!"
+        elif new_progress == 8:
+            next_step_info = "\n💎 Chi phí tiếp theo: **2 Tiên Thạch**"
+        elif new_progress == 9:
+            next_step_info = "\n🔥 **Giai đoạn cuối:** Cần **3 Tiên Thạch** để hoàn tất Ấn Đế!"
+        else:
+            next_step_info = "" # Đã đạt mốc 10, chuẩn bị nhận ấn
         embed = discord.Embed(
             title="🔨 ĐANG ĐÚC ẤN...",
             description=f"Đạo hữu tiêu tốn **{cost_value} {cost_name}**.\nTiến độ: **{new_progress}/10**{next_step_info}",
@@ -2743,6 +2758,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
