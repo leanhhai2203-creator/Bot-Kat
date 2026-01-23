@@ -2731,7 +2731,7 @@ async def ducan(interaction: discord.Interaction):
         elif new_progress > 7:
             next_step_info = f"\n💎 Chi phí tiếp theo: **1 Tiên Thạch**"
         else:
-            next_step_info = f"\n💰 Chi phí tiếp theo: **100 Linh Thạch**"
+            next_step_info = f"\n💰 Chi phí tiếp theo: **15 Linh Thạch**"
 
         embed = discord.Embed(
             title="🔨 ĐANG ĐÚC ẤN...",
@@ -2743,6 +2743,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
