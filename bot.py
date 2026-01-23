@@ -1856,33 +1856,50 @@ async def unban_exp(interaction: discord.Interaction, target: discord.Member):
             f"❓ Tu sĩ {target.mention} hiện đang không trong trạng thái bị cấm túc.",
             ephemeral=True
         )
-@bot.tree.command(name="pay", description="Chuyển linh thạch cho đạo hữu khác")
-@app_commands.describe(member="Người nhận linh thạch", amount="Số lượng linh thạch muốn chuyển")
-async def pay(interaction: discord.Interaction, member: discord.Member, amount: int):
-    # Tránh các lỗi cơ bản
+from discord import app_commands
+
+@bot.tree.command(name="give", description="Chuyển tài nguyên (Linh Thạch/Tiên Thạch) cho đạo hữu khác")
+@app_commands.describe(
+    member="Đạo hữu nhận tài nguyên", 
+    resource_type="Loại tài nguyên muốn chuyển",
+    amount="Số lượng muốn chuyển"
+)
+@app_commands.choices(resource_type=[
+    app_commands.Choice(name="Linh Thạch 💎", value="linh_thach"),
+    app_commands.Choice(name="Tiên Thạch 🔮", value="tien_thach")
+])
+async def give(interaction: discord.Interaction, member: discord.Member, resource_type: str, amount: int):
+    # 1. Các kiểm tra cơ bản
     if amount <= 0:
         return await interaction.response.send_message("❌ Số lượng chuyển phải lớn hơn 0!", ephemeral=True)
     if member.id == interaction.user.id:
         return await interaction.response.send_message("❌ Đạo hữu không thể tự chuyển cho chính mình!", ephemeral=True)
     if member.bot:
-        return await interaction.response.send_message("❌ Không thể chuyển linh thạch cho thực thể nhân tạo (Bot)!", ephemeral=True)
+        return await interaction.response.send_message("❌ Không thể chuyển tài nguyên cho thực thể nhân tạo!", ephemeral=True)
 
     uid = str(interaction.user.id)
-    u = await users_col.find_one({"_id": uid})
+    tid = str(member.id)
     
-    # Kiểm tra số dư trước khi hiện nút
-    current_lt = u.get("linh_thach", 0) if u else 0
-    if current_lt < amount:
-        return await interaction.response.send_message(f"❌ Bạn không đủ linh thạch (Hiện có: `{current_lt}`)", ephemeral=True)
+    # Lấy dữ liệu người gửi
+    u = await users_col.find_one({"_id": uid})
+    if not u:
+        return await interaction.response.send_message("❌ Đạo hữu chưa có hồ sơ tu tiên!", ephemeral=True)
 
-    # Khởi tạo giao diện xác nhận
-    view = ConfirmTransfer(interaction.user, member, amount)
+    # 2. Kiểm tra số dư theo loại tài nguyên đã chọn
+    current_balance = u.get(resource_type, 0)
+    label = "Linh Thạch 💎" if resource_type == "linh_thach" else "Tiên Thạch 🔮"
+    
+    if current_balance < amount:
+        return await interaction.response.send_message(f"❌ Đạo hữu không đủ {label} (Hiện có: `{current_balance}`)", ephemeral=True)
+
+    # 3. Khởi tạo giao diện xác nhận (Cần cập nhật Class ConfirmTransfer phía dưới)
+    view = ConfirmTransfer(interaction.user, member, amount, resource_type, label)
     await interaction.response.send_message(
-        f"📜 **XÁC NHẬN GIAO DỊCH**\nĐạo hữu có chắc muốn chuyển **{amount} Linh thạch** cho **{member.mention}** không?\n*(Nút bấm sẽ hết hạn sau 30 giây)*",
+        f"📜 **XÁC NHẬN GIAO DỊCH**\n"
+        f"Đạo hữu **{interaction.user.mention}** muốn chuyển **{amount} {label}** cho **{member.mention}**.\n"
+        f"*(Nút bấm sẽ hết hạn sau 30 giây)*",
         view=view
     )
-
-
 @bot.tree.command(name="add", description="[ADMIN] Ban thưởng Linh thạch cho tu sĩ")
 @app_commands.describe(target="Tu sĩ được ban thưởng", so_luong="Số lượng linh thạch")
 async def add(interaction: discord.Interaction, target: discord.Member, so_luong: int):
@@ -2481,6 +2498,7 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
