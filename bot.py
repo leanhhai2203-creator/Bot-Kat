@@ -59,6 +59,13 @@ DANH_NGON = [
     "Nghịch thiên nhi hành, tu vi chứng đạo.",
     "Trước mặt ta là luân hồi, sau lưng ta là hư không."
 ]
+AN_DE_DATA = {
+    "Thương Long Ấn": {"atk": 300, "hp": 2000, "weight": 22, "desc": "Đông Phương - Mộc"},
+    "Bạch Hổ Ấn": {"atk": 300, "hp": 2000, "weight": 22, "desc": "Tây Phương - Kim"},
+    "Chu Tước Ấn": {"atk": 300, "hp": 2000, "weight": 22, "desc": "Nam Phương - Hỏa"},
+    "Huyền Vũ Ấn": {"atk": 300, "hp": 2000, "weight": 22, "desc": "Bắc Phương - Thủy"},
+    "Kỳ Lân Đế Ấn": {"atk": 400, "hp": 4000, "weight": 12, "desc": "Trung Tâm - Thổ (Chí Tôn)"}
+}
 THAN_KHI_CONFIG = {
     "Hiên Viên Kiếm": {"desc": "Là ý chí của thánh đạo ngưng tụ thành hình, nơi ánh sáng và công lý giao thoa giữa cõi hư vô.", "atk": 200, "color": 0xFFD700},
     "Thần Nông Đỉnh": {"desc": "Sự tĩnh lặng của vạn vật trước lúc khai sinh, là hơi thở của sự sống ẩn mình trong vòng xoáy luân hồi.", "atk": 200, "color": 0x2ECC71},
@@ -2616,10 +2623,90 @@ async def thuhoach(interaction: discord.Interaction):
         f"💎 `+{lt_reward}` Linh Thạch\n"
         f"✨ `+{exp_reward}` Kinh nghiệm{rare_msg}"
     )
+@bot.tree.command(name="ducan", description="Đúc Ấn Đế: Tiến độ 1-7 tốn Linh Thạch, 8-10 tốn Tiên Thạch")
+async def ducan(interaction: discord.Interaction):
+    await interaction.response.defer()
+    uid = str(interaction.user.id)
+    # 1. Lấy dữ liệu người dùng
+    u = await users_col.find_one({"_id": uid})
+    if not u:
+        return await interaction.followup.send("⚠️ Đạo hữu chưa có hồ sơ tu tiên!")
+    current_progress = u.get("duc_an_progress", 0)
+    # 2. Xác định loại phí dựa trên tiến độ hiện tại
+    # Nếu tiến độ từ 0-6 (đang đúc lên bước 1-7): Tốn Linh Thạch
+    # Nếu tiến độ từ 7-9 (đang đúc lên bước 8-10): Tốn Tiên Thạch
+    if current_progress < 7:
+        cost_type = "linh_thach"
+        cost_value = 15
+        cost_name = "Linh Thạch"
+    else:
+        cost_type = "tien_thach"
+        cost_value = 1
+        cost_name = "Tiên Thạch"
+    # 3. Kiểm tra tài sản tương ứng
+    user_balance = u.get(cost_type, 0)
+    if user_balance < cost_value:
+        return await interaction.followup.send(f"⚠️ Không đủ tài nguyên! Để đạt tiến độ tiếp theo đạo hữu cần **{cost_value} {cost_name}**.")
+    # 4. Xử lý tiến độ
+    new_progress = current_progress + 1
+    # Cập nhật Database: Trừ đúng loại tiền và tăng tiến độ
+    await users_col.update_one(
+        {"_id": uid}, 
+        {
+            "$inc": {cost_type: -cost_value}, 
+            "$set": {"duc_an_progress": new_progress}
+        }
+    )
 
+    # 5. Kiểm tra nếu đủ điểm nhận Ấn (Mốc 10)
+    if new_progress >= 10:
+        an_names = list(AN_DE_DATA.keys())
+        an_weights = [info["weight"] for info in AN_DE_DATA.values()]
+        received_an = random.choices(an_names, weights=an_weights)[0]
+        an_info = AN_DE_DATA[received_an]
+
+        await users_col.update_one(
+            {"_id": uid},
+            {"$set": {"duc_an_progress": 0, "an_de": received_an}}
+        )
+
+        embed = discord.Embed(
+            title="🔨 ĐÚC ẤN THÀNH CÔNG!",
+            description=f"Dùng **{cost_value} {cost_name}** cuối cùng làm vật dẫn, đạo hữu đã đúc thành công:\n\n{an_info['icon']} **{received_an}**",
+            color=discord.Color.gold() if received_an == "Kỳ Lân Đế Ấn" else discord.Color.green()
+        )
+        embed.add_field(name="✨ Chỉ số cộng thêm", value=f"Sát thương: `+{an_info['atk']}`\nSinh mệnh: `+{an_info['hp']}`")
+        
+        if received_an == "Kỳ Lân Đế Ấn":
+            try:
+                await interaction.channel.send(f"🎊 **THÔNG BÁO:** Đạo hữu **{interaction.user.mention}** đã đúc thành công **{received_an}**!")
+            except: pass
+
+        return await interaction.followup.send(embed=embed)
+
+    else:
+        # 6. Hiển thị thanh tiến độ
+        bar = "▰" * new_progress + "▱" * (10 - new_progress)
+        # Gợi ý cho người chơi biết bước tiếp theo tốn gì
+        next_step_info = ""
+        if new_progress == 7:
+            next_step_info = "\n⚠️ **Chú ý:** Từ bậc này trở đi, đạo hữu cần **Tiên Thạch** để đúc!"
+        elif new_progress > 7:
+            next_step_info = f"\n💎 Chi phí tiếp theo: **1 Tiên Thạch**"
+        else:
+            next_step_info = f"\n💰 Chi phí tiếp theo: **100 Linh Thạch**"
+
+        embed = discord.Embed(
+            title="🔨 ĐANG ĐÚC ẤN...",
+            description=f"Đạo hữu tiêu tốn **{cost_value} {cost_name}**.\nTiến độ: **{new_progress}/10**{next_step_info}",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="Linh Năng Tích Tụ", value=f"`{bar}`")
+        return await interaction.followup.send(embed=embed)
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
