@@ -2748,6 +2748,55 @@ async def ducan(interaction: discord.Interaction):
             next_step_info = "\n🔥 **Giai đoạn cuối:** Cần **3 Tiên Thạch** để hoàn tất Ấn Đế!"
         else:
             next_step_info = "" # Đã đạt mốc 10, chuẩn bị nhận ấn
+        # ... (Phần trừ tiền và tăng progress bên trên giữ nguyên)
+
+    # ... (Phần xác định cost_type và trừ tiền ở trên)
+
+    if new_progress >= 10:
+        # --- PHẦN KHI ĐÚC THÀNH CÔNG (10/10) ---
+        an_names = list(AN_DE_DATA.keys())
+        an_weights = [info["weight"] for info in AN_DE_DATA.values()]
+        received_an = random.choices(an_names, weights=an_weights)[0]
+        an_info = AN_DE_DATA[received_an]
+
+        # Reset tiến độ và lưu Ấn mới
+        await users_col.update_one(
+            {"_id": uid},
+            {"$set": {"duc_an_progress": 0, "an_de": received_an}}
+        )
+
+        embed = discord.Embed(
+            title="🔨 ĐÚC ẤN THÀNH CÔNG!",
+            description=f"Dùng **{cost_value} {cost_name}** cuối cùng làm vật dẫn, đạo hữu đã đúc thành công:\n\n{an_info['icon']} **{received_an}**",
+            color=discord.Color.gold() if received_an == "Kỳ Lân Đế Ấn" else discord.Color.green()
+        )
+        embed.add_field(name="✨ Chỉ số cộng thêm", value=f"Sát thương: `+{an_info['atk']}`\nSinh mệnh: `+{an_info['hp']}`")
+        
+        # Lời bình đặc biệt cho Kỳ Lân Đế Ấn
+        if received_an == "Kỳ Lân Đế Ấn":
+            embed.add_field(name="📜 Lời bình", value="*Hào quang vạn dặm, khí vận nghịch thiên mới đúc thành công!*", inline=False)
+            try:
+                await interaction.channel.send(f"🎊 **THÔNG BÁO:** Đạo hữu **{interaction.user.mention}** đã đúc thành công **{received_an}**!")
+            except: pass
+
+        return await interaction.followup.send(embed=embed)
+
+    else:
+        # --- PHẦN KHI ĐANG TÍCH LŨY (Dưới 10 điểm) ---
+        bar = "▰" * new_progress + "▱" * (10 - new_progress)
+        
+        # Xác định lời nhắc chi phí cho bước kế tiếp
+        if new_progress < 7:
+            next_step_info = f"\n💰 Chi phí tiếp theo: **15 Linh Thạch**"
+        elif new_progress == 7:
+            next_step_info = "\n⚠️ **Cảnh báo:** Phôi ấn đã hình thành. Từ bậc này cần **1 Tiên Thạch** để đúc!"
+        elif new_progress == 8:
+            next_step_info = "\n💎 Chi phí tiếp theo: **2 Tiên Thạch**"
+        elif new_progress == 9:
+            next_step_info = "\n🔥 **Giai đoạn cuối:** Cần **3 Tiên Thạch** để hoàn tất Ấn Đế!"
+        else:
+            next_step_info = ""
+
         embed = discord.Embed(
             title="🔨 ĐANG ĐÚC ẤN...",
             description=f"Đạo hữu tiêu tốn **{cost_value} {cost_name}**.\nTiến độ: **{new_progress}/10**{next_step_info}",
@@ -2758,6 +2807,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
