@@ -2423,15 +2423,34 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
             msg, color = "", discord.Color.blue()
             status_notif = ""
 
-            # A. DÍNH BẪY
+           # --- A. DÍNH BẪY (Cả hai cùng dính) ---
             if roll < cfg["trap_chance"]:
                 penalty = cfg["trap_penalty"]
-                await users_col.update_one({"_id": uid}, {"$inc": {"exp": -penalty}, "$set": {"bicanh_daily": {"date": today, "count": 3}}})
-                if tid: await users_col.update_one({"_id": tid}, {"$set": {"bicanh_daily": {"date": today, "count": 3}}})
+                
+                # 1. Phạt người mời (UID): Mất EXP, Khóa lượt đi (count=3), Trọng thương
+                await users_col.update_one(
+                    {"_id": uid}, 
+                    {
+                        "$inc": {"exp": -penalty}, 
+                        "$set": {
+                            "bicanh_daily": {"date": today, "count": 3},
+                            "trong_thuong": True
+                        }
+                    }
+                )
+                
+                # 2. Phạt người trợ giúp (TID): Chỉ bị Trọng thương (Không mất lượt cá nhân)
+                if tid:
+                    await users_col.update_one(
+                        {"_id": tid}, 
+                        {"$set": {"trong_thuong": True, "trong_thuong_date": today}}
+                    )
+                
                 res_down = await check_level_down(uid)
-                if res_down is True: status_notif = "\n💀 **PHẢN PHỆ:** Tu vi đại tổn, rớt cấp!"
-                elif res_down == "reset": status_notif = "\n🛡️ **CẢNH BÁO:** Chạm mốc khóa, EXP về 0!"
-                msg, color = f"🕸️ **DÍNH BẪY:** Mất `{penalty}` EXP & khóa lượt.{status_notif}", discord.Color.red()
+                status_notif = "\n💀 **HẬU QUẢ:** Cả hai bị trọng thương, không thể tiếp tục thám hiểm!"
+                if res_down: status_notif += "\n📉 Người mời bị phản phệ rớt cấp!"
+                
+                msg, color = f"🕸️ **DÍNH BẪY:** Tổn thất `{penalty}` EXP.{status_notif}", discord.Color.red()
 
             # B. CHIẾN BOSS
             elif roll < (cfg["trap_chance"] + cfg["boss_chance"]):
@@ -2596,6 +2615,7 @@ async def thuhoach(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
