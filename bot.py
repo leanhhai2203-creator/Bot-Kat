@@ -475,26 +475,37 @@ async def update_server_avg():
 @bot.event
 async def on_ready():
     try:
-        # --- TỐI ƯU HÓA DB: TẠO INDEX ---
-        # Giúp tìm kiếm theo level, thần khí, pet cực nhanh
+        # 1. ƯU TIÊN: Đồng bộ lệnh Slash trước để người dùng thấy lệnh ngay
+        print("🔄 Đang đồng bộ lệnh Slash...")
+        synced = await bot.tree.sync()
+        print(f"✅ Đã đồng bộ {len(synced)} lệnh Slash.")
+        
+        print(f"✅ Đã đăng nhập: {bot.user}")
+
+        # 2. XỬ LÝ DATABASE (Chạy ngầm hoặc chạy sau)
         print("⏳ Đang tối ưu hóa Database (Tạo Index)...")
+        # Sử dụng background task hoặc làm tuần tự nhưng sau khi đã Sync
         await users_col.create_index([("level", -1)])
         await users_col.create_index([("exp", -1)])
         await users_col.create_index([("than_khi", 1)])
         await users_col.create_index([("thanh_giap", 1)])
         await users_col.create_index([("pet", 1)])
-        
-        synced = await bot.tree.sync()
-        print(f"✅ Đã đồng bộ {len(synced)} lệnh Slash.")
-        
+        print("✅ Tối ưu hóa Database hoàn tất!")
+
+        # 3. KHỞI CHẠY CÁC VÒNG LẶP (LOOPS)
         await update_server_avg() 
-        if not update_server_avg.is_running(): update_server_avg.start()
-        if not thien_y_loop.is_running(): thien_y_loop.start()
+        if not update_server_avg.is_running(): 
+            update_server_avg.start()
+            print("📈 Đã chạy vòng lặp Cập nhật Server.")
             
-        print(f"✅ Đã đăng nhập: {bot.user}")
+        if not thien_y_loop.is_running(): 
+            thien_y_loop.start()
+            print("🌌 Đã chạy vòng lặp Thiên Ý.")
+            
         print("🚀 Bot đã sẵn sàng và chạy mượt hơn!")
 
     except Exception as e:
+        # Lỗi ở Index hay Loop sẽ không làm bot bị sập hoàn toàn nếu ta bắt lỗi tốt
         print(f"❌ Lỗi khởi động: {e}")
 @bot.event
 async def on_message(message):
@@ -2576,6 +2587,7 @@ async def thuhoach(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
