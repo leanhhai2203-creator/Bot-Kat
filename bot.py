@@ -2794,7 +2794,7 @@ async def quay_ho_ly(interaction: discord.Interaction):
     # 3. Tính toán cơ duyên
     # Tỉ lệ Hồ Ly: Cơ bản 0.5% + (pity * 0.05)
     # Tỉ lệ Tiên Thạch: Cố định 2%
-    success_rate_pet = 0.5 + (pity * 0.2)
+    success_rate_pet = 0.5 + (pity * 0.5)
     roll = random.uniform(0, 100)
     
     # Trừ tiền trước khi quay
@@ -2819,7 +2819,7 @@ async def quay_ho_ly(interaction: discord.Interaction):
         await interaction.channel.send(f"🎊 **THÔNG BÁO:** Chúc mừng đạo hữu **{interaction.user.mention}** đã rước được **Hóa Hình Hồ Ly** chỉ với 5 Linh thạch!")
 
     # --- TRƯỜNG HỢP 2: TRÚNG TIÊN THẠCH (2%) ---
-    elif roll <= (success_rate_pet + 2):
+    elif roll <= (success_rate_pet + 3):
         await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": 1}})
         
         embed = discord.Embed(
@@ -2844,6 +2844,7 @@ async def quay_ho_ly(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
