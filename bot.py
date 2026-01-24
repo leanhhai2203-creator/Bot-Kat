@@ -886,8 +886,10 @@ async def diemdanh(interaction: discord.Interaction):
         await interaction.followup.send(embed=embed)
 
     except Exception as e:
-        print(f"❌ Lỗi điểm danh: {e}")
-        await interaction.followup.send("⚠️ Pháp trận điểm danh gặp trục trặc, hãy thử lại sau!")
+        import traceback
+        traceback.print_exc() # In chi tiết lỗi ra Terminal/Console để đạo hữu biết lỗi dòng nào
+        try: await interaction.followup.send(f"⚠️ Linh lực hỗn loạn! (Lỗi: {e})")
+        except: pass
 
 
 @bot.tree.command(name="gacha", description="Tầm bảo: Trang bị, Linh thú & Thánh giới chỉ")
@@ -2839,6 +2841,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
