@@ -186,33 +186,65 @@ BI_CANH_CONFIG = {
 }
 PET_CONFIG = {
     "Tiểu Hỏa Phượng": {
-        "atk": 180, "hp": 2000, "drop_buff": 0.1, 
-        "break_buff": 0, "risk_reduce": 0, # Thêm vào để tránh lỗi khi quét
-        "effect": "Tăng 10% rơi đồ", "color": 0xe74c3c, "icon": "🔥"
+        "atk": 180, "hp": 2000, 
+        "drop_buff": 0.1, "break_buff": 0, "risk_reduce": 0,
+        "effect": "Tăng 10% rơi đồ", "color": 0xe74c3c, "icon": "🔥",
+        "quotes": [
+            "🔥 Thân mang Chân Hỏa, nhất vũ kinh thiên, thiêu rụi tà ma!",
+            "🔥 Phượng hoàng niết bàn, hỏa diệm ngập trời, vạn vật thành tro!",
+            "🔥 Dưới đôi cánh lửa, tài bảo xuất thế, cơ duyên khó cưỡng!"
+        ]
     },
     "U Minh Tước": {
-        "atk": 220, "hp": 2000, "break_buff": 0, "risk_reduce": 0,
-        "effect": "Tăng 5% tỷ lệ thắng mọi trận đấu", "icon": "🌀", "color": 0x4B0082
+        "atk": 220, "hp": 2000, 
+        "break_buff": 0, "risk_reduce": 0,
+        "effect": "Tăng 5% tỷ lệ thắng mọi trận đấu", "icon": "🌀", "color": 0x4B0082,
+        "quotes": [
+            "🌀 U minh dẫn lối, tước ảnh vô hình, đoạt hồn trong chớp mắt!",
+            "🌀 Từ cõi vĩnh hằng trở về, bóng tối của ta bao trùm vạn dặm!",
+            "🌀 Đôi cánh vỗ nhẹ, không gian tan vỡ, nghịch chuyển bại thành thắng!"
+        ]
     },
     "Băng Tinh Hổ": {
         "atk": 170, "hp": 2300, 
-        "break_buff": 5,  # Chuyển từ 0.05 thành 5 (để cộng vào %)
-        "risk_reduce": 0,
-        "effect": "Tăng 5% tỉ lệ đột phá", "color": 0x3498db, "icon": "❄️"
+        "break_buff": 5, "risk_reduce": 0,
+        "effect": "Tăng 5% tỉ lệ đột phá", "color": 0x3498db, "icon": "❄️",
+        "quotes": [
+            "❄️ Mãnh hổ xuất sơn, hàn khí thấu xương, trấn áp thiên địa!",
+            "❄️ Tiếng gầm xé toạc không gian, phá tan xiềng xích, nghịch thiên đột phá!",
+            "❄️ Băng tinh vĩnh cửu, đóng băng thời gian, vạn pháp quy nhất!"
+        ]
     },
     "Thôn Phệ Thú": {
-        "atk": 170, "hp": 2200, "exp_mult": 1.15, "break_buff": 0, "risk_reduce": 0,
-        "effect": "Tăng 15% EXP", "color": 0x9b59b6, "icon": "🐾"
+        "atk": 170, "hp": 2200, 
+        "exp_mult": 1.15, "break_buff": 0, "risk_reduce": 0,
+        "effect": "Tăng 15% EXP", "color": 0x9b59b6, "icon": "🐾",
+        "quotes": [
+            "🐾 Thôn thiên nạp địa, hấp thụ tinh hoa, tu vi đại tiến!",
+            "🐾 Linh thú thượng cổ hiện thân, há miệng nuốt chửng linh lực phương viên vạn dặm!",
+            "🐾 Một ngụm sạch bóng, vạn linh quy phục, đạo quả viên mãn!"
+        ]
     },
     "Huyền Quy": {
         "atk": 120, "hp": 3000, 
-        "break_buff": 0,
-        "risk_reduce": 0.5, # Giữ nguyên 0.5 (50%)
-        "effect": "Giảm 50% rủi ro Lôi Kiếp", "color": 0x2ecc71, "icon": "🐢"
+        "break_buff": 0, "risk_reduce": 0.5,
+        "effect": "Giảm 50% rủi ro Lôi Kiếp", "color": 0x2ecc71, "icon": "🐢",
+        "quotes": [
+            "🐢 Bất động như sơn, vạn kiếp bất xâm, bảo hộ chân thân!",
+            "🐢 Quy giáp hiện linh văn, ngăn chặn thiên lôi, hóa giải lôi kiếp!",
+            "🐢 Trấn giữ phương Bắc, thọ cùng trời đất, vĩnh hằng bất diệt!"
+        ]
     },
     "Hóa Hình Hồ Ly": {
-        "atk": 190, "hp": 2500, "lt_buff": 0.2, "break_buff": 0, "risk_reduce": 0,
-        "effect": "Tăng 20% Linh Thạch", "color": 0xff99cc, "icon": "🌸"
+        "atk": 190, "hp": 2500, 
+        "lt_buff": 0.2, "break_buff": 0, "risk_reduce": 0,
+        "effect": "Tăng 20% Linh Thạch", "color": 0xff99cc, "icon": "🌸",
+        "quotes": [
+            "🦊 Cửu vĩ che trời, nhất niệm thành tro. Dưới gót chân ta, vạn cổ thiên ma đều là cát bụi!",
+            "🦊 Huyết mạch Thiên Hồ vĩnh hằng bất diệt. Kẻ nghịch ta là ác mộng, kẻ theo ta chính là chân mệnh!",
+            "🦊 Chúng sinh điên đảo vì sắc, tu sĩ gục ngã vì tình. Chỉ có chủ nhân mới xứng đáng khiến ta khuynh đảo thiên hạ!",
+            "🦊 Mắt tím nhìn thấu luân hồi, linh căn cảm ứng thiên địa. Chút linh thạch này... là lễ vật nô tỳ dâng ngài!"
+        ]
     }
 }
 THANH_NHAN_CONFIG = {}
@@ -2157,18 +2189,17 @@ async def boss_hunt(interaction: discord.Interaction, member: discord.Member, te
 
 @bot.tree.command(name="thanthu", description="Thần thú thị uy chân ngôn (Chỉ dành cho người có linh thú)")
 async def pet_show(interaction: discord.Interaction):
-    # 1. Khởi động pháp trận (Defer) để tránh treo lệnh
+    # 1. Khởi động pháp trận (Defer)
     await interaction.response.defer()
     uid = str(interaction.user.id)
     
     # 2. Truy vấn dữ liệu tu sĩ
     u = await users_col.find_one({"_id": uid})
-    
-    # 3. CHỐT CHẶN: Kiểm tra nếu không có Thần Thú
-    # Kiểm tra cả trường hợp user không tồn tại hoặc trường pet là None/rỗng/"Chưa có"
     pet_name = u.get("pet") if u else None
-    
-    if not pet_name or pet_name in [None, "", "Chưa có", "Không có"]:
+
+    # 3. Kiểm tra xem có Pet hợp lệ trong PET_CONFIG không
+    # Nếu không có pet hoặc pet đó chưa được định nghĩa trong CONFIG
+    if not pet_name or pet_name not in PET_CONFIG:
         embed_none = discord.Embed(
             title="⚠️ LINH THÚ CÁC THÔNG BÁO",
             description=(
@@ -2179,50 +2210,25 @@ async def pet_show(interaction: discord.Interaction):
         )
         return await interaction.followup.send(embed=embed_none)
 
-    # 4. CẤU HÌNH CHÂN NGÔN (Dành cho người đã có Pet)
-    pet_actions = {
-        "Tiểu Hỏa Phượng": {
-            "quotes": [
-                "🔥 Thân mang Chân Hỏa, nhất vũ kinh thiên, thiêu rụi tà ma!",
-                "🔥 Phượng hoàng niết bàn, hỏa diệm ngập trời, vạn vật thành tro!",
-                "🔥 Dưới đôi cánh lửa, tài bảo xuất thế, cơ duyên khó cưỡng!"
-            ],
-            "color": 0xe74c3c, "icon": "🔥"
-        },
-        "Băng Tinh Hổ": {
-            "quotes": [
-                "❄️ Mãnh hổ xuất sơn, hàn khí thấu xương, trấn áp thiên địa!",
-                "❄️ Tiếng gầm xé toạc không gian, phá tan xiềng xích, nghịch thiên đột phá!",
-                "❄️ Băng tinh vĩnh cửu, đóng băng thời gian, vạn pháp quy nhất!"
-            ],
-            "color": 0x3498db, "icon": "❄️"
-        },
-        "Thôn Phệ Thú": {
-            "quotes": [
-                "🐾 Thôn thiên nạp địa, hấp thụ tinh hoa, tu vi đại tiến!",
-                "🐾 Linh thú thượng cổ hiện thân, há miệng nuốt chửng linh lực phương viên vạn dặm!",
-                "🐾 Một ngụm sạch bóng, vạn linh quy phục, đạo quả viên mãn!"
-            ],
-            "color": 0x9b59b6, "icon": "🐾"
-        },
-        "Huyền Quy": {
-            "quotes": [
-                "🐢 Bất động như sơn, vạn kiếp bất xâm, bảo hộ chân thân!",
-                "🐢 Quy giáp hiện linh văn, ngăn chặn thiên lôi, hóa giải lôi kiếp!",
-                "🐢 Trấn giữ phương Bắc, thọ cùng trời đất, vĩnh hằng bất diệt!"
-            ],
-            "color": 0x2ecc71, "icon": "🐢"
-        },
-        "Hóa Hình Hồ Ly": {
-            "quotes": [
-                "🦊 Thiên hồ hóa hình, mị hoặc chúng sinh, ảo cảnh vô biên!",
-                "🦊 Cửu vĩ lay động, nghịch chuyển càn khôn, biến ảo khôn lường!",
-                "🦊 Linh căn huyền diệu, tâm trí thông tuệ, thấu hiểu thiên cơ!"
-            ],
-            "color": 0xff69b4, "icon": "🦊"
-        }
-    }
-
+    # 4. Lấy cấu hình trực tiếp từ PET_CONFIG
+    cfg = PET_CONFIG[pet_name]
+    
+    # Lấy ngẫu nhiên 1 câu thoại
+    random_quote = random.choice(cfg["quotes"])
+    
+    # 5. Tạo Embed hiển thị
+    embed = discord.Embed(
+        title=f"{cfg['icon']} CHÂN NGÔN THẦN THÚ: {pet_name}",
+        description=f"**\"{random_quote}\"**",
+        color=cfg["color"]
+    )
+    
+    # Thêm thông tin người gọi lệnh cho uy tín
+    embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+    embed.set_footer(text="✨ Thần thú hộ chủ - Uy trấn bát phương")
+    
+    # Gửi kết quả
+    await interaction.followup.send(embed=embed)
     # 5. XỬ LÝ THỊ UY
     data = pet_actions.get(pet_name)
     
@@ -2796,6 +2802,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
