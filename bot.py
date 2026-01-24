@@ -145,6 +145,7 @@ THANH_GIAP_CONFIG = {
         "desc": "Trấn Thế Chi Bảo. Thân ngoài ngũ hành, lôi phạt không thể chạm đến.",
         "hp": 5000,
         "color": 0xFFFFFF,
+        "risk_reduce": 1,
         "effect": "khang_loi_phat"
     }
 }
@@ -219,6 +220,7 @@ PET_CONFIG = {
         "atk": 120, 
         "hp": 3000,
         "risk_reduce": 0.5, 
+        "risk_reduce":0.5,
         "effect": "Giảm 50% rủi ro Lôi Kiếp", 
         "color": 0x2ecc71,
         "icon": "🐢"
@@ -1121,18 +1123,12 @@ async def dotpha(interaction: discord.Interaction):
         return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ tu tiên!")
 
     lv = u.get("level", 1)
-    linh_thach = u.get("linh_thach", 0)
-    tien_thach = u.get("tien_thach", 0) # Lấy số lượng Tiên Thạch
+    lin_thach = u.get("linh_thach", 0)
+    tien_thach = u.get("tien_thach", 0)
     exp = u.get("exp", 0)
-    pet_name = u.get("pet", "Không")
     luck_bonus = u.get("luck_bonus", 0) 
 
-    # 1. LẤY CHỈ SỐ PET
-    pet_data = PET_CONFIG.get(pet_name, {})
-    break_buff = pet_data.get("break_buff", 0)
-    risk_reduce = pet_data.get("risk_reduce", 0)
-
-    # 2. KIỂM TRA ĐIỀU KIỆN CẤP ĐỘ & EXP
+    # 1. KIỂM TRA ĐIỀU KIỆN CƠ BẢN
     if lv % 10 != 0:
         return await interaction.followup.send(f"❌ Cần đạt đỉnh phong để đột phá. Hiện tại: **Cấp {lv}**")
 
@@ -1140,77 +1136,96 @@ async def dotpha(interaction: discord.Interaction):
     if exp < needed:
         return await interaction.followup.send(f"❌ Tu vi chưa đủ! (Cần {int(exp)}/{needed} EXP)")
 
-    # 3. KIỂM TRA LINH THẠCH & TIÊN THẠCH
     required_lt = 3 if lv < 30 else (10 if lv < 60 else (15 if lv < 80 else 20))
-    
-    # Logic Tiên Thạch: Cần 1 viên khi lv là 80, 90, 100...
     needs_tiên_thạch = lv >= 80 and lv % 10 == 0
     
-    if linh_thach < required_lt:
+    if lin_thach < required_lt:
         return await interaction.followup.send(f"❌ Cần **{required_lt} Linh thạch**.")
     
     if needs_tiên_thạch and tien_thach < 1:
-        return await interaction.followup.send(f"❌ Cảnh giới quá cao, cần thêm **1 Tiên Thạch** 🔮 để nghịch thiên cải mệnh!")
+        return await interaction.followup.send(f"❌ Cảnh giới quá cao, cần thêm **1 Tiên Thạch** 🔮!")
 
-    # 4. TÍNH TỈ LỆ
+    # 2. TÍNH TỈ LỆ THÀNH CÔNG (Dynamic từ Pet/Trang bị)
+    # Quét tất cả trang bị để lấy break_buff (tăng tỉ lệ)
+    equipment_to_scan = [
+        ("pet", PET_CONFIG, "🐾"),
+        ("an_de", AN_DE_DATA, "👑"),
+        ("thanh_giap", THANH_GIAP_CONFIG, "🛡️"),
+        ("thanh_nhan", THANH_NHAN_CONFIG, "💍"),
+        ("than_khi", THAN_KHI_CONFIG, "🌟")
+    ]
+    
+    total_break_buff = 0
+    for field, config, icon in equipment_to_scan:
+        item_name = u.get(field)
+        if item_name and item_name in config:
+            total_break_buff += config[item_name].get("break_buff", 0)
+
     realm_index = lv // 10
     base_rate = max(5, 90 - (realm_index * 10))
-    final_rate = base_rate + break_buff + luck_bonus
+    final_rate = base_rate + total_break_buff + luck_bonus
     
     success = random.randint(1, 100) <= final_rate
 
-    # Chuẩn bị Query update
-    update_data = {
-        "$inc": {"linh_thach": -required_lt}
-    }
+    # Chuẩn bị Query update chung cho cả 2 trường hợp
+    update_query = {"$inc": {"linh_thach": -required_lt}}
     if needs_tiên_thạch:
-        update_data["$inc"]["tien_thach"] = -1 # Trừ 1 tiên thạch nếu có dùng
+        update_query["$inc"]["tien_thach"] = -1
 
+    # 3. XỬ LÝ KẾT QUẢ
     if success:
-        # THÀNH CÔNG
-        update_data["$set"] = {"level": lv + 1, "exp": 0, "luck_bonus": 0}
-        await users_col.update_one({"_id": uid}, update_data)
-        
-        luck_msg = f"\n🍀 *Vận may tích lũy (+{luck_bonus}%) đã giúp đạo hữu vượt qua thiên kiếp!*" if luck_bonus > 0 else ""
-        pet_msg = f"\n✨ Nhờ có **{pet_name}** trợ lực (+{break_buff}%)!" if break_buff > 0 else ""
-        tiên_thạch_msg = "\n🔮 **Tiên Thạch** đã phát huy tác dụng bảo hộ tâm mạch!" if needs_tiên_thạch else ""
+        update_query["$set"] = {"level": lv + 1, "exp": 0, "luck_bonus": 0}
+        await users_col.update_one({"_id": uid}, update_query)
         
         embed = discord.Embed(
             title="🔥 ĐỘT PHÁ THÀNH CÔNG 🔥",
-            description=f"🎉 **{interaction.user.display_name}** đã phi thăng lên **{get_realm(lv + 1)}**!{luck_msg}{pet_msg}{tiên_thạch_msg}",
+            description=f"🎉 **{interaction.user.display_name}** đã phi thăng lên **{get_realm(lv + 1)}**!\n"
+                        f"✨ Tỉ lệ: `{final_rate}%` (Buff: +{total_break_buff}%)",
             color=discord.Color.gold()
         )
         await interaction.followup.send(embed=embed)
             
     else:
-        # THẤT BẠI
+        # THẤT BẠI - Tính toán rủi ro
         base_tut_cap = 1
         loi_kiep_msg = ""
         
+        # Check Lôi Kiếp
         if lv >= 30 and random.randint(1, 100) <= 30:
             base_tut_cap = random.randint(2, 5)
             loi_kiep_msg = "\n⚡ **LÔI KIẾP BẤT NGỜ!**"
 
-        if risk_reduce > 0 and base_tut_cap > 1:
-            tut_cap = max(1, int(base_tut_cap * (1 - risk_reduce)))
-            pet_risk_msg = f"\n🐢 **{pet_name}** đã bảo vệ đạo hữu!"
-        else:
-            tut_cap = base_tut_cap
-            pet_risk_msg = ""
+        # Quét chỉ số giảm rủi ro (risk_reduce)
+        total_risk_reduce = 0.0
+        protection_sources = []
+        for field, config, icon in equipment_to_scan:
+            item_name = u.get(field)
+            if item_name and item_name in config:
+                red = config[item_name].get("risk_reduce", 0.0)
+                if red > 0:
+                    total_risk_reduce += red
+                    protection_sources.append(f"{icon} {item_name}")
 
-        new_lv = max(1, lv - tut_cap)
-        new_luck = luck_bonus + 5
+        total_risk_reduce = min(total_risk_reduce, 0.9)
+        tut_cap = max(1, int(base_tut_cap * (1 - total_risk_reduce)))
+        new_luck = luck_bonus + 5 # Tăng 5% may mắn cho lần sau
         
-        update_data["$set"] = {"level": new_lv, "luck_bonus": new_luck}
-        await users_col.update_one({"_id": uid}, update_data)
+        # Cập nhật DB khi thất bại
+        update_query["$set"] = {
+            "level": max(1, lv - tut_cap),
+            "luck_bonus": new_luck
+        }
+        await users_col.update_one({"_id": uid}, update_query)
+
+        pet_risk_msg = f"\n🛡️ **Bảo hộ:** {', '.join(protection_sources)} đã giảm bớt phản phệ!" if protection_sources else ""
         
         fail_embed = discord.Embed(
             title="💥 ĐỘT PHÁ THẤT BẠI 💥",
             description=(
                 f"😔 **{interaction.user.display_name}** đã gục ngã!{loi_kiep_msg}{pet_risk_msg}\n"
                 f"📉 Khấu trừ: **{tut_cap} cấp**\n"
-                f"🛡️ **BẢO HIỂM:** Tỉ lệ đột phá lần tới tăng: **+{new_luck}%**\n"
-                f"💸 Mất: `{required_lt}` Linh thạch" + (f" và `1` Tiên Thạch 🔮" if needs_tiên_thạch else "")
+                f"🛡️ **BẢO HIỂM:** Tỉ lệ lần tới tăng: **+{new_luck}%**\n"
+                f"💸 Mất: `{required_lt} LT`" + (f" và `1 Tiên Thạch` 🔮" if needs_tiên_thạch else "")
             ),
             color=discord.Color.red()
         )
@@ -1531,23 +1546,18 @@ async def attack(interaction: discord.Interaction):
 
     # 6. Logic rơi trang bị
     drop_msg = ""
-    
-    # Mặc định buff rơi đồ là 0
     additional_buff = 0
-    
-    # Kiểm tra nếu có Linh thú và Linh thú đó là Tiểu Hỏa Phượng
-    user_pet = u.get("pet")
-    if user_pet == "Tiểu Hỏa Phượng":
-        additional_buff = 0.25 # Tăng thêm 25% tỷ lệ rơi
-        # Chèn thêm một câu thông báo nhỏ cho ngầu
+    pet_aura = ""
+
+    # Kiểm tra buff từ Linh thú (Tiểu Hỏa Phượng)
+    if u.get("pet") == "Tiểu Hỏa Phượng":
+        additional_buff = 0.25
         pet_aura = "✨ *Hỏa Phượng minh khiết, thiên vận gia thân!*"
-    else:
-        pet_aura = ""
 
     # Tính toán tỷ lệ rơi cuối cùng
     final_drop_rate = drop_rate + additional_buff
     
-    # Thực hiện quay số vận may
+    # BẮT ĐẦU ROLL RƠI ĐỒ
     if random.random() <= final_drop_rate:
         eq_type = random.choice(EQ_TYPES)
         eq_lv = random.randint(*eq_range)
@@ -1555,18 +1565,18 @@ async def attack(interaction: discord.Interaction):
         # Lấy trang bị hiện tại để so sánh
         current_eq = await eq_col.find_one({"_id": uid}) or {}
         old_lv = current_eq.get(eq_type, 0)
-        user_than_khi = u.get("than_khi")
         
-        # TRƯỜNG HỢP 2: Nếu cấp độ mới cao hơn -> Thay đồ mới
-        elif eq_lv > old_lv:
+        # KIỂM TRA ĐIỀU KIỆN NHẬN ĐỒ (Sửa lỗi Syntax tại đây)
+        if eq_lv > old_lv:
+            # TRƯỜNG HỢP 1: Đồ mới mạnh hơn -> Cập nhật trang bị
             await eq_col.update_one({"_id": uid}, {"$set": {eq_type: eq_lv}}, upsert=True)
-            drop_msg = f"{pet_aura}\n🎁 **VẬN MAY!** Nhận được: `{eq_type} Cấp {eq_lv}`"
-            
-        # TRƯỜNG HỢP 3: Đồ yếu hơn hoặc bằng -> Tự rã
+            drop_msg = f"\n{pet_aura}\n🎁 **VẬN MAY!** Nhận được: `{eq_type} Cấp {eq_lv}`"
         else:
-            exp_gain = eq_lv * 10
-            await add_exp(uid, exp_gain)
-            drop_msg = f"{pet_aura}\n🗑️ Rơi ra `{eq_type} Cấp {eq_lv}`, tự rã nhận **{exp_gain} EXP**."
+            # TRƯỜNG HỢP 2: Đồ yếu hơn hoặc bằng -> Tự rã lấy EXP
+            # Lưu ý: Ta cộng dồn vào exp_gain hiện tại để update DB một lần ở cuối
+            exp_from_gear = eq_lv * 10
+            exp_gain += exp_from_gear 
+            drop_msg = f"\n{pet_aura}\n🗑️ Rơi ra `{eq_type} Cấp {eq_lv}`, tự rã nhận **{exp_from_gear} EXP**."
    # 7. TÍNH TOÁN SỐ LƯỢT MỚI (Xử lý hồi lượt từ Thôn Phệ Thú)
     actual_count_inc = 1
     refund_msg = ""
@@ -2766,6 +2776,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
