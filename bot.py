@@ -1050,7 +1050,7 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
             if winner_tk and winner_tg and winner_pet:
                 embed_color = discord.Color.from_rgb(255, 255, 255) # Trắng bạc
                 embed_title = "🌌 THIÊN ĐẠO CHÍ TÔN - ĐỘC CÔ CẦU BẠI 🌌"
-                special_msg = f"🌌 **KHÍ VẬN NGHỊCH THIÊN!** {winner_name} mặc **{winner_tg}**, tay cầm **{winner_tk}**, cưỡi **{winner_pet}** quét sạch bát hoang!"
+                special_msg = f"🌌 **KHÍ VẬN NGHỊCH THIÊN!** {winner_name} mặc **{winner_tg}**, tay cầm **{winner_tk}**, đồng hành cùng **{winner_pet}** quét sạch bát hoang!"
 
             # 2. COMBO CÔNG THỦ TOÀN DIỆN: THẦN KHÍ + THÁNH GIÁP
             elif winner_tk and winner_tg:
@@ -2776,6 +2776,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
