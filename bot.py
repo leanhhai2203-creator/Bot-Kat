@@ -404,15 +404,22 @@ async def calc_power(uid: str) -> int:
             # Giáp, Tay, Ủng (và các loại khác) tăng Máu (HP)
             hp += eq_lv * 150
             
-    # --- BƯỚC 3: CỘNG DỒN CHỈ SỐ CỰC PHẨM (Thần Khí & Thánh Giáp) ---
-    # Logic mới: Luôn luôn cộng thêm nếu sở hữu
+    # --- BƯỚC 3: CỘNG DỒN CHỈ SỐ CỰC PHẨM (Thần Khí, Thánh Giáp & Giới Chỉ) ---
+    
+    # 1. Cộng chỉ số Thần Khí
     if than_khi_name and than_khi_name in THAN_KHI_CONFIG:
-        # Lấy atk từ config, an toàn với .get()
         atk += THAN_KHI_CONFIG[than_khi_name].get("atk", 200)
             
+    # 2. Cộng chỉ số Thánh Giáp
     if thanh_giap_name and thanh_giap_name in THANH_GIAP_CONFIG:
-        # Lấy hp từ config
         hp += THANH_GIAP_CONFIG[thanh_giap_name].get("hp", 2500)
+
+    # 3. MỚI: Cộng chỉ số Thánh Giới Chỉ
+    # Lấy tên nhẫn từ database (giả sử biến là gioi_chi)
+    if gioi_chi and gioi_chi in GIOI_CHI_CONFIG:
+        config = GIOI_CHI_CONFIG[gioi_chi]
+        atk += config.get("atk", 100) # Lấy atk từ config, mặc định 100 nếu thiếu
+        hp += config.get("hp", 1500)  # Lấy hp từ config, mặc định 1500 nếu thiếu
 
     # --- BƯỚC 4: CỘNG DỒN CHỈ SỐ LINH THÚ (Pet) ---
     if pet_name and pet_name in PET_CONFIG:
@@ -2832,6 +2839,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
