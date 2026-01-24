@@ -186,54 +186,36 @@ BI_CANH_CONFIG = {
 }
 PET_CONFIG = {
     "Tiểu Hỏa Phượng": {
-        "atk": 180, 
-        "hp": 2000,
-        "drop_buff": 0.1, 
-        "effect": "Tăng 10% rơi đồ", 
-        "color": 0xe74c3c,
-        "icon": "🔥"
+        "atk": 180, "hp": 2000, "drop_buff": 0.1, 
+        "break_buff": 0, "risk_reduce": 0, # Thêm vào để tránh lỗi khi quét
+        "effect": "Tăng 10% rơi đồ", "color": 0xe74c3c, "icon": "🔥"
     },
     "U Minh Tước": {
-        "atk": 220, 
-        "hp": 2000, 
-        "effect": "Tăng 5% tỷ lệ thắng mọi trận đấu",
-        "icon": "🌀",
-        "color": 0x4B0082
+        "atk": 220, "hp": 2000, "break_buff": 0, "risk_reduce": 0,
+        "effect": "Tăng 5% tỷ lệ thắng mọi trận đấu", "icon": "🌀", "color": 0x4B0082
     },
     "Băng Tinh Hổ": {
-        "atk": 170,
-        "hp": 2300,
-        "break_buff": 0.05, 
-        "effect": "Tăng 5% tỉ lệ đột phá", 
-        "color": 0x3498db,
-        "icon": "❄️"
+        "atk": 170, "hp": 2300, 
+        "break_buff": 5,  # Chuyển từ 0.05 thành 5 (để cộng vào %)
+        "risk_reduce": 0,
+        "effect": "Tăng 5% tỉ lệ đột phá", "color": 0x3498db, "icon": "❄️"
     },
     "Thôn Phệ Thú": {
-        "atk": 170, 
-        "hp": 2200,
-        "exp_mult": 1.15, 
-        "effect": "Tăng 15% EXP", 
-        "color": 0x9b59b6,
-        "icon": "🐾"
+        "atk": 170, "hp": 2200, "exp_mult": 1.15, "break_buff": 0, "risk_reduce": 0,
+        "effect": "Tăng 15% EXP", "color": 0x9b59b6, "icon": "🐾"
     },
     "Huyền Quy": {
-        "atk": 120, 
-        "hp": 3000,
-        "risk_reduce": 0.5, 
-        "risk_reduce":0.5,
-        "effect": "Giảm 50% rủi ro Lôi Kiếp", 
-        "color": 0x2ecc71,
-        "icon": "🐢"
+        "atk": 120, "hp": 3000, 
+        "break_buff": 0,
+        "risk_reduce": 0.5, # Giữ nguyên 0.5 (50%)
+        "effect": "Giảm 50% rủi ro Lôi Kiếp", "color": 0x2ecc71, "icon": "🐢"
     },
     "Hóa Hình Hồ Ly": {
-        "atk": 190,
-        "hp": 1500,
-        "lt_buff": 0.2, 
-        "effect": "Tăng 20% Linh Thạch",
-        "color": 0xff99cc,
-        "icon": "🦊"
+        "atk": 190, "hp": 1500, "lt_buff": 0.2, "break_buff": 0, "risk_reduce": 0,
+        "effect": "Tăng 20% Linh Thạch", "color": 0xff99cc, "icon": "🦊"
     }
 }
+THANH_NHAN_CONFIG = {}
 BOSS_CONFIG = {
     "Hồng Tụ Tôn Sứ": {
         "multiplier": 20, 
@@ -1123,15 +1105,16 @@ async def dotpha(interaction: discord.Interaction):
         return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ tu tiên!")
 
     lv = u.get("level", 1)
-    lin_thach = u.get("linh_thach", 0)
+    linh_thach = u.get("linh_thach", 0)
     tien_thach = u.get("tien_thach", 0)
     exp = u.get("exp", 0)
     luck_bonus = u.get("luck_bonus", 0) 
 
-    # 1. KIỂM TRA ĐIỀU KIỆN CƠ BẢN
+    # 1. KIỂM TRA ĐIỀU KIỆN
     if lv % 10 != 0:
-        return await interaction.followup.send(f"❌ Cần đạt đỉnh phong để đột phá. Hiện tại: **Cấp {lv}**")
+        return await interaction.followup.send(f"❌ Cần đạt đỉnh phong (cấp 10, 20...) để đột phá. Hiện tại: **Cấp {lv}**")
 
+    # Sử dụng hàm exp_needed đạo hữu đã có
     needed = exp_needed(lv)
     if exp < needed:
         return await interaction.followup.send(f"❌ Tu vi chưa đủ! (Cần {int(exp)}/{needed} EXP)")
@@ -1139,14 +1122,13 @@ async def dotpha(interaction: discord.Interaction):
     required_lt = 3 if lv < 30 else (10 if lv < 60 else (15 if lv < 80 else 20))
     needs_tiên_thạch = lv >= 80 and lv % 10 == 0
     
-    if lin_thach < required_lt:
-        return await interaction.followup.send(f"❌ Cần **{required_lt} Linh thạch**.")
+    if linh_thach < required_lt:
+        return await interaction.follow_up.send(f"❌ Cần **{required_lt} Linh thạch**.")
     
     if needs_tiên_thạch and tien_thach < 1:
         return await interaction.followup.send(f"❌ Cảnh giới quá cao, cần thêm **1 Tiên Thạch** 🔮!")
 
-    # 2. TÍNH TỈ LỆ THÀNH CÔNG (Dynamic từ Pet/Trang bị)
-    # Quét tất cả trang bị để lấy break_buff (tăng tỉ lệ)
+    # 2. QUÉT TRANG BỊ & TÍNH BUFF (Đã bọc an toàn tránh treo)
     equipment_to_scan = [
         ("pet", PET_CONFIG, "🐾"),
         ("an_de", AN_DE_DATA, "👑"),
@@ -1156,66 +1138,62 @@ async def dotpha(interaction: discord.Interaction):
     ]
     
     total_break_buff = 0
+    total_risk_reduce = 0.0
+    protection_sources = []
+
     for field, config, icon in equipment_to_scan:
         item_name = u.get(field)
+        # Kiểm tra item có trong config không
         if item_name and item_name in config:
-            total_break_buff += config[item_name].get("break_buff", 0)
+            item_data = config[item_name]
+            total_break_buff += item_data.get("break_buff", 0)
+            red = item_data.get("risk_reduce", 0.0)
+            if red > 0:
+                total_risk_reduce += red
+                protection_sources.append(f"{icon} {item_name}")
 
+    # 3. TÍNH TOÁN TỈ LỆ
     realm_index = lv // 10
     base_rate = max(5, 90 - (realm_index * 10))
     final_rate = base_rate + total_break_buff + luck_bonus
     
     success = random.randint(1, 100) <= final_rate
 
-    # Chuẩn bị Query update chung cho cả 2 trường hợp
-    update_query = {"$inc": {"linh_thach": -required_lt}}
+    # Chuẩn bị Query update
+    update_data = {"$inc": {"linh_thach": -required_lt}}
     if needs_tiên_thạch:
-        update_query["$inc"]["tien_thach"] = -1
+        update_data["$inc"]["tien_thach"] = -1
 
-    # 3. XỬ LÝ KẾT QUẢ
     if success:
-        update_query["$set"] = {"level": lv + 1, "exp": 0, "luck_bonus": 0}
-        await users_col.update_one({"_id": uid}, update_query)
+        # THÀNH CÔNG
+        update_data["$set"] = {"level": lv + 1, "exp": 0, "luck_bonus": 0}
+        await users_col.update_one({"_id": uid}, update_data)
         
         embed = discord.Embed(
             title="🔥 ĐỘT PHÁ THÀNH CÔNG 🔥",
-            description=f"🎉 **{interaction.user.display_name}** đã phi thăng lên **{get_realm(lv + 1)}**!\n"
-                        f"✨ Tỉ lệ: `{final_rate}%` (Buff: +{total_break_buff}%)",
+            description=(
+                f"🎉 **{interaction.user.display_name}** đã phi thăng lên **{get_realm(lv + 1)}**!\n"
+                f"✨ Tỉ lệ: `{final_rate}%` (Cơ bản: {base_rate}% + Buff: {total_break_buff}%)"
+            ),
             color=discord.Color.gold()
         )
         await interaction.followup.send(embed=embed)
             
     else:
-        # THẤT BẠI - Tính toán rủi ro
+        # THẤT BẠI
         base_tut_cap = 1
         loi_kiep_msg = ""
-        
-        # Check Lôi Kiếp
         if lv >= 30 and random.randint(1, 100) <= 30:
             base_tut_cap = random.randint(2, 5)
             loi_kiep_msg = "\n⚡ **LÔI KIẾP BẤT NGỜ!**"
 
-        # Quét chỉ số giảm rủi ro (risk_reduce)
-        total_risk_reduce = 0.0
-        protection_sources = []
-        for field, config, icon in equipment_to_scan:
-            item_name = u.get(field)
-            if item_name and item_name in config:
-                red = config[item_name].get("risk_reduce", 0.0)
-                if red > 0:
-                    total_risk_reduce += red
-                    protection_sources.append(f"{icon} {item_name}")
-
-        total_risk_reduce = min(total_risk_reduce, 0.9)
+        # Tính toán giảm rớt cấp
+        total_risk_reduce = min(total_risk_reduce, 0.9) # Tối đa giảm 90%
         tut_cap = max(1, int(base_tut_cap * (1 - total_risk_reduce)))
-        new_luck = luck_bonus + 5 # Tăng 5% may mắn cho lần sau
+        new_luck = luck_bonus + 5
         
-        # Cập nhật DB khi thất bại
-        update_query["$set"] = {
-            "level": max(1, lv - tut_cap),
-            "luck_bonus": new_luck
-        }
-        await users_col.update_one({"_id": uid}, update_query)
+        update_data["$set"] = {"level": max(1, lv - tut_cap), "luck_bonus": new_luck}
+        await users_col.update_one({"_id": uid}, update_data)
 
         pet_risk_msg = f"\n🛡️ **Bảo hộ:** {', '.join(protection_sources)} đã giảm bớt phản phệ!" if protection_sources else ""
         
@@ -2847,6 +2825,7 @@ async def quay_ho_ly(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
