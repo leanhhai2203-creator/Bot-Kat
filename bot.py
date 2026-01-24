@@ -49,6 +49,13 @@ REALMS = [
     ("Hợp Thể", 70), ("Đại Thừa", 80),
     ("Chân Tiên", 90), ("Kim Tiên", 100)
 ]
+TIEN_NHAN_QUOTES = [
+    "仙 'Côn trùng mà cũng đòi rung cây đại thụ? Nực cười!'",
+    "仙 'Dưới chân Thiên Tiên, phàm nhân chỉ là cát bụi. Ngươi lấy gì để thắng ta?'",
+    "仙 'Chênh lệch giữa ta và ngươi, chính là khoảng cách giữa vực thẳm và trời cao!'",
+    "仙 'Đạo tâm chưa vững, tu vi còn non, về luyện thêm nghìn năm nữa đi!'",
+    "仙 'Nhìn thẳng vào mắt ta... ngươi thấy gì? Là cái chết hay là sự nhỏ bé của chính mình?'"
+]
 DANH_NGON = [
     "Trời đất không có nhân từ, coi vạn vật như chó rơm.",
     "Ta là đỉnh phong, vạn cổ độc tôn!",
@@ -979,64 +986,36 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
         embed.set_footer(text="Cơ duyên do trời, vận mệnh tại ta.")
 
     await interaction.followup.send(embed=embed)
-@bot.tree.command(name="solo", description="Thách đấu người chơi khác (Ẩn lực chiến, cược linh thạch)")
+
+@bot.tree.command(name="solo", description="Thách đấu người chơi khác")
 async def solo(interaction: discord.Interaction, target: discord.Member, linh_thach: int | None = None):
-    # Tránh lỗi Unknown Interaction
     await interaction.response.defer()
-    uid = str(interaction.user.id)
-    tid = str(target.id)
+    uid, tid = str(interaction.user.id), str(target.id)
 
-    if uid == tid:
-        return await interaction.followup.send("❌ Không thể tự solo với chính mình!")
-    if target.bot:
-        return await interaction.followup.send("❌ Không thể thách đấu với linh thể (Bot)!")
-
+    if uid == tid: return await interaction.followup.send("❌ Không thể tự thách đấu chính mình!")
     bet = linh_thach or 0
-    if bet < 0:
-        return await interaction.followup.send("❌ Số linh thạch không hợp lệ!")
+    
+    u1, u2 = await asyncio.gather(users_col.find_one({"_id": uid}), users_col.find_one({"_id": tid}))
+    if not u1 or not u2: return await interaction.followup.send("❌ Một trong hai chưa có hồ sơ!")
 
-    u1, u2 = await asyncio.gather(
-        users_col.find_one({"_id": uid}),
-        users_col.find_one({"_id": tid})
-    )
-
-    if not u1 or not u2:
-        return await interaction.followup.send("❌ Một trong hai đạo hữu chưa có hồ sơ tu tiên!")
-
-    if bet > 0:
-        if u1.get("linh_thach", 0) < bet or u2.get("linh_thach", 0) < bet:
-            return await interaction.followup.send(f"❌ Một trong hai không đủ **{bet} linh thạch** để cược!")
-
-    # Tính toán lực chiến chuẩn bị cho trận đấu
     p1_power = await calc_power(uid)
     p2_power = await calc_power(tid)
 
     class SoloView(discord.ui.View):
-        def __init__(self):
-            super().__init__(timeout=60)
-
-        async def interaction_check(self, i: discord.Interaction):
-            if i.user.id != target.id:
-                await i.response.send_message("❌ Bạn không phải người bị thách đấu!", ephemeral=True)
-                return False
-            return True
+        def __init__(self): super().__init__(timeout=60)
 
         @discord.ui.button(label="✅ Tiếp Chiến", style=discord.ButtonStyle.success)
         async def accept(self, i: discord.Interaction, button: discord.ui.Button):
-            # Kiểm tra linh thạch thực tế lúc bấm nút
-            curr_u1, curr_u2 = await asyncio.gather(
-                users_col.find_one({"_id": uid}),
-                users_col.find_one({"_id": tid})
-            )
-            
+            # Kiểm tra tiền tại thời điểm bấm nút
+            curr_u1, curr_u2 = await asyncio.gather(users_col.find_one({"_id": uid}), users_col.find_one({"_id": tid}))
             if bet > 0 and (curr_u1.get("linh_thach", 0) < bet or curr_u2.get("linh_thach", 0) < bet):
-                return await i.response.edit_message(content="❌ Trận đấu hủy bỏ! Một bên đã không còn đủ linh thạch.", view=None)
+                return await i.response.edit_message(content="❌ Một bên không đủ linh thạch!", view=None)
 
             total_power = p1_power + p2_power if (p1_power + p2_power) > 0 else 1
             win_chance = p1_power / total_power
-            
-            # --- XÁC ĐỊNH KẾT QUẢ ---
             is_u1_win = random.random() <= win_chance
+            
+            # Dữ liệu kẻ thắng người thua
             winner_data = curr_u1 if is_u1_win else curr_u2
             winner_name = interaction.user.display_name if is_u1_win else target.display_name
             loser_name = target.display_name if is_u1_win else interaction.user.display_name
@@ -1047,48 +1026,47 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
                 await users_col.update_many({"_id": {"$in": [uid, tid]}}, {"$inc": {"linh_thach": -bet}})
                 await users_col.update_one({"_id": winner_id}, {"$inc": {"linh_thach": bet * 2}})
 
-            # --- KIỂM TRA HÀO QUANG (THẦN KHÍ & LINH THÚ) ---
+            # --- KIỂM TRA TRANG BỊ VÀ CẤP ĐỘ ---
+            winner_tg = winner_data.get("thanh_giap")
             winner_tk = winner_data.get("than_khi")
             winner_pet = winner_data.get("pet")
-            
+            winner_lv = winner_data.get("level", 0)
+
             embed_color = discord.Color.gold()
             special_msg = ""
             embed_title = "⚔️ TRẬN THƯ HÙNG KẾT THÚC ⚔️"
 
-           # --- TÍNH TOÁN HIỆU ỨNG CHIẾN THẮNG (SẮP XẾP LẠI ƯU TIÊN) ---
-            winner_tg = winner_data.get("thanh_giap")
-            winner_tk = winner_data.get("than_khi")
-            winner_pet = winner_data.get("pet")
-
-            # 1. COMBO CỰC PHẨM: CÓ CẢ 3 MÓN
+            # --- PHÂN CẤP HIỂN THỊ CHIẾN THẮNG (GIỮ NGUYÊN 6 BẬC CỦA BẠN) ---
+            
+            # 1. CỰC PHẨM (CÓ CẢ 3)
             if winner_tk and winner_tg and winner_pet:
-                embed_color = discord.Color.from_rgb(255, 255, 255) # Trắng bạc
+                embed_color = discord.Color.from_rgb(255, 255, 255)
                 embed_title = "🌌 THIÊN ĐẠO CHÍ TÔN - ĐỘC CÔ CẦU BẠI 🌌"
                 special_msg = f"🌌 **KHÍ VẬN NGHỊCH THIÊN!** {winner_name} mặc **{winner_tg}**, tay cầm **{winner_tk}**, đồng hành cùng **{winner_pet}** quét sạch bát hoang!"
 
-            # 2. COMBO CÔNG THỦ TOÀN DIỆN: THẦN KHÍ + THÁNH GIÁP
+            # 2. CÔNG THỦ TOÀN DIỆN (THẦN KHÍ + THÁNH GIÁP)
             elif winner_tk and winner_tg:
-                embed_color = discord.Color.from_rgb(255, 140, 0) # Cam đậm (Hỏa long)
+                embed_color = discord.Color.from_rgb(255, 140, 0)
                 embed_title = "⚔️ CÔNG THỦ TOÀN DIỆN - CHIẾN THẮNG ⚔️"
                 special_msg = f"🔥 **Vô đối thiên hạ!** Với sức mạnh của **{winner_tk}** và sự kiên cố của **{winner_tg}**, {winner_name} là bất khả chiến bại!"
 
-            # 3. COMBO TUYỆT THẾ: THẦN KHÍ + LINH THÚ
+            # 3. TUYỆT THẾ (THẦN KHÍ + LINH THÚ)
             elif winner_tk and winner_pet:
-                embed_color = discord.Color.from_rgb(255, 0, 255) # Tím
+                embed_color = discord.Color.from_rgb(255, 0, 255)
                 embed_title = "🔥 TUYỆT THẾ VÔ SONG - CHIẾN THẮNG 🔥"
                 special_msg = f"🌟 **Hào quang vạn trượng!** {winner_name} cùng linh thú **{winner_pet}** xuất kích, tay cầm **{winner_tk}** trấn áp quần hùng!"
 
             # 4. CHỈ CÓ THÁNH GIÁP
             elif winner_tg:
-                embed_color = discord.Color.from_rgb(0, 255, 255) # Xanh Cyan
+                embed_color = discord.Color.from_rgb(0, 255, 255)
                 embed_title = "🛡️ THÁNH GIÁP BẤT DIỆT - CHIẾN THẮNG 🛡️"
-                special_msg = f"🛡️ **{winner_tg}** tỏa ra hào quang hộ thể, khiến mọi đòn tấn công của đối phương đều trở nên vô dụng!"
+                special_msg = f"🛡️ **{winner_tg}** tỏa ra hào quang hộ thể, khiến mọi đòn tấn công của đối phương vô dụng!"
 
             # 5. CHỈ CÓ THẦN KHÍ
             elif winner_tk:
                 embed_color = discord.Color.red()
                 embed_title = "🔱 THẦN KHÍ GIÁNG THẾ - CHIẾN THẮNG 🔱"
-                special_msg = f"🔱 **{winner_tk}** phát ra uy áp khủng khiếp, khiến đối phương không kịp trở tay!"
+                special_msg = f"🔱 **{winner_tk}** phát ra uy áp khủng khiếp, đối phương không kịp trở tay!"
 
             # 6. CHỈ CÓ LINH THÚ
             elif winner_pet:
@@ -1096,37 +1074,40 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
                 embed_title = "🐾 LINH THÚ HỘ THỂ - CHIẾN THẮNG 🐾"
                 special_msg = f"🐾 Linh thú **{winner_pet}** gầm vang trời đất, trợ lực cho chủ nhân giành chiến thắng!"
 
+            # --- GIA CỐ UY ÁP TIÊN NHÂN (LEVEL >= 80) ---
+            uy_ap_msg = ""
+            if winner_lv >= 80:
+                uy_ap_msg = f"\n\n**◈ Khâu Ngữ:** *\"{random.choice(TIEN_NHAN_QUOTES)}\"*"
+                # Tiên nhân thì dùng màu đen huyền bí đè lên màu trang bị
+                embed_color = discord.Color.from_rgb(0, 0, 0)
+                embed_title = f"🌌 [BẬC TIÊN] {embed_title}"
+
             p1_percent = round((p1_power / total_power) * 100, 1)
             p2_percent = round(100 - p1_percent, 1)
 
             result_embed = discord.Embed(title=embed_title, color=embed_color)
-            
-            # Mô tả chi tiết trận đấu
             desc = (
                 f"🔵 **{interaction.user.display_name}**: `{p1_power:,}` LC ({p1_percent}%)\n"
                 f"🔴 **{target.display_name}**: `{p2_power:,}` LC ({p2_percent}%)\n\n"
-                f"🏆 Người thắng: **{winner_name}**\n"
+                f"🏆 Người thắng: **{winner_name}**" + (f" (Cấp {winner_lv})" if winner_lv >= 80 else "") + "\n"
                 f"💀 Kẻ bại: {loser_name}\n"
                 f"💰 Kết quả: " + (f"Thắng cược **{bet} 💎**" if bet > 0 else "Vang danh thiên hạ")
             )
             
-            if special_msg:
-                desc += f"\n\n{special_msg}"
-                
+            if special_msg: desc += f"\n\n{special_msg}"
+            desc += uy_ap_msg
+            
             result_embed.description = desc
             result_embed.set_footer(text="Hữu thắng hữu bại, chớ nên nản lòng.")
-
             await i.response.edit_message(content=None, embed=result_embed, view=None)
             self.stop()
 
         @discord.ui.button(label="❌ Thủ Thế", style=discord.ButtonStyle.danger)
         async def decline(self, i: discord.Interaction, button: discord.ui.Button):
-            await i.response.edit_message(content=f"❌ **{target.display_name}** đã chọn cách thủ thế, từ chối tiếp chiến.", view=None)
+            await i.response.edit_message(content=f"❌ **{target.display_name}** đã từ chối tiếp chiến.", view=None)
             self.stop()
 
-    invite_msg = f"⚔️ **{interaction.user.display_name}** thách đấu **{target.mention}**!\n" + \
-                 (f"💎 Cược: **{bet} Linh thạch**" if bet > 0 else "🎲 Trận chiến giao hữu")
-    await interaction.followup.send(content=invite_msg, view=SoloView())
+    await interaction.followup.send(content=f"⚔️ **{interaction.user.display_name}** thách đấu **{target.mention}**!", view=SoloView())
 @bot.tree.command(name="dotpha", description="Đột phá cảnh giới (Cần Tiên Thạch từ cấp 80+)")
 async def dotpha(interaction: discord.Interaction):
     # ƯU TIÊN SỐ 1: Phản hồi Discord ngay lập tức để tránh lỗi 404 Unknown Interaction
@@ -2802,6 +2783,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
