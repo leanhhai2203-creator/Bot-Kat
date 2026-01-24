@@ -369,66 +369,56 @@ def get_monster_data(lv: int):
 async def calc_power(uid: str) -> int:
     uid = str(uid)
     
-    # 1. Truy vấn dữ liệu song song (Tối ưu tốc độ)
-    # Thay vì await lần lượt, ta lấy dữ liệu user và trang bị cùng lúc nếu cần thiết, 
-    # nhưng ở đây giữ nguyên luồng logic đơn giản để dễ debug.
     u = await users_col.find_one({"_id": uid})
     if not u: 
         return 0
     
-    # Lấy dữ liệu trang bị, mặc định là dict rỗng nếu chưa có
     eq = await eq_col.find_one({"_id": uid}) or {}
     
-    # 2. Khởi tạo biến dữ liệu
+    # 2. Khởi tạo biến dữ liệu (Đã thêm gioi_chi ở đây)
     lv = u.get("level", 1)
     pet_name = u.get("pet")
     than_khi_name = u.get("than_khi") 
     thanh_giap_name = u.get("thanh_giap")
+    gioi_chi = u.get("gioi_chi") # <--- QUAN TRỌNG: Phải lấy dữ liệu này từ user 'u'
     
     # --- BƯỚC 1: TÍNH CHỈ SỐ GỐC TỪ LEVEL ---
-    # Lv 1: Atk 5, HP 50
     atk = lv * 5
     hp = lv * 50
     
-    # --- BƯỚC 2: CỘNG DỒN CHỈ SỐ TRANG BỊ (Equipment) ---
-    # Logic mới: Cộng thẳng vào, không quan tâm có Thần Khí hay không
+    # --- BƯỚC 2: CỘNG DỒN CHỈ SỐ TRANG BỊ ---
     for t in EQ_TYPES:
         eq_lv = eq.get(t, 0)
         if eq_lv <= 0: continue 
         
-        # Phân loại trang bị để cộng chỉ số tương ứng
-        if t in ["Kiếm", "Nhẫn"]:
-            # Kiếm và Nhẫn tăng Tấn Công (ATK)
+        if t in ["Kiếm", "Nhẫn", "Giới Chỉ"]: # Thêm Giới Chỉ vào đây để cộng Atk nếu là đồ thường
             atk += eq_lv * 15
         else:
-            # Giáp, Tay, Ủng (và các loại khác) tăng Máu (HP)
             hp += eq_lv * 150
             
-    # --- BƯỚC 3: CỘNG DỒN CHỈ SỐ CỰC PHẨM (Thần Khí, Thánh Giáp & Giới Chỉ) ---
+    # --- BƯỚC 3: CỘNG DỒN CHỈ SỐ CỰC PHẨM ---
     
-    # 1. Cộng chỉ số Thần Khí
+    # 1. Thần Khí
     if than_khi_name and than_khi_name in THAN_KHI_CONFIG:
         atk += THAN_KHI_CONFIG[than_khi_name].get("atk", 200)
             
-    # 2. Cộng chỉ số Thánh Giáp
+    # 2. Thánh Giáp
     if thanh_giap_name and thanh_giap_name in THANH_GIAP_CONFIG:
         hp += THANH_GIAP_CONFIG[thanh_giap_name].get("hp", 2500)
 
-    # 3. MỚI: Cộng chỉ số Thánh Giới Chỉ
-    # Lấy tên nhẫn từ database (giả sử biến là gioi_chi)
+    # 3. Thánh Giới Chỉ (Giờ đây biến gioi_chi đã tồn tại, không còn lỗi)
     if gioi_chi and gioi_chi in GIOI_CHI_CONFIG:
         config = GIOI_CHI_CONFIG[gioi_chi]
-        atk += config.get("atk", 100) # Lấy atk từ config, mặc định 100 nếu thiếu
-        hp += config.get("hp", 1500)  # Lấy hp từ config, mặc định 1500 nếu thiếu
+        atk += config.get("atk", 100)
+        hp += config.get("hp", 1500)
 
-    # --- BƯỚC 4: CỘNG DỒN CHỈ SỐ LINH THÚ (Pet) ---
+    # --- BƯỚC 4: LINH THÚ ---
     if pet_name and pet_name in PET_CONFIG:
         p_stats = PET_CONFIG[pet_name]
         atk += p_stats.get("atk", 0)
         hp += p_stats.get("hp", 0) 
 
-    # --- BƯỚC 5: TỔNG HỢP LỰC CHIẾN ---
-    # Công thức Thiên Đạo: (Công * 10) + Thủ + Biến số thiên cơ (0-100)
+    # --- BƯỚC 5: TỔNG HỢP ---
     total_power = (atk * 10) + hp + random.randint(0, 100)
     
     return int(total_power)
@@ -2841,6 +2831,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
