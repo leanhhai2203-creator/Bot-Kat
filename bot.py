@@ -254,7 +254,75 @@ PET_CONFIG = {
         ]
     }
 }
-THANH_NHAN_CONFIG = {}
+THANH_NHAN_CONFIG = {
+    "Thiên Đạo Vô Thượng Lệnh": {
+        "atk": 250, "hp": 2500,
+        "color": 0xFFD700,
+        "desc": "Vạn cổ quy nhất, hiệu lệnh chúng sinh, nắm giữ luân hồi.",
+        "khau_quyet": "Thiên đạo vô tình, duy ngã độc tôn!",
+        "special_ability": "vô_ngại_bí_cảnh" # Không dính bẫy khi đi bí cảnh
+    },
+    "Thanh Vân Lôi Thần Nhẫn": {
+        "atk": 100, "hp": 1500,
+        "color": 0x3498db,
+        "desc": "Thanh Vân kiếm khí, dẫn động lôi thần, chém đứt tà ma.",
+        "khau_quyet": "Cửu Thiên Huyền Sát, hóa vi thần lôi!"
+    },
+    "Tỳ Kheo Kim Cương Nhẫn": {
+        "atk": 100, "hp": 1500,
+        "color": 0xe67e22,
+        "desc": "Kim cương bất hoại thân, vạn kiếp bất diệt, trấn thủ linh sơn.",
+        "khau_quyet": "Bất động như sơn, vạn pháp bất xâm!"
+    },
+    "Thái Thượng Huyền Môn Nhẫn": {
+        "atk": 100, "hp": 1500,
+        "color": 0xf1c40f,
+        "desc": "Huyền môn chính thống, thái thượng vô vi, khí vận nghịch thiên.",
+        "khau_quyet": "Đạo pháp tự nhiên, nghịch chuyển càn khôn!"
+    },
+    "Quỷ Vương U Minh Nhẫn": {
+        "atk": 100, "hp": 1500,
+        "color": 0x2c3e50,
+        "desc": "Ma khí ngập trời, đi trong bóng tối, sát nhân vô ảnh.",
+        "khau_quyet": "U minh quỷ hỏa, phệ hồn đoạt mệnh!"
+    },
+    "Hợp Hoan Mị Ảnh Nhẫn": {
+        "atk": 100, "hp": 1500,
+        "color": 0xe91e63,
+        "desc": "Mị hoặc chúng sinh, lấy nhu thắng cương, chuyển bại thành thắng.",
+        "khau_quyet": "Hoa khai vạn dặm, mộng cảnh hư ảo!"
+    },
+    "Vạn Bảo Kim Tinh Nhẫn": {
+        "atk": 100, "hp": 1500,
+        "color": 0xf39c12,
+        "desc": "Vạn bảo tụ hội, kim quang sáng chói, phú quý vô tận.",
+        "khau_quyet": "Kim quang đại lộ, tài lộc đầy gùi!"
+    },
+    "Dược Vương Bách Thảo Nhẫn": {
+        "atk": 100, "hp": 1500,
+        "color": 0x2ecc71,
+        "desc": "Bách thảo linh đan, cải tử hoàn sinh, thân thể vĩnh hằng.",
+        "khau_quyet": "Mộc diệp linh căn, sinh mệnh bất diệt!"
+    },
+    "Tiêu Dao Trường Xuân Nhẫn": {
+        "atk": 100, "hp": 1500,
+        "color": 0x1abc9c,
+        "desc": "Bắc Minh thần công, ngự phong mà đi, tự tại tiêu dao.",
+        "khau_quyet": "Tiêu dao thiên hạ, lăng ba ngự phong!"
+    },
+    "Phần Hương Chân Hỏa Nhẫn": {
+        "atk": 100, "hp": 1500,
+        "color": 0xe74c3c,
+        "desc": "Bát Hoang Hỏa Long, thiêu rụi trời xanh, rèn luyện tu vi.",
+        "khau_quyet": "Hỏa long giáng thế, vạn vật thành tro!"
+    },
+    "Thần Khí Đúc Thánh Nhẫn": {
+        "atk": 100, "hp": 1500,
+        "color": 0xbdc3c7,
+        "desc": "Vạn cổ linh thiết, đúc nên thần binh, cảm ứng thiên vật.",
+        "khau_quyet": "Vạn khí chi vương, cảm ứng thiên linh!"
+    }
+}
 BOSS_CONFIG = {
     "Hồng Tụ Tôn Sứ": {
         "multiplier": 20, 
@@ -2799,6 +2867,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
