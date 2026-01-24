@@ -243,7 +243,7 @@ PET_CONFIG = {
             "🦊 Cửu vĩ che trời, nhất niệm thành tro. Dưới gót chân ta, vạn cổ thiên ma đều là cát bụi!",
             "🦊 Huyết mạch Thiên Hồ vĩnh hằng bất diệt. Kẻ nghịch ta là ác mộng, kẻ theo ta chính là chân mệnh!",
             "🦊 Chúng sinh điên đảo vì sắc, tu sĩ gục ngã vì tình. Chỉ có chủ nhân mới xứng đáng khiến ta khuynh đảo thiên hạ!",
-            "🦊 Mắt tím nhìn thấu luân hồi, linh căn cảm ứng thiên địa. Chút linh thạch này... là lễ vật nô tỳ dâng ngài!"
+            "🦊 Mắt tím nhìn thấu luân hồi, linh căn cảm ứng thiên địa. Chút linh thạch này... là lễ vật ta dâng ngài!"
         ]
     }
 }
@@ -2802,6 +2802,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
