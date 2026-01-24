@@ -2773,9 +2773,81 @@ async def ducan(interaction: discord.Interaction):
         )
         embed.add_field(name="Linh Năng Tích Tụ", value=f"`{bar}`")
         return await interaction.followup.send(embed=embed)
+@bot.tree.command(name="quay_ho_ly", description="Banner Cầu Nguyện: Hóa Hình Hồ Ly (Tốn 5 Linh thạch/lượt)")
+async def quay_ho_ly(interaction: discord.Interaction):
+    await interaction.response.defer()
+    uid = str(interaction.user.id)
+    
+    # 1. Lấy dữ liệu người dùng
+    u = await users_col.find_one({"_id": uid})
+    if not u:
+        return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ tu tiên!")
+
+    # KIỂM TRA: Nếu đã có Hồ Ly thì chặn quay tiếp
+    if u.get("pet") == "Hóa Hình Hồ Ly":
+        return await interaction.followup.send("🌸 Đạo hữu đã có **Hóa Hình Hồ Ly** bầu bạn rồi, đừng tham lam tìm kiếm thêm nữa!", ephemeral=True)
+
+    linh_thach = u.get("linh_thach", 0)
+    pity = u.get("pity_ho_ly", 0) 
+
+    # 2. Kiểm tra chi phí (5 Linh thạch)
+    if linh_thach < 5:
+        return await interaction.followup.send("❌ Đạo hữu không đủ **5 Linh thạch** để khởi động pháp trận!")
+
+    # 3. Tính toán cơ duyên
+    # Tỉ lệ Hồ Ly: Cơ bản 0.5% + (pity * 0.05)
+    # Tỉ lệ Tiên Thạch: Cố định 2%
+    success_rate_pet = 0.5 + (pity * 0.2)
+    roll = random.uniform(0, 100)
+    
+    # Trừ tiền trước khi quay
+    await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": -5}})
+
+    # --- TRƯỜNG HỢP 1: TRÚNG HỒ LY ---
+    if roll <= success_rate_pet:
+        await users_col.update_one(
+            {"_id": uid}, 
+            {"$set": {"pet": "Hóa Hình Hồ Ly", "pity_ho_ly": 0}}
+        )
+        
+        embed = discord.Embed(
+            title="🌸 DUYÊN ĐỊNH TAM SINH 🌸",
+            description=(
+                f"✨ Chúc mừng **{interaction.user.display_name}**!\n\n"
+                "🦊 *Trong làn sương hồng ảo ảnh, một thiếu nữ đuôi cáo bước ra khẽ cúi chào, "
+                "nguyện cùng đạo hữu kết tri kỉ đồng hành trên con đường tu tiên.*"
+            ),
+            color=0xff99cc
+        )
+        await interaction.channel.send(f"🎊 **THÔNG BÁO:** Chúc mừng đạo hữu **{interaction.user.mention}** đã rước được **Hóa Hình Hồ Ly** chỉ với 5 Linh thạch!")
+
+    # --- TRƯỜNG HỢP 2: TRÚNG TIÊN THẠCH (2%) ---
+    elif roll <= (success_rate_pet + 2):
+        await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": 1}})
+        
+        embed = discord.Embed(
+            title="🔮 CƠ DUYÊN BẤT NGỜ",
+            description=f"Tuy chưa gặp được Hồ Ly, nhưng đạo hữu đã nhặt được **1 Tiên Thạch** quý giá rơi vãi trong ảo cảnh!",
+            color=discord.Color.purple()
+        )
+
+    # --- TRƯỜNG HỢP 3: THẤT BẠI ---
+    else:
+        await users_col.update_one({"_id": uid}, {"$inc": {"pity_ho_ly": 1}})
+        
+        embed = discord.Embed(
+            title="🍃 LÁ RƠI VÔ TÌNH",
+            description="Ảo cảnh tan biến, vẫn chưa thấy bóng dáng nàng Hồ Ly đâu...",
+            color=discord.Color.dark_gray()
+        )
+        embed.set_footer(text=f"Tích lũy may mắn: {pity + 1} | Lượt quay: 5 LT")
+
+    await interaction.followup.send(embed=embed)
+
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
