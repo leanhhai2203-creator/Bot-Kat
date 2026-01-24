@@ -1077,7 +1077,9 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
             # --- GIA CỐ UY ÁP TIÊN NHÂN (LEVEL >= 80) ---
             uy_ap_msg = ""
             if winner_lv >= 80:
-                uy_ap_msg = f"\n\n**◈ Khâu Ngữ:** *\"{random.choice(TIEN_NHAN_QUOTES)}\"*"
+                # Bỏ chữ "Khâu Ngữ:", chỉ để lại chân ngôn của Tiên nhân
+                uy_ap_msg = f"\n\n**◈ {random.choice(TIEN_NHAN_QUOTES)}**" 
+                
                 # Tiên nhân thì dùng màu đen huyền bí đè lên màu trang bị
                 embed_color = discord.Color.from_rgb(0, 0, 0)
                 embed_title = f"🌌 [BẬC TIÊN] {embed_title}"
@@ -2783,6 +2785,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
