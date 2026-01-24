@@ -891,9 +891,9 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
             except Exception as e:
                 print(f"Lỗi Gacha Thánh Giáp: {e}")
 
-        # 2. LOGIC LINH THÚ (0.2% - Mỗi người chỉ mang 1 con)
+        # 2. LOGIC LINH THÚ (0.1% - Mỗi người chỉ mang 1 con)
         # Điều kiện: User chưa có Linh thú trên người AND chưa trúng con nào trong lượt x10 này
-        if not current_user_pet and not got_pet_this_turn and random.random() <= 0.0015:
+        if not current_user_pet and not got_pet_this_turn and random.random() <= 0.001:
             try:
                 # Chọn linh thú ngẫu nhiên từ cấu hình
                 p_name = random.choice(list(PET_CONFIG.keys()))
@@ -2847,6 +2847,7 @@ async def quay_ho_ly(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
