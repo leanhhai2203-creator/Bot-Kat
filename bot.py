@@ -2561,6 +2561,13 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
         await interaction.response.send_message(content="🏔️ Chọn Bí Cảnh thám hiểm:", view=BiCanhSelectView())
 #full lệnh hái dược
 @bot.tree.command(name="haiduoc", description="Khởi hành vào Linh Sơn hái thuốc")
+ALLOWED_CHANNEL_ID = 1461017212365181160
+    
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        return await interaction.response.send_message(
+            f"❌ Linh Sơn không nằm ở đây! Đạo hữu phải đến kênh <#{ALLOWED_CHANNEL_ID}> mới có thể khởi hành hái thuốc.", 
+            ephemeral=True
+        )
 async def haiduoc(interaction: discord.Interaction):
     uid = str(interaction.user.id)
     user_data = await users_col.find_one({"_id": uid})
@@ -2590,6 +2597,13 @@ async def haiduoc(interaction: discord.Interaction):
         f"Dự kiến thám hiểm mất **60 phút**. Sau thời gian này, hãy dùng lệnh `/thuhoach` để nhận linh thạch!"
     )
 @bot.tree.command(name="thuhoach", description="Trở về từ Linh Sơn và bán thảo dược")
+ALLOWED_CHANNEL_ID = 1461017212365181160
+    
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        return await interaction.response.send_message(
+            f"❌ Linh Sơn không nằm ở đây! Đạo hữu phải đến kênh <#{ALLOWED_CHANNEL_ID}> mới có thể thu hoạch.", 
+            ephemeral=True
+        )
 async def thuhoach(interaction: discord.Interaction):
     uid = str(interaction.user.id)
     user_data = await users_col.find_one({"_id": uid})
@@ -2785,6 +2799,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
