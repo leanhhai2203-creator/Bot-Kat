@@ -1521,10 +1521,8 @@ async def attack(interaction: discord.Interaction):
     total_atk = (u["level"] * 10) + pet_data.get("atk", 0)
     base_exp = exp_needed(u["level"]) // 5
     exp_gain = int(base_exp * pet_data.get("exp_mult", 1.0))
-    
     lt_chance = pet_data.get("lt_chance", 30) 
     lt_gain = random.randint(1, 5) if random.randint(1, 100) <= lt_chance else 0
-
     # 5. Kiểm tra bình cảnh (Chặn EXP)
     can_gain_exp = True
     if u["level"] % 10 == 0 and u["exp"] >= exp_needed(u["level"]):
@@ -1558,12 +1556,6 @@ async def attack(interaction: discord.Interaction):
         current_eq = await eq_col.find_one({"_id": uid}) or {}
         old_lv = current_eq.get(eq_type, 0)
         user_than_khi = u.get("than_khi")
-
-        # TRƯỜNG HỢP 1: Nếu là Kiếm và đã có Thần Khí -> Tự rã
-        if eq_type == "Kiếm" and user_than_khi:
-            exp_gain = eq_lv * 10
-            await add_exp(uid, exp_gain)
-            drop_msg = f"{pet_aura}\n⚔️ Uy áp từ **[{user_than_khi}]** khiến **{eq_type} cấp {eq_lv}** vụn nát, nhận **{exp_gain} EXP**."
         
         # TRƯỜNG HỢP 2: Nếu cấp độ mới cao hơn -> Thay đồ mới
         elif eq_lv > old_lv:
@@ -1578,7 +1570,7 @@ async def attack(interaction: discord.Interaction):
    # 7. TÍNH TOÁN SỐ LƯỢT MỚI (Xử lý hồi lượt từ Thôn Phệ Thú)
     actual_count_inc = 1
     refund_msg = ""
-    if pet_name == "Tiểu Hỏa Phượng" and random.randint(1, 100) <= 20:
+    if pet_name == "Tiểu Hỏa Phượng" and random.randint(1, 100) <= 30:
         actual_count_inc = 0
         refund_msg = "\n🌀 **Tiểu Hỏa Phượng** hấp thụ linh khí,Tái Sinh, giúp bạn không tốn thể lực!"
 
@@ -2774,6 +2766,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
