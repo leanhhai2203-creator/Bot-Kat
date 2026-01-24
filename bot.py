@@ -211,7 +211,7 @@ PET_CONFIG = {
         "effect": "Giảm 50% rủi ro Lôi Kiếp", "color": 0x2ecc71, "icon": "🐢"
     },
     "Hóa Hình Hồ Ly": {
-        "atk": 190, "hp": 1500, "lt_buff": 0.2, "break_buff": 0, "risk_reduce": 0,
+        "atk": 190, "hp": 2500, "lt_buff": 0.2, "break_buff": 0, "risk_reduce": 0,
         "effect": "Tăng 20% Linh Thạch", "color": 0xff99cc, "icon": "🦊"
     }
 }
@@ -2002,7 +2002,7 @@ class BossInviteView(discord.ui.View):
         self.ten_boss = ten_boss
         self.win_rate = win_rate
         self.config = config
-        self.member_obj = member_obj # Để check level up
+        self.member_obj = member_obj 
         self.message = None
 
     async def on_timeout(self):
@@ -2022,48 +2022,63 @@ class BossInviteView(discord.ui.View):
             is_win = random.random() < self.win_rate
             today = datetime.now().strftime("%Y-%m-%d")
             
-            # --- KHỞI TẠO DỮ LIỆU CẬP NHẬT ---
-            update_data = {"$set": {"last_boss": today}}
-            tien_thach_msg = ""
+            # --- LẤY DỮ LIỆU CẢ 2 NGƯỜI ĐỂ CHECK PET ---
+            u1, u2 = await asyncio.gather(
+                users_col.find_one({"_id": self.ids[0]}),
+                users_col.find_one({"_id": self.ids[1]})
+            )
+            users_data = {self.ids[0]: u1, self.ids[1]: u2}
 
             if is_win:
-                # 1. Thưởng Linh Thạch & EXP theo config (Giữ nguyên)
-                reward_lt = random.randint(*self.config['reward'])
-                reward_exp = self.config.get('exp', 50) # Mặc định 50 nếu ko có trong config
+                reward_lt_base = random.randint(*self.config['reward'])
+                reward_exp = self.config.get('exp', 50)
                 
-                update_data["$inc"] = {
-                    "linh_thach": reward_lt,
-                    "exp": reward_exp
-                }
+                tien_thach_msg = ""
+                # Logic Tiên Thạch cho Boss cuối
+                if self.ten_boss == "Mục Dã Di" and random.random() < 0.20:
+                    tien_thach_msg = "\n🔮 **CHÍ TÔN BẢO VẬT:** Cả hai nhận được **1 Tiên Thạch**!"
 
-                # 2. LOGIC MỚI: Chỉ Boss mạnh nhất (Boss 3) mới rơi Tiên Thạch
-                # Thay 'Ma Thần Vương' bằng tên chính xác trong BOSS_CONFIG của bạn
-                if self.ten_boss == "Mục Dã Di":
-                    if random.random() < 0.20: # 20% tỉ lệ rơi
-                        update_data["$inc"]["tien_thach"] = 1
-                        tien_thach_msg = "\n🔮 **CHÍ TÔN BẢO VẬT:** Cả hai nhận được **1 Tiên Thạch**!"
+                # Cập nhật từng người để tính Buff riêng biệt
+                for uid in self.ids:
+                    user_info = users_data.get(uid)
+                    lt_final = reward_lt_base
+                    fox_msg = ""
 
-                msg = f"🎉 **THÀNH CÔNG:** Tiêu diệt {self.ten_boss}!\n🎁 Thưởng: `+{reward_exp}` EXP, `+{reward_lt}` 💎.{tien_thach_msg}"
+                    # Check Buff Hồ Ly (🦊 +20%)
+                    if user_info and user_info.get("pet") == "Hóa Hình Hồ Ly":
+                        fox_cfg = globals().get("PET_CONFIG", {}).get("Hóa Hình Hồ Ly", {})
+                        bonus = int(reward_lt_base * fox_cfg.get("lt_buff", 0.2))
+                        lt_final += bonus
+                        fox_msg = f" (🦊 +{bonus})"
+
+                    # Build query update cho từng cá nhân
+                    upd = {
+                        "$inc": {"linh_thach": lt_final, "exp": reward_exp},
+                        "$set": {"last_boss": today}
+                    }
+                    if tien_thach_msg:
+                        upd["$inc"]["tien_thach"] = 1
+
+                    await users_col.update_one({"_id": uid}, upd)
+                    
+                    # Check Level Up
+                    member = interaction.guild.get_member(int(uid))
+                    name = member.display_name if member else "Tu sĩ"
+                    await check_level_up(uid, interaction.channel, f"{name}{fox_msg}")
+
+                msg = f"🎉 **THÀNH CÔNG:** Tiêu diệt {self.ten_boss}!\n🎁 Thưởng cơ bản: `+{reward_exp}` EXP, `+{reward_lt_base}` 💎.{tien_thach_msg}"
                 color = discord.Color.gold()
             else:
                 # THẤT BẠI
                 penalty = self.config['penalty']
-                update_data["$inc"] = {"exp": -penalty}
+                await users_col.update_many(
+                    {"_id": {"$in": self.ids}}, 
+                    {"$inc": {"exp": -penalty}, "$set": {"last_boss": today}}
+                )
+                for uid in self.ids: await check_level_down(uid)
+                
                 msg = f"💀 **BẠI TRẬN:** {self.ten_boss} quá mạnh, cả hai tổn thất `-{penalty:,}` EXP!"
                 color = discord.Color.red()
-
-            # THỰC THI CẬP NHẬT (update_many để giảm lag)
-            await users_col.update_many({"_id": {"$in": self.ids}}, update_data)
-
-            # KIỂM TRA LÊN/XUỐNG CẤP
-            for uid in self.ids:
-                if is_win:
-                    # Tìm member object để lấy tên hiển thị
-                    member = interaction.guild.get_member(int(uid))
-                    name = member.display_name if member else "Tu sĩ"
-                    await check_level_up(uid, interaction.channel, name)
-                else:
-                    await check_level_down(uid)
 
             emb = discord.Embed(title=f"⚔️ CHIẾN BÁO: {self.ten_boss}", description=msg, color=color)
             emb.add_field(name="📈 Tỷ lệ thắng", value=f"`{self.win_rate*100:.1f}%`")
@@ -2072,6 +2087,14 @@ class BossInviteView(discord.ui.View):
         finally:
             active_battles.difference_update(self.ids)
             self.stop()
+
+    @discord.ui.button(label="❌ Từ Chối", style=discord.ButtonStyle.danger)
+    async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.target_id:
+            return await interaction.response.send_message("❌ Lệnh này không phải của bạn!", ephemeral=True)
+        await interaction.response.edit_message(content="❌ Lời mời bị khước từ.", view=None)
+        active_battles.difference_update(self.ids)
+        self.stop()
 
     @discord.ui.button(label="❌ Từ Chối", style=discord.ButtonStyle.danger)
     async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2420,17 +2443,15 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
     
     u_bc = u_data.get("bicanh_daily", {"date": "", "count": 0, "trong_thuong": False})
     
-    # Reset trạng thái Trọng thương nếu qua ngày mới
     if u_bc.get("date") != today:
         u_bc = {"date": today, "count": 0, "trong_thuong": False}
 
-    # KIỂM TRA CHỦ PHÒNG: Phải còn lượt VÀ không bị trọng thương
     if u_bc.get("trong_thuong") is True:
         return await interaction.response.send_message("❌ Đạo hữu đang trọng thương do dính bẫy, cần tịnh dưỡng qua ngày mai!", ephemeral=True)
     if u_bc["count"] >= 3:
         return await interaction.response.send_message("❌ Đạo hữu đã hết lượt tự thám hiểm hôm nay!", ephemeral=True)
 
-    # 2. Kiểm tra Đồng đội (TID)
+    # 2. Kiểm tra Đồng đội
     tid = str(dong_doi.id) if dong_doi else None
     if tid:
         if tid == uid: return await interaction.response.send_message("❌ Không thể tự mời mình!", ephemeral=True)
@@ -2441,7 +2462,6 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
         if t_bc.get("date") != today:
             t_bc = {"date": today, "count": 0, "trong_thuong": False}
 
-        # ĐỒNG ĐỘI: Chỉ chặn nếu ĐANG TRỌNG THƯƠNG (Hết lượt 3/3 vẫn cho đi cứu bồ)
         if t_bc.get("trong_thuong") is True:
             return await interaction.response.send_message(f"❌ {dong_doi.display_name} đang trọng thương, không thể trợ chiến!", ephemeral=True)
 
@@ -2462,7 +2482,6 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
             cfg = BI_CANH_CONFIG[choice]
             await i.response.defer()
 
-            # Lấy sức mạnh
             p1_pwr = await calc_power(uid)
             p2_pwr = await calc_power(tid) if tid else 0
             total_pwr = p1_pwr + p2_pwr
@@ -2471,34 +2490,35 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
             new_count = u_bc["count"] + 1
             msg, color = "", discord.Color.blue()
 
-            # --- A. DÍNH BẪY (Cả hai cùng dính họa) ---
+            # --- A. DÍNH BẪY ---
             if roll < cfg["trap_chance"]:
                 penalty = cfg["trap_penalty"]
-                
-                # Cập nhật Chủ phòng: Trọng thương + Khóa lượt
                 await users_col.update_one(
                     {"_id": uid}, 
                     {"$inc": {"exp": -penalty}, "$set": {"bicanh_daily": {"date": today, "count": 3, "trong_thuong": True}}}
                 )
-                
-                # Cập nhật Đồng đội: Chỉ Trọng thương (Không reset lượt cá nhân của họ)
                 if tid:
                     await users_col.update_one(
                         {"_id": tid}, 
                         {"$set": {"bicanh_daily.date": today, "bicanh_daily.trong_thuong": True}}
                     )
-
-                res_down = await check_level_down(uid)
+                await check_level_down(uid)
                 msg = f"💥 **ĐẠI NẠN:** Dính cạm bẫy tổn thất `{penalty}` EXP. \n💀 **HẬU QUẢ:** Cả hai bị trọng thương, không thể tiếp tục thám hiểm hôm nay!"
-                if res_down: msg += "\n📉 Chủ phòng bị phản phệ rớt cấp!"
                 color = discord.Color.red()
 
-            # --- B. CHIẾN BOSS (Chỉ chủ phòng nhận thưởng) ---
+            # --- B. CHIẾN BOSS (Có Buff Hồ Ly) ---
             elif roll < (cfg["trap_chance"] + cfg["boss_chance"]):
                 win_rate = min(total_pwr / (cfg["boss_power"] * 1.0), 0.9)
                 if random.random() < win_rate:
-                    # Logic rơi đồ & Tiên thạch (Chỉ UID nhận)
+                    # TÍNH TOÁN BUFF HỒ LY
+                    fox_bonus = 0
+                    if u_data.get("pet") == "Hóa Hình Hồ Ly":
+                        fox_cfg = globals().get("PET_CONFIG", {}).get("Hóa Hình Hồ Ly", {})
+                        fox_bonus = int(cfg["lt"] * fox_cfg.get("lt_buff", 0.2))
+
+                    total_lt = cfg["lt"] + fox_bonus
                     drop_msg = ""
+                    
                     if random.random() < cfg.get("tien_thach_chance", 0):
                         amt = cfg.get("tien_thach_amount", 1)
                         await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": amt}})
@@ -2506,10 +2526,12 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 
                     await users_col.update_one(
                         {"_id": uid}, 
-                        {"$inc": {"exp": cfg["exp"], "linh_thach": cfg["lt"]}, "$set": {"bicanh_daily.count": new_count}}
+                        {"$inc": {"exp": cfg["exp"], "linh_thach": total_lt}, "$set": {"bicanh_daily.count": new_count}}
                     )
                     await check_level_up(uid, i.channel, i.user.display_name)
-                    msg = f"⚔️ **THẮNG BOSS:** Chủ phòng nhận `+{cfg['exp']}` EXP, `+{cfg['lt']}` 💎.{drop_msg}"
+                    
+                    fox_info = f" (🦊 +{fox_bonus})" if fox_bonus > 0 else ""
+                    msg = f"⚔️ **THẮNG BOSS:** Chủ phòng nhận `+{cfg['exp']}` EXP, `+{total_lt}` 💎{fox_info}.{drop_msg}"
                     color = discord.Color.green()
                 else:
                     penalty = cfg["trap_penalty"] // 2
@@ -2770,80 +2792,11 @@ async def ducan(interaction: discord.Interaction):
         )
         embed.add_field(name="Linh Năng Tích Tụ", value=f"`{bar}`")
         return await interaction.followup.send(embed=embed)
-@bot.tree.command(name="quay_ho_ly", description="Banner Cầu Nguyện: Hóa Hình Hồ Ly (Tốn 5 Linh thạch/lượt)")
-async def quay_ho_ly(interaction: discord.Interaction):
-    await interaction.response.defer()
-    uid = str(interaction.user.id)
-    
-    # 1. Lấy dữ liệu người dùng
-    u = await users_col.find_one({"_id": uid})
-    if not u:
-        return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ tu tiên!")
-
-    # KIỂM TRA: Nếu đã có Hồ Ly thì chặn quay tiếp
-    if u.get("pet") == "Hóa Hình Hồ Ly":
-        return await interaction.followup.send("🌸 Đạo hữu đã có **Hóa Hình Hồ Ly** bầu bạn rồi, đừng tham lam tìm kiếm thêm nữa!", ephemeral=True)
-
-    linh_thach = u.get("linh_thach", 0)
-    pity = u.get("pity_ho_ly", 0) 
-
-    # 2. Kiểm tra chi phí (5 Linh thạch)
-    if linh_thach < 5:
-        return await interaction.followup.send("❌ Đạo hữu không đủ **5 Linh thạch** để khởi động pháp trận!")
-
-    # 3. Tính toán cơ duyên
-    # Tỉ lệ Hồ Ly: Cơ bản 0.5% + (pity * 0.05)
-    # Tỉ lệ Tiên Thạch: Cố định 2%
-    success_rate_pet = 0.5 + (pity * 0.5)
-    roll = random.uniform(0, 100)
-    
-    # Trừ tiền trước khi quay
-    await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": -5}})
-
-    # --- TRƯỜNG HỢP 1: TRÚNG HỒ LY ---
-    if roll <= success_rate_pet:
-        await users_col.update_one(
-            {"_id": uid}, 
-            {"$set": {"pet": "Hóa Hình Hồ Ly", "pity_ho_ly": 0}}
-        )
-        
-        embed = discord.Embed(
-            title="🌸 DUYÊN ĐỊNH TAM SINH 🌸",
-            description=(
-                f"✨ Chúc mừng **{interaction.user.display_name}**!\n\n"
-                "🦊 *Trong làn sương hồng ảo ảnh, một thiếu nữ đuôi cáo bước ra khẽ cúi chào, "
-                "nguyện cùng đạo hữu kết tri kỉ đồng hành trên con đường tu tiên.*"
-            ),
-            color=0xff99cc
-        )
-        await interaction.channel.send(f"🎊 **THÔNG BÁO:** Chúc mừng đạo hữu **{interaction.user.mention}** đã rước được **Hóa Hình Hồ Ly** chỉ với 5 Linh thạch!")
-
-    # --- TRƯỜNG HỢP 2: TRÚNG TIÊN THẠCH (2%) ---
-    elif roll <= (success_rate_pet + 3):
-        await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": 1}})
-        
-        embed = discord.Embed(
-            title="🔮 CƠ DUYÊN BẤT NGỜ",
-            description=f"Tuy chưa gặp được Hồ Ly, nhưng đạo hữu đã nhặt được **1 Tiên Thạch** quý giá rơi vãi trong ảo cảnh!",
-            color=discord.Color.purple()
-        )
-
-    # --- TRƯỜNG HỢP 3: THẤT BẠI ---
-    else:
-        await users_col.update_one({"_id": uid}, {"$inc": {"pity_ho_ly": 1}})
-        
-        embed = discord.Embed(
-            title="🍃 LÁ RƠI VÔ TÌNH",
-            description="Ảo cảnh tan biến, vẫn chưa thấy bóng dáng nàng Hồ Ly đâu...",
-            color=discord.Color.dark_gray()
-        )
-        embed.set_footer(text=f"Tích lũy may mắn: {pity + 1} | Lượt quay: 5 LT")
-
-    await interaction.followup.send(embed=embed)
 
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
