@@ -212,7 +212,7 @@ PET_CONFIG = {
     },
     "Hóa Hình Hồ Ly": {
         "atk": 190, "hp": 2500, "lt_buff": 0.2, "break_buff": 0, "risk_reduce": 0,
-        "effect": "Tăng 20% Linh Thạch", "color": 0xff99cc, "icon": "🦊"
+        "effect": "Tăng 20% Linh Thạch", "color": 0xff99cc, "icon": "🌸"
     }
 }
 THANH_NHAN_CONFIG = {}
@@ -2796,6 +2796,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
