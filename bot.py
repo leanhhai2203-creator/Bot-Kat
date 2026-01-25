@@ -2215,7 +2215,7 @@ async def show_thankhi(interaction: discord.Interaction):
     await interaction.response.defer()
     uid = str(interaction.user.id)
 
-    # 1. DỮ LIỆU THẦN KHÍ (Giữ nguyên Khẩu ngữ của đạo hữu)
+    # 1. DỮ LIỆU THẦN KHÍ 
     THAN_KHI_DATA = {
         "Hiên Viên Kiếm": {"quote": "『 THÁNH ĐẠO PHỤC HƯNG - VẠN KIẾM QUY TÔNG 』", "desc": "Ý chí của thánh đạo ngưng tụ thành hình.", "color": 0xFFD700, "icon": "⚔️"},
         "Thần Nông Đỉnh": {"quote": "『 SINH LINH VẠN ĐẠI - NHẤT ĐỈNH TRƯỜNG SINH 』", "desc": "Hơi thở của sự sống ẩn mình.", "color": 0x2ECC71, "icon": "🧪"},
@@ -2235,6 +2235,7 @@ async def show_thankhi(interaction: discord.Interaction):
         my_tk = u.get("than_khi")
         my_tg = u.get("thanh_giap")
         my_gc = u.get("gioi_chi")
+        my_pet = u.get("pet")
 
         # Quét chủ nhân toàn server
         owned_tk = await users_col.distinct("than_khi", {"than_khi": {"$ne": None}})
@@ -2246,14 +2247,14 @@ async def show_thankhi(interaction: discord.Interaction):
         avail_tg = [name for name in THANH_GIAP_CONFIG.keys() if name not in owned_tg]
         avail_gc = [name for name in GIOI_CHI_CONFIG.keys() if name not in owned_gc]
 
-        # Đếm số lượng báu vật đang sở hữu
-        count = sum(1 for x in [my_tk, my_tg, my_gc] if x)
+        # Đếm số lượng báu vật đang sở hữu (Tính cả Pet là 4 mốc cực phẩm)
+        count = sum(1 for x in [my_tk, my_tg, my_gc, my_pet] if x)
         medals = "⭐" * count if count > 0 else "🌑"
 
         # 3. KHỞI TẠO EMBED
         embed = discord.Embed(
-            title=f"🏛️ LINH BẢO MINH BẢNG", 
-            description=f"**Cấp bậc bảo vật:** {medals} ({count}/3 cực phẩm tái thế)",
+            title="🏛️ LINH BẢO MINH BẢNG", 
+            description=f"**Khí vận tu sĩ:** {medals} ({count}/4 cực phẩm tái thế)",
             color=0x2F3136
         )
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
@@ -2277,12 +2278,18 @@ async def show_thankhi(interaction: discord.Interaction):
         # --- HIỂN THỊ THÁNH GIỚI CHỈ ---
         if my_gc in GIOI_CHI_CONFIG:
             gc = GIOI_CHI_CONFIG[my_gc]
-            embed.add_field(name=f"💍 Thánh Giới Chỉ: {my_gc}", value=f"**『 {gc['khau_quyet']} 』**\n*{gc['desc']}*", inline=False)
-            if not my_tk and not my_tg: embed.color = gc['color']
+            # Sử dụng key 'khau_quyet' hoặc 'quote' tùy theo config của đạo hữu
+            quote_gc = gc.get('khau_quyet') or gc.get('quote', '『 NGHỊCH CHUYỂN CÀN KHÔN 』')
+            embed.add_field(name=f"💍 Thánh Giới Chỉ: {my_gc}", value=f"**{quote_gc}**\n*{gc['desc']}*", inline=False)
+            if not my_tk and not my_tg: embed.color = gc.get('color', 0x00FFFF)
         else:
             embed.add_field(name="💍 Giới Chỉ", value="🥀 *Nhẫn cỏ ven đường.*", inline=True)
 
-        # --- DANH SÁCH VẬT PHẨM CHƯA CÓ CHỦ (Dùng dấu gạch ngang để scannable) ---
+        # --- HIỂN THỊ LINH THÚ (Bổ sung thêm để đủ bộ 4) ---
+        if my_pet:
+            embed.add_field(name=f"🐾 Linh Thú: {my_pet}", value=f"🐾 *Đang đồng hành cùng báu vật phương xa.*", inline=False)
+
+        # --- DANH SÁCH VẬT PHẨM VÔ CHỦ ---
         avail_text = ""
         if avail_tk: avail_text += f"⚔️ **Thần Khí:** {', '.join(avail_tk)}\n"
         if avail_tg: avail_text += f"🛡️ **Thánh Giáp:** {', '.join(avail_tg)}\n"
@@ -2348,17 +2355,16 @@ async def phong_than_bang(interaction: discord.Interaction):
     await interaction.response.defer()
     
     try:
-        # Sử dụng query tối ưu hơn
-        # Lưu ý: Đảm bảo đã chạy Bước 1 (Tạo Index) thì lệnh này mới nhanh
+        # 1. Cập nhật Query: Thêm điều kiện tìm kiếm "gioi_chi"
         cursor = users_col.find({
             "$or": [
                 {"than_khi": {"$exists": True, "$ne": None}},
                 {"thanh_giap": {"$exists": True, "$ne": None}},
-                {"pet": {"$exists": True, "$ne": None}}
+                {"pet": {"$exists": True, "$ne": None}},
+                {"gioi_chi": {"$exists": True, "$ne": None}} # Bổ sung Giới Chỉ
             ]
         })
         
-        # Giới hạn lấy 50 người để tránh timeout
         users_list = await cursor.to_list(length=50)
         
         if not users_list:
@@ -2369,45 +2375,59 @@ async def phong_than_bang(interaction: discord.Interaction):
             tk = u.get("than_khi")
             tg = u.get("thanh_giap")
             pet = u.get("pet")
+            gc = u.get("gioi_chi") # Lấy dữ liệu Giới Chỉ
             
             details = []
             if tk: details.append(f"⚔️ `{tk}`")
             if tg: details.append(f"🛡️ `{tg}`")
+            if gc: details.append(f"💍 `{gc}`") # Icon nhẫn cho Giới Chỉ
             if pet: details.append(f"🐾 `{pet}`")
             
             if details:
+                # Tính điểm ưu tiên: Càng nhiều báu vật càng đứng cao
                 leaderboard.append({
                     "id": u["_id"],
                     "count": len(details),
                     "details": " | ".join(details)
                 })
 
-        # Sắp xếp
+        # 2. Sắp xếp theo số lượng báu vật sở hữu
         leaderboard.sort(key=lambda x: x["count"], reverse=True)
 
-        embed = discord.Embed(title="✨ PHONG THẦN BẢNG ✨", color=0xFFD700)
+        embed = discord.Embed(
+            title="✨ PHONG THẦN BẢNG ✨", 
+            description="*Vinh danh những tu sĩ sở hữu báu vật hiếm nhất thiên hà*\n\n",
+            color=0xFFD700
+        )
+        
         top_str = ""
         
         # Chỉ hiển thị Top 15
         for i, entry in enumerate(leaderboard[:15]):
             try:
-                # Dùng fetch_member nếu get_member (cache) thất bại, nhưng để tránh chậm thì dùng fallback
                 member = interaction.guild.get_member(int(entry["id"]))
                 name = member.display_name if member else f"Ẩn danh ({entry['id'][-4:]})"
             except:
                 name = f"Tu sĩ ({entry['id'][-4:]})"
 
-            medal = ["🥇", "🥈", "🥉"][i] if i < 3 else f"**#{i+1}**"
+            # Huy chương cho Top 3
+            if i == 0: medal = "🥇"
+            elif i == 1: medal = "🥈"
+            elif i == 2: medal = "🥉"
+            else: medal = f"**#{i+1}**"
+
             top_str += f"{medal} **{name}**\n╰ {entry['details']}\n\n"
 
-        if not top_str: top_str = "Chưa có dữ liệu hiển thị."
+        if not top_str: 
+            top_str = "Chưa có dữ liệu hiển thị."
         
-        embed.description = top_str
+        embed.description += top_str
+        embed.set_footer(text="Báu vật tìm thấy tại Linh Sơn hoặc thảo phạt Ma Thần.")
         await interaction.followup.send(embed=embed)
 
     except Exception as e:
         print(f"Lỗi Phong Thần Bảng: {e}")
-        await interaction.followup.send("⚠️ Lỗi hệ thống, vui lòng thử lại sau.")
+        await interaction.followup.send("⚠️ Pháp trận nhiễu loạn, không thể xem bảng phong thần!")
 @bot.tree.command(name="bicanh", description="Khám phá Bí Cảnh (Trợ chiến không tốn lượt, dính bẫy cùng chịu)")
 @app_commands.describe(dong_doi="Mời đồng đội trợ chiến")
 async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = None):
@@ -2794,6 +2814,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
