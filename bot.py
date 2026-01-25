@@ -995,15 +995,12 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
                 value=f"📜 *{desc_vip}*\n🔥 **Khẩu quyết:** `{kq}`",
                 inline=False
             )
-            embed_vip.set_thumbnail(url="https://i.imgur.com/8N4I6XG.gif")
-
         if got_pet_this_turn:
             embed_vip.add_field(
                 name=f"🐾 LINH THÚ: {current_user_pet}",
                 value=f"Vạn thú quy phục, linh lực tràn đầy!",
                 inline=False
             )
-
         # Gộp các quà phụ vào field cuối
         misc_rewards = f"{new_eq_msg}\n{exp_str}" if new_eq_msg or exp_str else "Không có"
         embed_vip.add_field(name="🎁 Trang bị & Linh khí kèm theo", value=misc_rewards, inline=False)
@@ -2814,6 +2811,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
