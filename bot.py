@@ -714,64 +714,51 @@ async def info(interaction: discord.Interaction):
         await interaction.response.defer()
         uid = str(interaction.user.id)
         
-        # 1. Lấy dữ liệu
+        # 1. Lấy dữ liệu từ Database
         u = await users_col.find_one({"_id": uid})
         if not u:
             return await interaction.followup.send("⚠️ Đạo hữu chưa có tên trong sổ sinh tử!")
         
         eq = await eq_col.find_one({"_id": uid}) or {}
         
-        # 2. Thu thập thông tin
+        # 2. Thu thập thông tin cá nhân
         level = u.get("level", 1)
         cur_exp = u.get("exp", 0)
         linh_thach = u.get("linh_thach", 0)
         tien_thach = u.get("tien_thach", 0)
         pet_name = u.get("pet")
-        
         than_khi_name = u.get("than_khi")
         thanh_giap_name = u.get("thanh_giap")
-        gioi_chi = u.get("gioi_chi") # Dùng duy nhất tên này
-        
+        gioi_chi = u.get("gioi_chi")
         an_de_name = u.get("an_de")
         duc_an_progress = u.get("duc_an_progress", 0)
 
-        # 3. Xử lý hiển thị Trang bị (Ưu tiên đồ VIP)
-        
-        # --- VŨ KHÍ (Thần Khí) ---
-        if than_khi_name:
-            weapon_display = f"🌟 **{than_khi_name}**"
-        else:
-            kiem_lv = eq.get("Kiếm", 0)
-            weapon_display = f"⚔️ Kiếm Cấp {kiem_lv}" if kiem_lv > 0 else "⚔️ Vô nhận kiếm"
-
-        # --- GIỚI CHỈ (Thánh Giới Chỉ) ---
-        if gioi_chi: # Kiểm tra đúng biến gioi_chi
-            nhan_display = f"💍 **{gioi_chi}**"
-        else:
-            nhan_lv = eq.get("Nhẫn", 0) or eq.get("Giới Chỉ", 0)
-            nhan_display = f"💍 Nhẫn Cấp {nhan_lv}" if nhan_lv > 0 else "💍 Nhẫn Cỏ"
-
-        # --- GIÁP (Thánh Giáp) ---
+        # 3. Xử lý hiển thị Trang bị (Ưu tiên bảo vật)
+        # Vũ khí
+        weapon_display = f"🌟 **{than_khi_name}**" if than_khi_name else f"⚔️ Kiếm Cấp {eq.get('Kiếm', 0)}"
+        # Giới chỉ
+        nhan_display = f"💍 **{gioi_chi}**" if gioi_chi else f"💍 Nhẫn Cấp {eq.get('Nhẫn', 0) or eq.get('Giới Chỉ', 0)}"
+        # Giáp
         icon_giap = "<:emoji_31:1464123093579731005>"
-        if thanh_giap_name:
-            giap_display = f"{icon_giap} **{thanh_giap_name}**"
-        else:
-            giap_lv = eq.get("Giáp", 0)
-            giap_display = f"{icon_giap} Giáp Cấp {giap_lv}" if giap_lv > 0 else f"{icon_giap} Bố y"
+        giap_display = f"{icon_giap} **{thanh_giap_name}**" if thanh_giap_name else f"{icon_giap} Giáp Cấp {eq.get('Giáp', 0)}"
 
         # 4. Tính toán Lực chiến & Cảnh giới
         total_power = await calc_power(uid)
         display_canh_gioi = get_realm(level)
 
-        # 5. Xác định màu sắc Embed
+        # 5. Thiết lập màu sắc và danh hiệu theo cấp độ
+        is_immortal = level >= 81
         embed_color = discord.Color.blue()
-        if level >= 81:
-            embed_color = discord.Color.from_rgb(255, 0, 0) # Đỏ
-        elif than_khi_name or thanh_giap_name or gioi_chi or an_de_name:
-            embed_color = discord.Color.gold() # Vàng kim
+        header_title = f"📜 HỒ SƠ TU TIÊN: {interaction.user.display_name}"
+
+        if is_immortal:
+            embed_color = discord.Color.from_rgb(255, 0, 0) # Đỏ bậc Tiên
+            header_title = f"🌌 [BẬC TIÊN] {interaction.user.display_name}"
+        elif than_khi_name or thanh_giap_name or gioi_chi:
+            embed_color = discord.Color.gold() # Vàng báu vật
 
         # 6. Khởi tạo Embed chính
-        embed = discord.Embed(title=f"📜 HỒ SƠ TU TIÊN: {interaction.user.display_name}", color=embed_color)
+        embed = discord.Embed(title=header_title, color=embed_color)
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
         
         embed.add_field(name="📜 Cảnh Giới", value=f"**{display_canh_gioi}**", inline=False)
@@ -780,7 +767,7 @@ async def info(interaction: discord.Interaction):
         tai_san_str = f"🔹 Linh Thạch: `{linh_thach:,}`\n🔮 Tiên Thạch: `{tien_thach:,}`"
         embed.add_field(name="💎 Tài Sản", value=tai_san_str, inline=True)
 
-        # Kinh nghiệm
+        # Linh lực (EXP)
         needed = exp_needed(level) if level % 10 != 0 else "Đỉnh Phong"
         exp_val = f"`{int(cur_exp):,} / {needed:,}`" if isinstance(needed, int) else f"`{int(cur_exp):,} / {needed}`"
         embed.add_field(name="✨ Linh Lực", value=exp_val, inline=False)
@@ -797,18 +784,28 @@ async def info(interaction: discord.Interaction):
         
         # Linh thú và Ấn đế
         an_display = f"👑 **{an_de_name}**" if an_de_name else f"🔨 *Đang đúc ({duc_an_progress}/10)*" if duc_an_progress > 0 else "❌ *Chưa có*"
-        extra_str = (
-            f"🐾 **{pet_name or 'Chưa có'}**\n"
-            f"{an_display}"
-        )
+        extra_str = f"🐾 **{pet_name or 'Chưa có'}**\n{an_display}"
         embed.add_field(name="🦄 Linh Thú & Ấn", value=extra_str, inline=True)
 
-        await interaction.followup.send(embed=embed)
+        # 7. Xử lý gửi Embed (Kèm Embed phụ nếu là Bậc Tiên)
+        if is_immortal:
+            import random
+            chan_ngon = random.choice(DAN_NGON)
+            
+            sub_embed = discord.Embed(
+                description=f"🌌 **THIÊN ĐẠO CHÂN NGÔN**\n\n*\"{chan_ngon}\"*",
+                color=0x000000
+            )
+            sub_embed.set_footer(text="◈ Uy áp Tiên nhân: Vạn dân bái phục ◈")
+            
+            await interaction.followup.send(embeds=[embed, sub_embed])
+        else:
+            embed.set_footer(text="Hữu duyên thiên lý năng tương ngộ.")
+            await interaction.followup.send(embed=embed)
 
     except Exception as e:
         print(f"❌ Lỗi lệnh check: {e}")
-        try: await interaction.followup.send("⚠️ Linh lực hỗn loạn, không thể xem hồ sơ!")
-        except: pass
+        await interaction.followup.send("⚠️ Linh lực hỗn loạn, không thể xem hồ sơ!")
 @bot.tree.command(name="diemdanh", description="Điểm danh nhận cơ duyên thăng 1 cấp")
 async def diemdanh(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -2605,7 +2602,7 @@ async def haiduoc(interaction: discord.Interaction):
 @bot.tree.command(name="thuhoach", description="Trở về từ Linh Sơn và bán thảo dược")
 async def thuhoach(interaction: discord.Interaction):
     ALLOWED_CHANNEL_ID = 1461017212365181160
-    VIP_UID = "472564016917643264" # Thay bằng ID Discord bạn muốn ưu tiên (ví dụ: "123456789")
+    VIP_UID = "" # Thay bằng ID Discord bạn muốn ưu tiên (ví dụ: "123456789")
     
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
         return await interaction.response.send_message(
@@ -2811,6 +2808,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
