@@ -2436,32 +2436,37 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
     uid = str(interaction.user.id)
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # 1. Kiểm tra Người mời (Chủ phòng)
+    # 1. KIỂM TRA NGƯỜI MỜI (CHỦ PHÒNG)
     u_data = await users_col.find_one({"_id": uid})
     if not u_data: 
         return await interaction.response.send_message("❌ Đạo hữu chưa có hồ sơ tu tiên!", ephemeral=True)
     
     u_bc = u_data.get("bicanh_daily", {"date": "", "count": 0, "trong_thuong": False})
     
+    # Reset lượt nếu sang ngày mới
     if u_bc.get("date") != today:
         u_bc = {"date": today, "count": 0, "trong_thuong": False}
 
-    if u_bc.get("trong_thuong") is True:
-        return await interaction.response.send_message("❌ Đạo hữu đang trọng thương do dính bẫy, cần tịnh dưỡng qua ngày mai!", ephemeral=True)
+    # Kiểm tra trạng thái
+    if u_bc.get("trong_thuong"):
+        return await interaction.response.send_message("❌ Đạo hữu đang trọng thương, cần tịnh dưỡng qua ngày mai!", ephemeral=True)
     if u_bc.get("count", 0) >= 3:
-        return await interaction.response.send_message("❌ Đạo hữu đã hết lượt tự thám hiểm Bí Cảnh hôm nay! Hãy quay lại vào ngày mai.", ephemeral=True)
-    # 2. Kiểm tra Đồng đội
+        return await interaction.response.send_message("❌ Đạo hữu đã hết 3 lượt thám hiểm hôm nay!", ephemeral=True)
+
+    # 2. KIỂM TRA ĐỒNG ĐỘI (NẾU CÓ)
     tid = str(dong_doi.id) if dong_doi else None
     if tid:
-        if tid == uid: return await interaction.response.send_message("❌ Không thể tự mời mình!", ephemeral=True)
+        if tid == uid: 
+            return await interaction.response.send_message("❌ Không thể tự mời mình!", ephemeral=True)
         t_data = await users_col.find_one({"_id": tid})
-        if not t_data: return await interaction.response.send_message(f"❌ {dong_doi.display_name} chưa tu hành!", ephemeral=True)
+        if not t_data: 
+            return await interaction.response.send_message(f"❌ {dong_doi.display_name} chưa tu hành!", ephemeral=True)
         
         t_bc = t_data.get("bicanh_daily", {"date": "", "count": 0, "trong_thuong": False})
         if t_bc.get("date") != today:
             t_bc = {"date": today, "count": 0, "trong_thuong": False}
 
-        if t_bc.get("trong_thuong") is True:
+        if t_bc.get("trong_thuong"):
             return await interaction.response.send_message(f"❌ {dong_doi.display_name} đang trọng thương, không thể trợ chiến!", ephemeral=True)
 
     # --- VIEW CHỌN BÍ CẢNH ---
@@ -2481,71 +2486,101 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
             cfg = BI_CANH_CONFIG[choice]
             await i.response.defer()
 
+            # Tính toán sức mạnh
             p1_pwr = await calc_power(uid)
             p2_pwr = await calc_power(tid) if tid else 0
             total_pwr = p1_pwr + p2_pwr
 
             roll = random.random()
-            new_count = u_bc["count"] + 1
+            new_count = u_bc["count"] + 1 # Tăng lượt ngay tại đây
             msg, color = "", discord.Color.blue()
 
-            # --- A. DÍNH BẪY ---
+            # --- TRƯỜNG HỢP A: DÍNH BẪY ---
             if roll < cfg["trap_chance"]:
                 penalty = cfg["trap_penalty"]
-                await users_col.update_one(
-                    {"_id": uid}, 
-                    {"$inc": {"exp": -penalty}, "$set": {"bicanh_daily": {"date": today, "count": 3, "trong_thuong": True}}}
-                )
+                # Khóa luôn 3 lượt và đánh dấu trọng thương
+                update_query = {
+                    "$inc": {"exp": -penalty}, 
+                    "$set": {"bicanh_daily": {"date": today, "count": 3, "trong_thuong": True}}
+                }
+                await users_col.update_one({"_id": uid}, update_query)
+                
                 if tid:
                     await users_col.update_one(
                         {"_id": tid}, 
                         {"$set": {"bicanh_daily.date": today, "bicanh_daily.trong_thuong": True}}
                     )
+                
                 await check_level_down(uid)
-                msg = f"💥 **ĐẠI NẠN:** Dính cạm bẫy tổn thất `{penalty}` EXP. \n💀 **HẬU QUẢ:** Cả hai bị trọng thương, không thể tiếp tục thám hiểm hôm nay!"
+                msg = f"💥 **ĐẠI NẠN:** Dính cạm bẫy tổn thất `{penalty}` EXP.\n💀 **HẬU QUẢ:** Trọng thương, mất toàn bộ lượt đi hôm nay!"
                 color = discord.Color.red()
 
-            # --- B. CHIẾN BOSS (Có Buff Hồ Ly) ---
+            # --- TRƯỜNG HỢP B: CHIẾN BOSS ---
             elif roll < (cfg["trap_chance"] + cfg["boss_chance"]):
                 win_rate = min(total_pwr / (cfg["boss_power"] * 1.0), 0.9)
+                
                 if random.random() < win_rate:
-                    # TÍNH TOÁN BUFF HỒ LY
+                    # Buff Hồ Ly
                     fox_bonus = 0
                     if u_data.get("pet") == "Hóa Hình Hồ Ly":
                         fox_cfg = globals().get("PET_CONFIG", {}).get("Hóa Hình Hồ Ly", {})
                         fox_bonus = int(cfg["lt"] * fox_cfg.get("lt_buff", 0.2))
 
                     total_lt = cfg["lt"] + fox_bonus
-                    drop_msg = ""
                     
+                    # Cập nhật kết quả Thắng & Tăng lượt đi
+                    await users_col.update_one(
+                        {"_id": uid}, 
+                        {
+                            "$inc": {"exp": cfg["exp"], "linh_thach": total_lt},
+                            "$set": {"bicanh_daily.count": new_count, "bicanh_daily.date": today}
+                        }
+                    )
+
+                    # Rơi Tiên Thạch
+                    drop_msg = ""
                     if random.random() < cfg.get("tien_thach_chance", 0):
                         amt = cfg.get("tien_thach_amount", 1)
                         await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": amt}})
-                        drop_msg = f"\n🔮 **CƠ DUYÊN:** Chủ phòng nhặt được `{amt}` Tiên Thạch!"
+                        drop_msg = f"\n🔮 **CƠ DUYÊN:** Nhặt được `{amt}` Tiên Thạch!"
 
-                    await users_col.update_one(
-                        {"_id": uid}, 
-                        {"$inc": {"exp": cfg["exp"], "linh_thach": total_lt}, "$set": {"bicanh_daily.count": new_count}}
-                    )
                     await check_level_up(uid, i.channel, i.user.display_name)
-                    
-                    fox_info = f" (🦊 +{fox_bonus})" if fox_bonus > 0 else ""
-                    msg = f"⚔️ **THẮNG BOSS:** Chủ phòng nhận `+{cfg['exp']}` EXP, `+{total_lt}` 💎{fox_info}.{drop_msg}"
+                    msg = f"⚔️ **THẮNG BOSS:** Nhận `+{cfg['exp']}` EXP, `+{total_lt}` 💎 (🦊 +{fox_bonus}).{drop_msg}"
                     color = discord.Color.green()
                 else:
+                    # Bại trận & Tăng lượt đi
                     penalty = cfg["trap_penalty"] // 2
-                    await users_col.update_one({"_id": uid}, {"$inc": {"exp": -penalty}, "$set": {"bicanh_daily.count": new_count}})
+                    await users_col.update_one(
+                        {"_id": uid}, 
+                        {
+                            "$inc": {"exp": -penalty},
+                            "$set": {"bicanh_daily.count": new_count, "bicanh_daily.date": today}
+                        }
+                    )
                     await check_level_down(uid)
-                    msg = f"💀 **BẠI TRẬN:** Boss quá mạnh, chủ phòng tổn thất `-{penalty}` EXP!"
+                    msg = f"💀 **BẠI TRẬN:** Boss quá mạnh, tổn thất `-{penalty}` EXP!"
                     color = discord.Color.dark_red()
 
-            # --- C. KHO BÁU / LANG THANG ---
+            # --- TRƯỜNG HỢP C: LANG THANG / KHO BÁU ---
             else:
-                await users_col.update_one({"_id": uid}, {"$inc": {"exp": cfg["exp"]}, "$set": {"bicanh_daily.count": new_count}})
+                # Thành công & Tăng lượt đi
+                await users_col.update_one(
+                    {"_id": uid}, 
+                    {
+                        "$inc": {"exp": cfg["exp"]},
+                        "$set": {"bicanh_daily.count": new_count, "bicanh_daily.date": today}
+                    }
+                )
                 msg = f"✨ **THÀNH CÔNG:** Khám phá bí cảnh nhận `+{cfg['exp']}` EXP."
                 color = discord.Color.gold()
 
-            await i.edit_original_response(content=None, embed=discord.Embed(title=f"🏔️ {cfg['name']}", description=msg, color=color), view=None)
+            # Phản hồi kết quả kèm số lượt còn lại
+            final_msg = f"{msg}\n📊 **Lượt hôm nay:** `{new_count}/3`"
+            await i.edit_original_response(
+                content=None, 
+                embed=discord.Embed(title=f"🏔️ {cfg['name']}", description=final_msg, color=color), 
+                view=None
+            )
 
     # --- VIEW XÁC NHẬN MỜI ĐỒNG ĐỘI ---
     class ConfirmView(discord.ui.View):
@@ -2555,7 +2590,8 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 
         @discord.ui.button(label="Đồng Ý", style=discord.ButtonStyle.green, emoji="⚔️")
         async def confirm(self, i: discord.Interaction, btn: discord.ui.Button):
-            if str(i.user.id) != tid: return
+            if str(i.user.id) != tid: 
+                return await i.response.send_message("❌ Lời mời này không dành cho đạo hữu!", ephemeral=True)
             await i.response.edit_message(content=f"✅ **{dong_doi.display_name}** đã gia nhập pháp trận!", view=None)
             await self.interaction.edit_original_response(view=BiCanhSelectView())
 
@@ -2566,7 +2602,10 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 
     # KHỞI CHẠY LỆNH
     if dong_doi:
-        await interaction.response.send_message(content=f"📜 {interaction.user.mention} mời {dong_doi.mention} trợ chiến Bí Cảnh!\n*(Hỗ trợ không tốn lượt, dính bẫy dính họa chung)*", view=ConfirmView(interaction))
+        await interaction.response.send_message(
+            content=f"📜 {interaction.user.mention} mời {dong_doi.mention} trợ chiến Bí Cảnh!\n*(Trợ chiến không tốn lượt, dính bẫy cùng chịu)*", 
+            view=ConfirmView(interaction)
+        )
     else:
         await interaction.response.send_message(content="🏔️ Chọn Bí Cảnh thám hiểm:", view=BiCanhSelectView())
 #full lệnh hái dược
@@ -2815,6 +2854,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
