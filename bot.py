@@ -2448,9 +2448,8 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 
     if u_bc.get("trong_thuong") is True:
         return await interaction.response.send_message("❌ Đạo hữu đang trọng thương do dính bẫy, cần tịnh dưỡng qua ngày mai!", ephemeral=True)
-    if u_bc["count"] >= 3:
-        return await interaction.response.send_message("❌ Đạo hữu đã hết lượt tự thám hiểm hôm nay!", ephemeral=True)
-
+    if u_bc.get("count", 0) >= 3:
+        return await interaction.response.send_message("❌ Đạo hữu đã hết lượt tự thám hiểm Bí Cảnh hôm nay! Hãy quay lại vào ngày mai.", ephemeral=True)
     # 2. Kiểm tra Đồng đội
     tid = str(dong_doi.id) if dong_doi else None
     if tid:
@@ -2816,6 +2815,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
