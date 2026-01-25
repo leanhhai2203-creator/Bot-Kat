@@ -1144,13 +1144,13 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
     await interaction.followup.send(content=f"⚔️ **{interaction.user.display_name}** thách đấu **{target.mention}**!", view=SoloView())
 @bot.tree.command(name="dotpha", description="Đột phá cảnh giới (Cần Tiên Thạch từ cấp 80+)")
 async def dotpha(interaction: discord.Interaction):
-    # ƯU TIÊN SỐ 1: Phản hồi Discord ngay lập tức để tránh lỗi 404 Unknown Interaction
     await interaction.response.defer()
     
     uid = str(interaction.user.id)
-    
+    # --- DANH SÁCH ID ĐƯỢC THIÊN ĐẠO ƯU ÁI ---
+    VIP_LIST = ["472564016917643264"] 
+
     try:
-        # 1. Truy xuất dữ liệu (Sau khi đã defer)
         u = await users_col.find_one({"_id": uid})
         if not u: 
             return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ tu tiên!")
@@ -1161,31 +1161,29 @@ async def dotpha(interaction: discord.Interaction):
         exp = u.get("exp", 0)
         luck_bonus = u.get("luck_bonus", 0) 
 
-        # 2. Kiểm tra điều kiện đỉnh phong
+        # Kiểm tra điều kiện đỉnh phong
         if lv % 10 != 0:
             return await interaction.followup.send(f"❌ Cần đạt đỉnh phong cấp {lv//10*10+10} để đột phá. Hiện tại: **Cấp {lv}**")
 
-        # Kiểm tra EXP (Sử dụng hàm của đạo hữu)
         needed = exp_needed(lv)
         if exp < needed:
-            return await interaction.followup.send(f"❌ Tu vi chưa đủ! (Cần {int(exp)}/{needed} EXP)")
+            return await interaction.followup.send(f"❌ Tu vi chưa đủ!")
 
-        # Phí tài nguyên
         required_lt = 3 if lv < 30 else (10 if lv < 60 else (15 if lv < 80 else 20))
         needs_tien_thach = (lv >= 80)
         
         if linh_thach < required_lt:
-            return await interaction.followup.send(f"❌ Cần **{required_lt} Linh thạch**.")
+            return await interaction.followup.send(f"❌ Linh thạch không đủ để khởi động pháp trận.")
         
         if needs_tien_thach and tien_thach < 1:
-            return await interaction.followup.send(f"❌ Cảnh giới cao cần thêm **1 Tiên Thạch** 🔮!")
+            return await interaction.followup.send(f"❌ Cảnh giới cao cần thêm **1 Tiên Thạch** để trấn giữ tâm ma!")
 
-        # 3. Quét trang bị tính Buff (Sử dụng globals().get để tránh NameError)
+        # Quét trang bị tính Buff rủi ro
         equipment_map = [
             ("pet", globals().get('PET_CONFIG', {}), "🐾"),
             ("an_de", globals().get('AN_DE_DATA', {}), "👑"),
             ("thanh_giap", globals().get('THANH_GIAP_CONFIG', {}), "🛡️"),
-            ("thanh_nhan", globals().get('THANH_NHAN_CONFIG', {}), "💍"),
+            ("gioi_chi", globals().get('GIOI_CHI_CONFIG', {}), "💍"),
             ("than_khi", globals().get('THAN_KHI_CONFIG', {}), "🌟")
         ]
         
@@ -1203,36 +1201,30 @@ async def dotpha(interaction: discord.Interaction):
                     total_risk_reduce += red
                     protection_sources.append(f"{icon} {item_name}")
 
-        # 4. Tính toán tỉ lệ thành công
-        realm_index = lv // 10
-        base_rate = max(5, 90 - (realm_index * 10))
-        final_rate = base_rate + total_break_buff + luck_bonus
-        
-        # Thực hiện quay số
-        success = random.randint(1, 100) <= final_rate
+        # --- LOGIC TÍNH TOÁN KÍN ---
+        if uid in VIP_LIST:
+            success = True
+        else:
+            realm_index = lv // 10
+            base_rate = max(5, 90 - (realm_index * 10))
+            final_rate = base_rate + total_break_buff + luck_bonus
+            success = random.randint(1, 100) <= final_rate
 
-        # Cấu trúc query update phí
         update_query = {"$inc": {"linh_thach": -required_lt}}
         if needs_tien_thach:
             update_query["$inc"]["tien_thach"] = -1
 
-        # 5. Xử lý kết quả
         if success:
-            # THÀNH CÔNG
             update_query["$set"] = {"level": lv + 1, "exp": 0, "luck_bonus": 0}
             await users_col.update_one({"_id": uid}, update_query)
             
-            try:
-                new_realm_name = get_realm(lv + 1)
-            except:
-                new_realm_name = f"Cảnh giới mới (Cấp {lv + 1})"
+            try: new_realm_name = get_realm(lv + 1)
+            except: new_realm_name = f"Cảnh giới mới (Cấp {lv + 1})"
 
+            # Thông báo rút gọn, không hiển thị %
             embed = discord.Embed(
                 title="🔥 ĐỘT PHÁ THÀNH CÔNG 🔥",
-                description=(
-                    f"🎉 **{interaction.user.display_name}** đã phi thăng lên **{new_realm_name}**!\n"
-                    f"✨ Tỉ lệ: `{final_rate}%` (Buff: +{total_break_buff}%)"
-                ),
+                description=f"🎉 **{interaction.user.display_name}** đã phi thăng lên **{new_realm_name}**!\n*Đạo tâm kiên định, thiên địa chúc phúc.*",
                 color=discord.Color.gold()
             )
             await interaction.followup.send(embed=embed)
@@ -1245,7 +1237,6 @@ async def dotpha(interaction: discord.Interaction):
                 base_tut = random.randint(2, 5)
                 loi_kiep_msg = "\n⚡ **LÔI KIẾP BẤT NGỜ!** Đạo tâm bị chấn động!"
 
-            # Giảm rủi ro (Tối đa 90%)
             total_risk_reduce = min(total_risk_reduce, 0.9)
             tut_cap = max(1, int(base_tut * (1 - total_risk_reduce)))
             new_luck = luck_bonus + 5
@@ -1258,22 +1249,18 @@ async def dotpha(interaction: discord.Interaction):
             fail_embed = discord.Embed(
                 title="💥 ĐỘT PHÁ THẤT BẠI 💥",
                 description=(
-                    f"😔 **{interaction.user.display_name}** đã gục ngã!{loi_kiep_msg}{prot_msg}\n"
-                    f"📉 Khấu trừ: **{tut_cap} cấp**\n"
-                    f"🛡️ **BẢO HIỂM:** Tỉ lệ lần tới tăng: **+{new_luck}%**\n"
-                    f"💸 Mất: `{required_lt} LT`" + (f" và `1 Tiên Thạch`" if needs_tien_thach else "")
+                    f"😔 **{interaction.user.display_name}** đã gục ngã trước thiên kiếp!{loi_kiep_msg}{prot_msg}\n"
+                    f"📉 Tu vi bị tổn hại: **Khấu trừ {tut_cap} cấp**\n"
+                    f"💸 Tổn thất tài nguyên đạo cụ đột phá."
                 ),
                 color=discord.Color.red()
             )
             await interaction.followup.send(embed=fail_embed)
 
     except Exception as e:
-        # Log lỗi ra Render để đạo hữu kiểm tra
-        print(f"CRITICAL ERROR: {e}")
-        try:
-            await interaction.followup.send(f"⚠️ Pháp trận nhiễu loạn! Lỗi: `{e}`")
-        except:
-            pass
+        import traceback
+        traceback.print_exc()
+        await interaction.followup.send(f"⚠️ Pháp trận nhiễu loạn, đột phá bị gián đoạn!")
 @bot.tree.command(name="huongdan", description="Xem bí kíp tu tiên - Hướng dẫn chi tiết cách chơi")
 async def huongdan(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -2646,12 +2633,14 @@ async def haiduoc(interaction: discord.Interaction):
 @bot.tree.command(name="thuhoach", description="Trở về từ Linh Sơn và bán thảo dược")
 async def thuhoach(interaction: discord.Interaction):
     ALLOWED_CHANNEL_ID = 1461017212365181160
+    VIP_UID = "472564016917643264" # Thay bằng ID Discord bạn muốn ưu tiên (ví dụ: "123456789")
     
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
         return await interaction.response.send_message(
             f"❌ Linh Sơn không nằm ở đây! Đạo hữu phải đến kênh <#{ALLOWED_CHANNEL_ID}> mới có thể thu hoạch.", 
             ephemeral=True
         )
+    
     uid = str(interaction.user.id)
     user_data = await users_col.find_one({"_id": uid})
     
@@ -2675,8 +2664,12 @@ async def thuhoach(interaction: discord.Interaction):
     exp_reward = random.randint(0, 300)
     
     rare_msg = ""
-    # 1% tỉ lệ rơi Tiên Thạch
-    if random.random() < 0.01:
+    
+    # --- LOGIC TIÊN THẠCH CẢI TIẾN ---
+    # Nếu là ID đặc biệt thì tỉ lệ là 100%, ngược lại là 1%
+    drop_rate = 1.0 if uid == VIP_UID else 0.01
+    
+    if random.random() < drop_rate:
         await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": 1}})
         rare_msg = "\n🔮 **CƠ DUYÊN:** Đạo hữu nhặt được một viên **Tiên Thạch** ẩn dưới gốc linh chi!"
 
@@ -2846,6 +2839,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
