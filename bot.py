@@ -2268,7 +2268,7 @@ async def pet_show(interaction: discord.Interaction):
     embed_res.set_footer(text="Khí thế chấn động bát hoang!")
 
     await interaction.followup.send(content=f"📡 **Thông cáo thiên hạ:**", embed=embed_res)
-@bot.tree.command(name="thankhi", description="Thị uy Thần Khí, Thánh Giáp và kiểm tra báu vật thất lạc")
+@bot.tree.command(name="thankhi", description="Thị uy Linh Bảo và kiểm tra báu vật thất lạc trên thế gian")
 async def show_thankhi(interaction: discord.Interaction):
     await interaction.response.defer()
     uid = str(interaction.user.id)
@@ -2288,22 +2288,33 @@ async def show_thankhi(interaction: discord.Interaction):
     }
 
     try:
-        # 2. TRUY VẤN DỮ LIỆU TỪ DATABASE
+        # 2. TRUY VẤN DỮ LIỆU
         u = await users_col.find_one({"_id": uid})
         my_tk = u.get("than_khi")
         my_tg = u.get("thanh_giap")
+        my_gc = u.get("gioi_chi")
 
-        # Quét chủ nhân hiện tại của cực phẩm trên toàn server
+        # Quét chủ nhân toàn server
         owned_tk = await users_col.distinct("than_khi", {"than_khi": {"$ne": None}})
         owned_tg = await users_col.distinct("thanh_giap", {"thanh_giap": {"$ne": None}})
+        owned_gc = await users_col.distinct("gioi_chi", {"gioi_chi": {"$ne": None}})
 
-        # Lọc danh sách vô chủ (Chỉ lấy tên)
+        # Lọc danh sách vô chủ
         avail_tk = [name for name in THAN_KHI_DATA.keys() if name not in owned_tk]
         avail_tg = [name for name in THANH_GIAP_CONFIG.keys() if name not in owned_tg]
+        avail_gc = [name for name in GIOI_CHI_CONFIG.keys() if name not in owned_gc]
+
+        # Đếm số lượng báu vật đang sở hữu
+        count = sum(1 for x in [my_tk, my_tg, my_gc] if x)
+        medals = "⭐" * count if count > 0 else "🌑"
 
         # 3. KHỞI TẠO EMBED
-        embed = discord.Embed(title="🏛️ LINH BẢO MINH BẢNG", color=0x2F3136)
-        embed.set_author(name=f"Tu sĩ: {interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
+        embed = discord.Embed(
+            title=f"🏛️ LINH BẢO MINH BẢNG", 
+            description=f"**Cấp bậc bảo vật:** {medals} ({count}/3 cực phẩm tái thế)",
+            color=0x2F3136
+        )
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
 
         # --- HIỂN THỊ THẦN KHÍ ---
         if my_tk in THAN_KHI_DATA:
@@ -2311,35 +2322,39 @@ async def show_thankhi(interaction: discord.Interaction):
             embed.add_field(name=f"{tk['icon']} Thần Khí: {my_tk}", value=f"**{tk['quote']}**\n*{tk['desc']}*", inline=False)
             embed.color = tk['color']
         else:
-            embed.add_field(name="⚔️ Thần Khí", value="🥀 *Cơ duyên chưa tới, báu vật chưa tìm.*", inline=True)
+            embed.add_field(name="⚔️ Thần Khí", value="🥀 *Cơ duyên chưa tới.*", inline=True)
 
-        # --- HIỂN THỊ THÁNH GIÁP (Chỉ lấy khẩu ngữ desc) ---
-        # Hiển thị Thánh Giáp cá nhân
+        # --- HIỂN THỊ THÁNH GIÁP ---
         if my_tg in THANH_GIAP_CONFIG:
             tg = THANH_GIAP_CONFIG[my_tg]
-            # Hiển thị Quote (Khẩu ngữ) và Desc (Mô tả)
-            embed.add_field(
-                name=f"🛡️ Thánh Giáp: {my_tg}", 
-                value=f"## {tg.get('quote', '『 HÀO QUANG VẠN TRƯỢNG 』')}\n\n*{tg['desc']}*", 
-                inline=False
-            )
+            embed.add_field(name=f"🛡️ Thánh Giáp: {my_tg}", value=f"**{tg.get('quote', '『 HÀO QUANG VẠN TRƯỢNG 』')}**\n*{tg['desc']}*", inline=False)
             if not my_tk: embed.color = tg['color']
         else:
-            embed.add_field(name="🛡️ Thánh Giáp", value="🥀 *Thân đơn bóng chiếc, chưa mặc giáp trụ.*", inline=True)
-        # --- DANH SÁCH VẬT PHẨM CHƯA CÓ CHỦ ---
-        if avail_tk:
-            embed.add_field(name="🏛️ Thần Khí Vô Chủ", value=", ".join([f"**{t}**" for t in avail_tk]), inline=False)
+            embed.add_field(name="🛡️ Thánh Giáp", value="🥀 *Chưa mặc giáp trụ.*", inline=True)
+
+        # --- HIỂN THỊ THÁNH GIỚI CHỈ ---
+        if my_gc in GIOI_CHI_CONFIG:
+            gc = GIOI_CHI_CONFIG[my_gc]
+            embed.add_field(name=f"💍 Thánh Giới Chỉ: {my_gc}", value=f"**『 {gc['khau_quyet']} 』**\n*{gc['desc']}*", inline=False)
+            if not my_tk and not my_tg: embed.color = gc['color']
+        else:
+            embed.add_field(name="💍 Giới Chỉ", value="🥀 *Nhẫn cỏ ven đường.*", inline=True)
+
+        # --- DANH SÁCH VẬT PHẨM CHƯA CÓ CHỦ (Dùng dấu gạch ngang để scannable) ---
+        avail_text = ""
+        if avail_tk: avail_text += f"⚔️ **Thần Khí:** {', '.join(avail_tk)}\n"
+        if avail_tg: avail_text += f"🛡️ **Thánh Giáp:** {', '.join(avail_tg)}\n"
+        if avail_gc: avail_text += f"💍 **Giới Chỉ:** {', '.join(avail_gc)}"
         
-        if avail_tg:
-            # Liệt kê tên các bộ giáp đang thất lạc
-            tg_text = ", ".join([f"**{t}**" for t in avail_tg])
-            embed.add_field(name="🛡️ Thánh Giáp Thất Lạc", value=tg_text, inline=False)
+        if avail_text:
+            embed.add_field(name="🌍 Báu Vật Thất Lạc (Vô Chủ)", value=avail_text, inline=False)
 
         embed.set_footer(text="Hào quang vạn trượng, chỉ dành cho kẻ có chân mệnh thiên tử.")
         await interaction.followup.send(embed=embed)
 
     except Exception as e:
-        print(f"Lỗi lệnh thankhi: {e}")
+        import traceback
+        traceback.print_exc()
         await interaction.followup.send("⚠️ Thiên địa nhiễu loạn, minh bảng tạm thời bị che khuất.")
 @bot.tree.command(name="addthankhi", description="[ADMIN] Ban tặng Thần Khí thượng cổ cho tu sĩ")
 @app_commands.describe(target="Tu sĩ được ban tặng", ten_than_khi="Chọn Thần Khí từ danh sách")
@@ -2831,6 +2846,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
