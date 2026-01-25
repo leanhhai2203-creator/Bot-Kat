@@ -202,6 +202,27 @@ PET_CONFIG = {
             "🔥 Dưới đôi cánh lửa, tài bảo xuất thế, cơ duyên khó cưỡng!"
         ]
     },
+    "Thái Hư Cổ Long": {
+        "atk": 300, "hp": 5000, 
+        "break_buff": 0, "risk_reduce": 0,
+        "effect": "Tăng 15% Tổng Lực Chiến", "color": 0x1abc9c, "icon": "🐉",
+        "quotes": [
+            "🐉 Hư không vỡ nát, long ngâm chấn động cửu thiên thập địa!",
+            "🐉 Ta là chúa tể thái hư, sức mạnh này đủ để nghiền nát mọi quy tắc!",
+            "🐉 Kẻ nào dám nhìn thẳng vào mắt rồng? Chỉ có chủ nhân mới xứng đáng ngự trên lưng ta!"
+        ]
+    },
+    "Thánh Linh Khưu": {
+        "atk": 160, "hp": 3200,
+        "trap_heal": 0.8, 
+        "break_buff": 0, "risk_reduce": 0,
+        "effect": "Cung cấp khả năng chữa trị", "color": 0x33ff99, "icon": "🦌",
+        "quotes": [
+            "✨ Thánh quang phổ chiếu, vạn vật hồi sinh, thương thế tiêu tan!",
+            "✨ Đừng sợ hãi bẫy rập, linh lực của ta sẽ giữ cho đạo căn của ngài luôn vẹn toàn.",
+            "✨ Một hơi thở tiên gia, cải tử hoàn sinh. Dưới chân ngài, chông gai cũng hóa cỏ mềm!"
+        ]
+    },
     "U Minh Tước": {
         "atk": 220, "hp": 2000, 
         "break_buff": 0, "risk_reduce": 0,
@@ -2880,6 +2901,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
