@@ -964,7 +964,7 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
                 print(f"Lỗi Gacha Thánh Giới Chỉ: {e}")
 
         # 2. LOGIC LINH THÚ (0.1%)
-        if not current_user_pet and not got_pet_this_turn and random.random() <= 0.0015:
+        if not current_user_pet and not got_pet_this_turn and random.random() <= 0.001:
             try:
                 p_name = random.choice(list(PET_CONFIG.keys()))
                 await users_col.update_one({"_id": uid}, {"$set": {"pet": p_name}})
@@ -2901,6 +2901,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
