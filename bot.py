@@ -2566,19 +2566,22 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
             
             msg, color = "", discord.Color.blue()
             
-            # ===== TRƯỜNG HỢP 1: DÍNH BẪY (CẢ HAI CÙNG BỊ PHẠT) =====
             if roll < cfg["trap_chance"]:
                 penalty = cfg["trap_penalty"]
                 
-                # Cập nhật Chủ phòng: Trừ EXP + Set Count=3 + Set Trọng Thương=True
+                # Tính lượt đi mới (chỉ tăng thêm 1 thay vì set cứng bằng 3)
+                new_count_after_trap = u_bc.get("count", 0) + 1
+                if new_count_after_trap > 3: new_count_after_trap = 3 # Giới hạn tối đa là 3
+
+                # Cập nhật Chủ phòng: Trừ EXP + Tăng 1 lượt + Set Trọng Thương=True
                 await users_col.update_one(
                     {"_id": uid}, 
                     {
                         "$inc": {"exp": -penalty}, 
                         "$set": {
                             "bicanh_daily.date": today,
-                            "bicanh_daily.count": 3, # Phạt hết lượt luôn
-                            "bicanh_daily.trong_thuong": True # Bị thương
+                            "bicanh_daily.count": new_count_after_trap, # Sửa ở đây: Chỉ tăng 1 lượt
+                            "bicanh_daily.trong_thuong": True # Vẫn bị trọng thương
                         }
                     }
                 )
@@ -3035,6 +3038,7 @@ async def chuathuong(interaction: discord.Interaction, target: discord.Member):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
