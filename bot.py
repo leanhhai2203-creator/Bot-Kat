@@ -1072,7 +1072,6 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
 
         @discord.ui.button(label="✅ Tiếp Chiến", style=discord.ButtonStyle.success)
         async def accept(self, i: discord.Interaction, button: discord.ui.Button):
-            # --- VẤN ĐỀ 1: CHỈ NGƯỜI BỊ THÁCH ĐẤU MỚI ĐƯỢC BẤM ---
             if str(i.user.id) != tid:
                 return await i.response.send_message("❌ Ngươi không phải đối tượng bị thách đấu!", ephemeral=True)
 
@@ -1080,11 +1079,9 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
             if bet > 0 and (curr_u1.get("linh_thach", 0) < bet or curr_u2.get("linh_thach", 0) < bet):
                 return await i.response.edit_message(content="❌ Một bên không đủ linh thạch!", view=None)
 
-            # --- LOGIC TÍNH TOÁN ---
             total_power = p1_power + p2_power if (p1_power + p2_power) > 0 else 1
             win_chance = p1_power / total_power
 
-            # Buff U Minh Tước
             u1_has_umt = curr_u1.get("pet") == "U Minh Tước"
             u2_has_umt = curr_u2.get("pet") == "U Minh Tước"
             if u1_has_umt: win_chance += 0.05
@@ -1102,7 +1099,7 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
                 await users_col.update_many({"_id": {"$in": [uid, tid]}}, {"$inc": {"linh_thach": -bet}})
                 await users_col.update_one({"_id": winner_id}, {"$inc": {"linh_thach": bet * 2}})
 
-            # --- VẤN ĐỀ 2 & 3: XỬ LÝ HIỂN THỊ (KHÔNG GHI ĐÈ) ---
+            # --- KHỞI TẠO BIẾN HIỂN THỊ ---
             winner_tg = winner_data.get("thanh_giap")
             winner_tk = winner_data.get("than_khi")
             winner_pet = winner_data.get("pet")
@@ -1111,9 +1108,10 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
             embed_color = discord.Color.gold()
             embed_title = "⚔️ TRẬN THƯ HÙNG KẾT THÚC ⚔️"
             special_msg = ""
+            umt_msg = ""
             uy_ap_msg = ""
 
-            # Bậc 1: Công thủ toàn diện/Cực phẩm (Ghép các loại trang bị)
+            # 1. XỬ LÝ TRANG BỊ VÀ PET THƯỜNG
             if winner_tk and winner_tg and winner_pet:
                 embed_color = discord.Color.from_rgb(255, 255, 255)
                 special_msg = f"🌌 **KHÍ VẬN NGHỊCH THIÊN!** {winner_name} mặc **{winner_tg}**, cầm **{winner_tk}**, cùng **{winner_pet}** quét sạch bát hoang!"
@@ -1127,16 +1125,22 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
                 embed_color = discord.Color.blue()
                 special_msg = f"🐾 Linh thú **{winner_pet}** gầm vang, trợ lực cho chủ nhân giành chiến thắng!"
 
-            # --- ĐẶC QUYỀN TIÊN NHÂN (CẤP 81+) ---
-            # Chỉ dành cho người thắng có Level >= 81
+            # 2. XỬ LÝ RIÊNG CHO U MINH TƯỚC (NẾU THẮNG CÓ UMT)
+            if winner_pet == "U Minh Tước":
+                embed_color = discord.Color.from_rgb(75, 0, 130) # Màu tím Indigo đặc trưng
+                embed_title = "🌀 U MINH NGHỊCH CHUYỂN 🌀"
+                # Lấy quote từ PET_CONFIG
+                umt_quotes = PET_CONFIG.get("U Minh Tước", {}).get("quotes", ["U Minh vĩnh hằng..."])
+                umt_msg = f"\n\n*\"{random.choice(umt_quotes)}\"*\n🌀 **U Minh Tước** tỏa ra hắc khí, nghịch chuyển cục diện!"
+
+            # 3. ĐẶC QUYỀN TIÊN NHÂN (CẤP 81+)
             if winner_lv >= 81:
-                embed_color = discord.Color.from_rgb(0, 0, 0) # Màu đen đặc trưng
+                embed_color = discord.Color.from_rgb(0, 0, 0) 
                 embed_title = f"🌌 [BẬC TIÊN] {embed_title}"
                 uy_ap_msg = f"\n\n**◈ {random.choice(TIEN_NHAN_QUOTES)}**"
-                # Thêm vào thông báo cũ thay vì thay thế hoàn toàn
                 special_msg = f"✨ **TIÊN NHÂN GIÁ LÂM!**\n{special_msg}"
 
-            # Hiển thị phần trăm
+            # --- TÍNH TOÁN HIỂN THỊ CHỈ SỐ ---
             p1_percent = round((p1_power / total_power) * 100, 1)
             p2_percent = round(100 - p1_percent, 1)
 
@@ -1149,8 +1153,10 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
                 f"💰 Kết quả: " + (f"Thắng cược **{bet} 💎**" if bet > 0 else "Vang danh thiên hạ")
             )
             
+            # Ghép nối các thông báo theo thứ tự
             if special_msg: desc += f"\n\n{special_msg}"
-            desc += uy_ap_msg
+            desc += umt_msg  # Hiển thị quote của UMT
+            desc += uy_ap_msg # Hiển thị uy áp Tiên Nhân
             
             result_embed.description = desc
             result_embed.set_footer(text="Hữu thắng hữu bại, chớ nên nản lòng.")
@@ -3026,6 +3032,7 @@ async def chuathuong(interaction: discord.Interaction, target: discord.Member):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
