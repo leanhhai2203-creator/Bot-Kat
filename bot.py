@@ -1135,8 +1135,8 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
 
             # 3. ĐẶC QUYỀN TIÊN NHÂN (CẤP 81+)
             if winner_lv >= 81:
-                embed_color = discord.Color.from_rgb(0, 0, 0) 
-                embed_title = f"🌌 [BẬC TIÊN] {embed_title}"
+                embed_color = discord.Color.from_rgb(255, 255, 0) 
+                embed_title = f"🌌 [TIÊN NHÂN] {embed_title}"
                 uy_ap_msg = f"\n\n**◈ {random.choice(TIEN_NHAN_QUOTES)}**"
                 special_msg = f"✨ **TIÊN NHÂN GIÁ LÂM!**\n{special_msg}"
 
@@ -3032,6 +3032,7 @@ async def chuathuong(interaction: discord.Interaction, target: discord.Member):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
