@@ -1088,9 +1088,7 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
             if u1_has_umt: win_chance += 0.05
             if u2_has_umt: win_chance -= 0.05
             
-            # Giới hạn tỷ lệ trong khoảng [0.05, 0.95] để tránh tuyệt đối
             win_chance = max(0.05, min(0.95, win_chance))
-            
             is_u1_win = random.random() <= win_chance
             
             # Xác định người thắng kẻ thua
@@ -1103,53 +1101,56 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
                 await users_col.update_many({"_id": {"$in": [uid, tid]}}, {"$inc": {"linh_thach": -bet}})
                 await users_col.update_one({"_id": winner_id}, {"$inc": {"linh_thach": bet * 2}})
 
-            # --- KIỂM TRA TRANG BỊ ---
+            # --- LẤY THÔNG TIN NGƯỜI THẮNG ---
             winner_tg = winner_data.get("thanh_giap")
             winner_tk = winner_data.get("than_khi")
             winner_pet = winner_data.get("pet")
             winner_lv = winner_data.get("level", 0)
 
+            # Thiết lập mặc định
             embed_color = discord.Color.gold()
-            special_msg = ""
             embed_title = "⚔️ TRẬN THƯ HÙNG KẾT THÚC ⚔️"
+            special_msg = ""
+            uy_ap_msg = ""
 
             # --- PHÂN CẤP HIỂN THỊ CHIẾN THẮNG ---
             
-            # BẬC VIP: U MINH TƯỚC TRỢ CHIẾN (Ưu tiên hiển thị nếu có)
-            if winner_pet == "U Minh Tước":
-                embed_color = discord.Color.from_rgb(75, 0, 130) # Màu Indigo/Purple tối
-                embed_title = "🌀 U MINH NGHỊCH CHUYỂN - CHIẾN THẮNG 🌀"
-                # Lấy ngẫu nhiên 1 câu thoại từ config linh thú
+            # 1. KIỂM TRA BẬC TIÊN (LEVEL > 80) - ƯU TIÊN CAO NHẤT
+            if winner_lv >= 80:
+                embed_color = discord.Color.from_rgb(0, 0, 0) # Màu đen huyền bí
+                embed_title = "🌌 [BẬC TIÊN] THIÊN ĐẠO CHÍ TÔN 🌌"
+                # Chỉ bậc tiên mới có câu thoại Tiên nhân
+                uy_ap_msg = f"\n\n**◈ {random.choice(TIEN_NHAN_QUOTES)}**"
+                special_msg = f"🌌 **UY ÁP TUYỆT ĐỐI!** {winner_name} đã chạm đến cảnh giới Tiên Nhân, một chiêu định giang sơn!"
+
+            # 2. KIỂM TRA PET VIP (U MINH TƯỚC) - NẾU KHÔNG PHẢI TIÊN NHÂN
+            elif winner_pet == "U Minh Tước":
+                embed_color = discord.Color.from_rgb(75, 0, 130)
+                embed_title = "🌀 U MINH NGHỊCH CHUYỂN 🌀"
                 umt_quote = random.choice(PET_CONFIG["U Minh Tước"]["quotes"])
-                special_msg = f"*{umt_quote}*\n\n🌀 **U Minh Tước** tung cánh, bóng tối bao phủ linh đài, giúp **{winner_name}** nhìn thấu sơ hở của đối phương!"
+                special_msg = f"*{umt_quote}*\n\n🌀 **U Minh Tước** hỗ trợ, giúp **{winner_name}** nghịch chuyển càn khôn!"
 
-            # 1. CỰC PHẨM (CÓ CẢ 3)
+            # 3. CỰC PHẨM (CÓ CẢ 3 TRANG BỊ)
             elif winner_tk and winner_tg and winner_pet:
-                embed_color = discord.Color.from_rgb(255, 255, 255)
-                embed_title = "🌌 THIÊN ĐẠO CHÍ TÔN - ĐỘC CÔ CẦU BẠI 🌌"
-                special_msg = f"🌌 **KHÍ VẬN NGHỊCH THIÊN!** {winner_name} mặc **{winner_tg}**, tay cầm **{winner_tk}**, đồng hành cùng **{winner_pet}** quét sạch bát hoang!"
+                embed_color = discord.Color.from_rgb(255, 255, 255) # Trắng tinh khôi
+                special_msg = f"🌌 **KHÍ VẬN NGHỊCH THIÊN!** Trang bị đầy mình, {winner_name} quét sạch bát hoang!"
 
-            # 2. CÔNG THỦ TOÀN DIỆN (THẦN KHÍ + THÁNH GIÁP)
+            # 4. CÔNG THỦ TOÀN DIỆN (THẦN KHÍ + THÁNH GIÁP)
             elif winner_tk and winner_tg:
                 embed_color = discord.Color.from_rgb(255, 140, 0)
-                special_msg = f"🔥 **Vô đối thiên hạ!** Với sức mạnh của **{winner_tk}** và sự kiên cố của **{winner_tg}**, {winner_name} là bất khả chiến bại!"
+                special_msg = f"🔥 **Vô đối thiên hạ!** Sức mạnh của **{winner_tk}** và **{winner_tg}** là không thể cản phá!"
 
-            # ... (Các bậc 3, 4, 5 giữ nguyên như code cũ của đạo hữu) ...
+            # 5. CHỈ CÓ THẦN KHÍ
             elif winner_tk:
                 embed_color = discord.Color.red()
-                special_msg = f"🔱 **{winner_tk}** phát ra uy áp khủng khiếp, đối phương không kịp trở tay!"
-            elif winner_pet: # Các linh thú khác ngoài U Minh Tước
+                special_msg = f"🔱 **{winner_tk}** phát ra uy áp khủng khiếp!"
+
+            # 6. CHỈ CÓ LINH THÚ (KHÁC)
+            elif winner_pet:
                 embed_color = discord.Color.blue()
-                special_msg = f"🐾 Linh thú **{winner_pet}** gầm vang trời đất, trợ lực cho chủ nhân giành chiến thắng!"
+                special_msg = f"🐾 Linh thú **{winner_pet}** trợ lực cho chủ nhân giành chiến thắng!"
 
-            # --- GIA CỐ UY ÁP TIÊN NHÂN ---
-            uy_ap_msg = ""
-            if winner_lv >= 80:
-                uy_ap_msg = f"\n\n**◈ {random.choice(TIEN_NHAN_QUOTES)}**" 
-                embed_color = discord.Color.from_rgb(0, 0, 0)
-                embed_title = f"🌌 [BẬC TIÊN] {embed_title}"
-
-            # Tính toán hiển thị phần trăm (Dựa trên LC gốc, không hiển thị bonus ẩn)
+            # --- TÍNH TOÁN HIỂN THỊ ---
             p1_percent = round((p1_power / total_power) * 100, 1)
             p2_percent = round(100 - p1_percent, 1)
 
@@ -1163,7 +1164,7 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
             )
             
             if special_msg: desc += f"\n\n{special_msg}"
-            desc += uy_ap_msg
+            desc += uy_ap_msg # Chỉ xuất hiện nếu là Bậc Tiên
             
             result_embed.description = desc
             result_embed.set_footer(text="Hữu thắng hữu bại, chớ nên nản lòng.")
@@ -2978,9 +2979,72 @@ async def ducan(interaction: discord.Interaction):
         embed.add_field(name="Linh Năng Tích Tụ", value=f"`{bar}`")
         return await interaction.followup.send(embed=embed)
 
+@bot.tree.command(name="chuathuong", description="Sử dụng thần lực Thánh Linh Khưu để trị thương cho đồng đạo")
+@app_commands.describe(target="Người cần được chữa trị trọng thương")
+async def chuathuong(interaction: discord.Interaction, target: discord.Member):
+    await interaction.response.defer()
+    
+    uid = str(interaction.user.id)
+    tid = str(target.id)
+    
+    # 1. Lấy dữ liệu người dùng
+    u_data = await users_col.find_one({"_id": uid})
+    t_data = await users_col.find_one({"_id": tid})
+    
+    if not u_data: return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ!")
+    if not t_data: return await interaction.followup.send("❌ Đối phương chưa có hồ sơ!")
+
+    # 2. KIỂM TRA ĐIỀU KIỆN PET (Phải mang Thánh Linh Khưu)
+    if u_data.get("pet") != "Thánh Linh Khưu": # Đạo hữu lưu ý check đúng tên Pet trong PET_CONFIG
+        return await interaction.followup.send("❌ Chỉ chủ nhân của **Thánh Linh Khưu** mới có thể sử dụng tiên khí trị thương!", ephemeral=True)
+
+    # 3. KIỂM TRA TRẠNG THÁI MỤC TIÊU (Truy cập vào bicanh_daily.trong_thuong)
+    t_bc = t_data.get("bicanh_daily", {})
+    if not t_bc.get("trong_thuong"):
+        return await interaction.followup.send(f"❌ **{target.display_name}** hiện không bị trọng thương.")
+
+    # 4. KIỂM TRA GIỚI HẠN 3 LẦN/NGÀY CỦA NGƯỜI DÙNG
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    heal_limit = u_data.get("heal_daily", {"date": "", "count": 0})
+    
+    if heal_limit["date"] == today:
+        if heal_limit["count"] >= 3:
+            return await interaction.followup.send("❌ Linh lực của Thánh thú đã cạn, hôm nay không thể thi triển thêm!")
+        new_count = heal_limit["count"] + 1
+    else:
+        new_count = 1 # Reset ngày mới
+
+    # 5. THỰC HIỆN CẢI TỬ HOÀN SINH
+    # Update trạng thái trọng thương của mục tiêu về False
+    await users_col.update_one(
+        {"_id": tid},
+        {"$set": {"bicanh_daily.trong_thuong": False}}
+    )
+    
+    # Update số lần sử dụng của người chữa
+    await users_col.update_one(
+        {"_id": uid},
+        {"$set": {"heal_daily": {"date": today, "count": new_count}}}
+    )
+
+    # 6. THÔNG BÁO
+    embed = discord.Embed(
+        title="🦌 THÁNH LINH HIỂN THẾ - TRỊ LIỆU THẦN TỐC",
+        description=(
+            f"**{interaction.user.display_name}** truyền gọi **Thành Linh Khưu**.\n"
+            f"🦌 Một dải lụa tiên quang bao phủ **{target.mention}**, chữa lành kinh mạch bị đứt đoạn!\n\n"
+            f"✅ **Trạng thái:** Đã hồi phục (Hết Trọng Thương)\n"
+            f"🔋 **Lượt dùng hôm nay:** `{new_count}/3`"
+        ),
+        color=0x2ecc71 # Màu xanh lá trị liệu
+    )
+    embed.set_footer(text="Sinh mệnh là trân quý, hãy cẩn trọng khi thám hiểm bí cảnh.")
+    
+    await interaction.followup.send(embed=embed)
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
