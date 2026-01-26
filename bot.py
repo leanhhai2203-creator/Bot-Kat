@@ -2982,68 +2982,71 @@ async def ducan(interaction: discord.Interaction):
 @bot.tree.command(name="chuathuong", description="Sử dụng thần lực Thánh Linh Khưu để trị thương cho đồng đạo")
 @app_commands.describe(target="Người cần được chữa trị trọng thương")
 async def chuathuong(interaction: discord.Interaction, target: discord.Member):
+    # 1. Defer trước để giữ kết nối (tránh lỗi 3s)
     await interaction.response.defer()
     
-    uid = str(interaction.user.id)
-    tid = str(target.id)
-    
-    # 1. Lấy dữ liệu người dùng
-    u_data = await users_col.find_one({"_id": uid})
-    t_data = await users_col.find_one({"_id": tid})
-    
-    if not u_data: return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ!")
-    if not t_data: return await interaction.followup.send("❌ Đối phương chưa có hồ sơ!")
+    try:
+        uid = str(interaction.user.id)
+        tid = str(target.id)
+        
+        # 2. Lấy data (Dùng await vì là DB async)
+        u_data = await users_col.find_one({"_id": uid})
+        t_data = await users_col.find_one({"_id": tid})
+        
+        if not u_data or not t_data:
+            return await interaction.followup.send("❌ Một trong hai đạo hữu chưa có hồ sơ tu tiên!")
 
-    # 2. KIỂM TRA ĐIỀU KIỆN PET (Phải mang Thánh Linh Khưu)
-    if u_data.get("pet") != "Thánh Linh Khưu": # Đạo hữu lưu ý check đúng tên Pet trong PET_CONFIG
-        return await interaction.followup.send("❌ Chỉ chủ nhân của **Thánh Linh Khưu** mới có thể sử dụng tiên khí trị thương!", ephemeral=True)
+        # 3. Kiểm tra Pet (Hãy copy chính xác tên từ PET_CONFIG)
+        if u_data.get("pet") != "Thánh Linh Khưu":
+            return await interaction.followup.send("❌ Chỉ chủ nhân **Thánh Linh Khưu** mới có thể thi triển tiên thuật trị thương!")
 
-    # 3. KIỂM TRA TRẠNG THÁI MỤC TIÊU (Truy cập vào bicanh_daily.trong_thuong)
-    t_bc = t_data.get("bicanh_daily", {})
-    if not t_bc.get("trong_thuong"):
-        return await interaction.followup.send(f"❌ **{target.display_name}** hiện không bị trọng thương.")
+        # 4. Kiểm tra trạng thái mục tiêu
+        # Truy cập sâu vào bicanh_daily.trong_thuong
+        t_bc = t_data.get("bicanh_daily", {})
+        if not t_bc.get("trong_thuong"):
+            return await interaction.followup.send(f"❌ **{target.display_name}** hiện khí huyết bình ổn, không bị trọng thương.")
 
-    # 4. KIỂM TRA GIỚI HẠN 3 LẦN/NGÀY CỦA NGƯỜI DÙNG
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    heal_limit = u_data.get("heal_daily", {"date": "", "count": 0})
-    
-    if heal_limit["date"] == today:
-        if heal_limit["count"] >= 3:
-            return await interaction.followup.send("❌ Linh lực của Thánh thú đã cạn, hôm nay không thể thi triển thêm!")
-        new_count = heal_limit["count"] + 1
-    else:
-        new_count = 1 # Reset ngày mới
+        # 5. Kiểm tra giới hạn ngày
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        heal_limit = u_data.get("heal_daily", {})
+        
+        # Nếu chưa có data heal_daily hoặc sang ngày mới thì reset
+        if not isinstance(heal_limit, dict) or heal_limit.get("date") != today:
+            new_count = 1
+        else:
+            if heal_limit.get("count", 0) >= 3:
+                return await interaction.followup.send("❌ Linh lực Thánh thú đã cạn, hãy đợi ngày mai!")
+            new_count = heal_limit.get("count", 0) + 1
 
-    # 5. THỰC HIỆN CẢI TỬ HOÀN SINH
-    # Update trạng thái trọng thương của mục tiêu về False
-    await users_col.update_one(
-        {"_id": tid},
-        {"$set": {"bicanh_daily.trong_thuong": False}}
-    )
-    
-    # Update số lần sử dụng của người chữa
-    await users_col.update_one(
-        {"_id": uid},
-        {"$set": {"heal_daily": {"date": today, "count": new_count}}}
-    )
+        # 6. Cập nhật Database đồng thời
+        await asyncio.gather(
+            # Chữa thương cho mục tiêu
+            users_col.update_one({"_id": tid}, {"$set": {"bicanh_daily.trong_thuong": False}}),
+            # Tăng count cho người dùng
+            users_col.update_one({"_id": uid}, {"$set": {"heal_daily": {"date": today, "count": new_count}}})
+        )
 
-    # 6. THÔNG BÁO
-    embed = discord.Embed(
-        title="🦌 THÁNH LINH HIỂN THẾ - TRỊ LIỆU THẦN TỐC",
-        description=(
-            f"**{interaction.user.display_name}** truyền gọi **Thành Linh Khưu**.\n"
-            f"🦌 Một dải lụa tiên quang bao phủ **{target.mention}**, chữa lành kinh mạch bị đứt đoạn!\n\n"
-            f"✅ **Trạng thái:** Đã hồi phục (Hết Trọng Thương)\n"
-            f"🔋 **Lượt dùng hôm nay:** `{new_count}/3`"
-        ),
-        color=0x2ecc71 # Màu xanh lá trị liệu
-    )
-    embed.set_footer(text="Sinh mệnh là trân quý, hãy cẩn trọng khi thám hiểm bí cảnh.")
-    
-    await interaction.followup.send(embed=embed)
+        # 7. Phản hồi Embed
+        embed = discord.Embed(
+            title="🦌 THÁNH LINH HIỂN THẾ",
+            description=(
+                f"🛡️ **{interaction.user.display_name}** thi triển đại pháp trị thương!\n"
+                f"✨ Tiên khí bao phủ **{target.mention}**, thương thế biến mất trong nháy mắt.\n\n"
+                f"✅ **Trạng thái:** Bình phục\n"
+                f"🔋 **Lượt dùng:** `{new_count}/3`"
+            ),
+            color=0x2ecc71
+        )
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        # Nếu có lỗi code, bot sẽ báo lỗi này lên Discord thay vì treo
+        print(f"LỖI CHUATHUONG: {e}")
+        await interaction.followup.send(f"⚠️ Pháp thuật bị gián đoạn do lỗi: `{str(e)}`")
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
