@@ -2982,70 +2982,60 @@ async def ducan(interaction: discord.Interaction):
 @bot.tree.command(name="chuathuong", description="Sử dụng thần lực Thánh Linh Khưu để trị thương cho đồng đạo")
 @app_commands.describe(target="Người cần được chữa trị trọng thương")
 async def chuathuong(interaction: discord.Interaction, target: discord.Member):
-    # 1. Defer trước để giữ kết nối (tránh lỗi 3s)
     await interaction.response.defer()
     
     try:
+        import datetime # Đảm bảo import đúng trong phạm vi hàm nếu chưa chắc chắn ở đầu file
+        
         uid = str(interaction.user.id)
         tid = str(target.id)
         
-        # 2. Lấy data (Dùng await vì là DB async)
         u_data = await users_col.find_one({"_id": uid})
         t_data = await users_col.find_one({"_id": tid})
         
         if not u_data or not t_data:
-            return await interaction.followup.send("❌ Một trong hai đạo hữu chưa có hồ sơ tu tiên!")
+            return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ!")
 
-        # 3. Kiểm tra Pet (Hãy copy chính xác tên từ PET_CONFIG)
         if u_data.get("pet") != "Thánh Linh Khưu":
-            return await interaction.followup.send("❌ Chỉ chủ nhân **Thánh Linh Khưu** mới có thể thi triển tiên thuật trị thương!")
+            return await interaction.followup.send("❌ Chỉ chủ nhân **Thánh Linh Khưu** mới có thể thi triển tiên thuật!")
 
-        # 4. Kiểm tra trạng thái mục tiêu
-        # Truy cập sâu vào bicanh_daily.trong_thuong
         t_bc = t_data.get("bicanh_daily", {})
         if not t_bc.get("trong_thuong"):
-            return await interaction.followup.send(f"❌ **{target.display_name}** hiện khí huyết bình ổn, không bị trọng thương.")
+            return await interaction.followup.send(f"❌ **{target.display_name}** không bị trọng thương.")
 
-        # 5. Kiểm tra giới hạn ngày
-        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        # --- ĐÃ FIX LỖI Ở ĐÂY ---
+        # Sử dụng .date().isoformat() hoặc kiểm tra kỹ cách gọi
+        now = datetime.datetime.now() 
+        today = now.strftime("%Y-%m-%d")
+        # ------------------------
+
         heal_limit = u_data.get("heal_daily", {})
-        
-        # Nếu chưa có data heal_daily hoặc sang ngày mới thì reset
         if not isinstance(heal_limit, dict) or heal_limit.get("date") != today:
             new_count = 1
         else:
             if heal_limit.get("count", 0) >= 3:
-                return await interaction.followup.send("❌ Linh lực Thánh thú đã cạn, hãy đợi ngày mai!")
+                return await interaction.followup.send("❌ Linh lực Thánh thú đã cạn!")
             new_count = heal_limit.get("count", 0) + 1
 
-        # 6. Cập nhật Database đồng thời
         await asyncio.gather(
-            # Chữa thương cho mục tiêu
             users_col.update_one({"_id": tid}, {"$set": {"bicanh_daily.trong_thuong": False}}),
-            # Tăng count cho người dùng
             users_col.update_one({"_id": uid}, {"$set": {"heal_daily": {"date": today, "count": new_count}}})
         )
 
-        # 7. Phản hồi Embed
         embed = discord.Embed(
             title="🦌 THÁNH LINH HIỂN THẾ",
-            description=(
-                f"🛡️ **{interaction.user.display_name}** thi triển đại pháp trị thương!\n"
-                f"✨ Tiên khí bao phủ **{target.mention}**, thương thế biến mất trong nháy mắt.\n\n"
-                f"✅ **Trạng thái:** Bình phục\n"
-                f"🔋 **Lượt dùng:** `{new_count}/3`"
-            ),
+            description=f"✨ **{interaction.user.display_name}** dùng Thánh Linh Khưu trị thương cho **{target.mention}**!\n\n✅ Hết Trọng Thương\n🔋 Lượt: `{new_count}/3`",
             color=0x2ecc71
         )
         await interaction.followup.send(embed=embed)
 
     except Exception as e:
-        # Nếu có lỗi code, bot sẽ báo lỗi này lên Discord thay vì treo
-        print(f"LỖI CHUATHUONG: {e}")
-        await interaction.followup.send(f"⚠️ Pháp thuật bị gián đoạn do lỗi: `{str(e)}`")
+        print(f"LỖI: {e}")
+        await interaction.followup.send(f"⚠️ Lỗi thực thi: `{str(e)}`")
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
