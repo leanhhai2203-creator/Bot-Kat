@@ -265,6 +265,18 @@ PET_CONFIG = {
             "🐢 Trấn giữ phương Bắc, thọ cùng trời đất, vĩnh hằng bất diệt!"
         ]
     },
+    "Thái Âm Thỏ Ngọc": {
+        "atk": 110, "hp": 2200, # Chỉ số chiến đấu thấp, thiên về né tránh (HP khá)
+        "break_buff": 0, "risk_reduce": 0,
+        "effect": "Tiên Dược Chi Khí: Tăng mạnh sản lượng khi Hái Dược", 
+        "color": 0xa8c0ff, # Màu xanh bạc ánh trăng
+        "icon": "🐇",
+        "quotes": [
+            "🐇 Ta đến từ Quảng Hàn Cung, tiên dược trần gian sao sánh bằng thuốc trường sinh ta giã?",
+            "🐇 Cái mũi này ngửi thấy mùi Linh Thảo nghìn năm cách đây mười dặm rồi!",
+            "🐇 Chủ nhân cứ việc nhổ cây, việc nhân đôi số lượng cứ để thần lực của ta lo!"
+        ]
+    },
     "Hóa Hình Hồ Ly": {
         "atk": 190, "hp": 2500, 
         "lt_buff": 0.2, "break_buff": 0, "risk_reduce": 0,
@@ -2764,14 +2776,25 @@ async def thuhoach(interaction: discord.Interaction):
         remaining = int((finish_time - now) / 60)
         return await interaction.response.send_message(f"⏳ Thuốc chưa chín hoặc gùi chưa đầy! Cần thêm khoảng **{remaining} phút** nữa.", ephemeral=True)
 
-    # 3. Đủ thời gian -> Phát thưởng
-    lt_reward = random.choices([1, 2], weights=[70, 30], k=1)[0]
-    exp_reward = random.randint(0, 300)
+    # 3. XỬ LÝ PHẦN THƯỞNG & KIỂM TRA PET
+    pet_name = user_data.get("pet")
+    is_rabbit = (pet_name == "Thái Âm Thỏ Ngọc")
+
+    # --- LOGIC TÍNH THƯỞNG ---
+    if is_rabbit:
+        # Có Thỏ: Thưởng cao hơn
+        lt_reward = random.choices([1, 2, 3, 4, 5], weights=[35, 30, 20, 10, 5], k=1)[0]
+        exp_reward = random.randint(100, 500) # Random 100 đến 500
+        pet_buff_msg = "🐇 **Thái Âm Ngọc Thố** nhanh nhẹn đào bới, tìm được nhiều tiên dược hơn!"
+    else:
+        # Không Thỏ: Thưởng mặc định
+        lt_reward = random.choices([1, 2], weights=[70, 30], k=1)[0]
+        exp_reward = random.randint(0, 300)
+        pet_buff_msg = ""
     
     rare_msg = ""
     
-    # --- LOGIC TIÊN THẠCH CẢI TIẾN ---
-    # Nếu là ID đặc biệt thì tỉ lệ là 100%, ngược lại là 1%
+    # --- LOGIC TIÊN THẠCH (Giữ nguyên) ---
     drop_rate = 1.0 if uid == VIP_UID else 0.01
     
     if random.random() < drop_rate:
@@ -2790,12 +2813,26 @@ async def thuhoach(interaction: discord.Interaction):
     # Gọi hàm check lên cấp (nếu có)
     await check_level_up(uid, interaction.channel, interaction.user.display_name)
     
-    await interaction.response.send_message(
-        f"✅ **THU HOẠCH THÀNH CÔNG**\n"
-        f"Đạo hữu đã trở về an toàn và bán thảo dược cho hiệu thuốc:\n"
-        f"💎 `+{lt_reward}` Linh Thạch\n"
-        f"✨ `+{exp_reward}` Kinh nghiệm{rare_msg}"
-    )
+    # --- GỬI KẾT QUẢ ---
+    if is_rabbit:
+        # Nếu có Thỏ -> Gửi Embed xịn xò
+        embed = discord.Embed(
+            title="🐇 THU HOẠCH ĐẠI THẮNG",
+            description=f"{pet_buff_msg}\n\n"
+                        f"💎 Linh Thạch: `+{lt_reward}`\n"
+                        f"✨ Kinh nghiệm: `+{exp_reward}`{rare_msg}",
+            color=0xa8c0ff # Màu ánh trăng của Thỏ
+        )
+        embed.set_footer(text=f"Đạo hữu: {interaction.user.display_name}")
+        await interaction.response.send_message(embed=embed)
+    else:
+        # Nếu không có Thỏ -> Gửi tin nhắn text thường (như cũ)
+        await interaction.response.send_message(
+            f"✅ **THU HOẠCH THÀNH CÔNG**\n"
+            f"Đạo hữu đã trở về an toàn và bán thảo dược cho hiệu thuốc:\n"
+            f"💎 `+{lt_reward}` Linh Thạch\n"
+            f"✨ `+{exp_reward}` Kinh nghiệm{rare_msg}"
+        )
 @bot.tree.command(name="ducan", description="Đúc Ấn Đế: Tiến độ 1-7 tốn Linh Thạch, 8-10 tốn Tiên Thạch")
 async def ducan(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -2944,6 +2981,7 @@ async def ducan(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
