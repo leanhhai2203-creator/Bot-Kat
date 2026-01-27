@@ -3026,9 +3026,72 @@ async def chuathuong(interaction: discord.Interaction, target: discord.Member):
     except Exception as e:
         print(f"LỖI: {e}")
         await interaction.followup.send(f"⚠️ Lỗi thực thi: `{str(e)}`")
+@bot.tree.command(name="shop", description="Tiệm tạp hóa tu tiên - Quy đổi Tiên Thạch và Linh Thạch")
+async def shop(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    
+    class ShopView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+
+        @discord.ui.button(label="Mua 1 Tiên Thạch (100💎)", style=discord.ButtonStyle.green, emoji="🔮")
+        async def buy_tt(self, i: discord.Interaction, button: discord.ui.Button):
+            if str(i.user.id) != uid: return await i.response.send_message("❌ Đây không phải túi đồ của đạo hữu!", ephemeral=True)
+            
+            # Kiểm tra số dư Linh Thạch
+            user = await users_col.find_one({"_id": uid})
+            if user.get("linh_thach", 0) < 100:
+                return await i.response.send_message("❌ Đạo hữu không đủ 100 Linh Thạch!", ephemeral=True)
+            
+            # Thực hiện giao dịch
+            await users_col.update_one(
+                {"_id": uid},
+                {"$inc": {"linh_thach": -100, "tien_thach": 1}}
+            )
+            await i.response.edit_message(content="✅ Đổi thành công! Nhận **1 Tiên Thạch** (Tốn 100💎)", view=None)
+
+        @discord.ui.button(label="Bán 1 Tiên Thạch (50💎)", style=discord.ButtonStyle.danger, emoji="💰")
+        async def sell_tt(self, i: discord.Interaction, button: discord.ui.Button):
+            if str(i.user.id) != uid: return await i.response.send_message("❌ Đây không phải túi đồ của đạo hữu!", ephemeral=True)
+            
+            # Kiểm tra số dư Tiên Thạch
+            user = await users_col.find_one({"_id": uid})
+            if user.get("tien_thach", 0) < 1:
+                return await i.response.send_message("❌ Đạo hữu không có Tiên Thạch để bán!", ephemeral=True)
+            
+            # Thực hiện giao dịch
+            await users_col.update_one(
+                {"_id": uid},
+                {"$inc": {"tien_thach": -1, "linh_thach": 50}}
+            )
+            await i.response.edit_message(content="✅ Bán thành công! Nhận **50 Linh Thạch** (Mất 1🔮)", view=None)
+
+    # Lấy dữ liệu hiện tại để hiển thị
+    u_data = await users_col.find_one({"_id": uid})
+    if not u_data:
+        return await interaction.response.send_message("❌ Đạo hữu chưa có hồ sơ tu tiên!", ephemeral=True)
+
+    lt = u_data.get("linh_thach", 0)
+    tt = u_data.get("tien_thach", 0)
+
+    embed = discord.Embed(
+        title="🏪 TIỆM TẠP HÓA TU TIÊN",
+        description=(
+            f"Chào mừng đạo hữu **{interaction.user.display_name}**!\n"
+            f"Hiện có: `{lt}` 💎 **Linh Thạch** | `{tt}` 🔮 **Tiên Thạch**\n\n"
+            f"**Tỷ giá niêm yết:**\n"
+            f"📥 **Mua:** 100 Linh Thạch ➡️ 1 Tiên Thạch\n"
+            f"📤 **Bán:** 1 Tiên Thạch ➡️ 50 Linh Thạch"
+        ),
+        color=discord.Color.blue()
+    )
+    embed.set_footer(text="Giao dịch sòng phẳng, không nợ nần!")
+    
+    await interaction.response.send_message(embed=embed, view=ShopView())
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
