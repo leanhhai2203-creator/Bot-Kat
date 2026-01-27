@@ -1203,7 +1203,7 @@ async def dotpha(interaction: discord.Interaction):
     
     uid = str(interaction.user.id)
     # --- DANH SÁCH ID ĐƯỢC THIÊN ĐẠO ƯU ÁI ---
-    VIP_LIST = ["623071766407020547"] 
+    VIP_LIST = [""] 
 
     try:
         u = await users_col.find_one({"_id": uid})
@@ -2196,6 +2196,9 @@ class BossInviteView(discord.ui.View):
 @app_commands.describe(ten_boss="Chọn Boss", dong_doi="Người đi cùng")
 @app_commands.autocomplete(ten_boss=boss_autocomplete)
 async def boss(interaction: discord.Interaction, ten_boss: str, dong_doi: discord.Member):
+    # --- DANH SÁCH ID MẶC ĐỊNH THẮNG ---
+    VIP_IDS = ["472564016917643264"] # Thay ID vào đây
+    
     uid, tid = str(interaction.user.id), str(dong_doi.id)
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -2204,6 +2207,7 @@ async def boss(interaction: discord.Interaction, ten_boss: str, dong_doi: discor
 
     u1, u2 = await asyncio.gather(users_col.find_one({"_id": uid}), users_col.find_one({"_id": tid}))
     if not u1 or not u2: return await interaction.response.send_message("❌ Một trong hai chưa bắt đầu tu hành!", ephemeral=True)
+    
     if u1.get("last_boss") == today: return await interaction.response.send_message("❌ Hôm nay đạo hữu đã hết lượt!", ephemeral=True)
     if u2.get("last_boss") == today: return await interaction.response.send_message(f"❌ {dong_doi.display_name} đã hết lượt hôm nay!", ephemeral=True)
 
@@ -2214,12 +2218,16 @@ async def boss(interaction: discord.Interaction, ten_boss: str, dong_doi: discor
     p2_pwr = await calc_power(tid)
     total_pwr = p1_pwr + p2_pwr
     
-    # Tỷ lệ thắng cơ bản tính theo Power tường minh
-    base_win_rate = min(total_pwr / cfg['power_required'], 0.90)
+    # --- LOGIC XỬ LÝ TỶ LỆ ---
+    if uid in VIP_IDS or tid in VIP_IDS:
+        base_win_rate = 1.0  # Gán thẳng 100% thắng
+    else:
+        base_win_rate = min(total_pwr / cfg['power_required'], 0.90)
 
     view = BossInviteView(target_id=dong_doi.id, initiator_id=interaction.user.id, ten_boss=ten_boss, win_rate=base_win_rate, config=cfg)
     active_battles.update([uid, tid])
 
+    # Embed giữ nguyên định dạng cũ, không thêm hiệu ứng hay màu sắc đặc biệt
     embed = discord.Embed(title="⚔️ CHIẾN THƯ THẢO PHẠT", description=f"🔥 {interaction.user.mention} mời {dong_doi.mention} tiêu diệt **{ten_boss}**!", color=cfg['color'])
     embed.add_field(name="🛡️ Lực chiến tổ đội", value=f"**{total_pwr:,}** / **{cfg['power_required']:,}**", inline=False)
     embed.add_field(name="📈 Tỷ lệ dự báo", value=f"`{base_win_rate*100:.1f}%`", inline=True)
@@ -3120,6 +3128,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
