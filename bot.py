@@ -2774,7 +2774,7 @@ async def haiduoc(interaction: discord.Interaction):
 @bot.tree.command(name="thuhoach", description="Trở về từ Linh Sơn và bán thảo dược")
 async def thuhoach(interaction: discord.Interaction):
     ALLOWED_CHANNEL_ID = 1461017212365181160
-    VIP_UID = "623071766407020547" # Thay bằng ID Discord bạn muốn ưu tiên (ví dụ: "123456789")
+    VIP_UID = "" # Thay bằng ID Discord bạn muốn ưu tiên (ví dụ: "123456789")
     
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
         return await interaction.response.send_message(
@@ -3120,6 +3120,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
