@@ -778,7 +778,7 @@ async def info(interaction: discord.Interaction):
 
         if is_immortal:
             embed_color = discord.Color.from_rgb(255, 255, 0)
-            header = f"🌌 [BẬC TIÊN] {interaction.user.display_name}"
+            header = f"🌌 [TIÊN NHÂN] {interaction.user.display_name}"
         elif than_khi_name or thanh_giap_name or gioi_chi:
             embed_color = discord.Color.gold()
 
@@ -3120,6 +3120,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
