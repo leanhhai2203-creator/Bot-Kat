@@ -400,65 +400,62 @@ def get_monster_data(lv: int):
     else: return "Cổ thú", 0.30, (6, 9)
 async def calc_power(uid: str) -> int:
     uid = str(uid)
-    
     u = await users_col.find_one({"_id": uid})
     if not u: 
         return 0
-    
     eq = await eq_col.find_one({"_id": uid}) or {}
-    
-    # 2. Khởi tạo biến dữ liệu (Đã thêm gioi_chi ở đây)
+    # 2. Khởi tạo biến dữ liệu
     lv = u.get("level", 1)
     pet_name = u.get("pet")
     than_khi_name = u.get("than_khi") 
     thanh_giap_name = u.get("thanh_giap")
-    gioi_chi = u.get("gioi_chi") # <--- QUAN TRỌNG: Phải lấy dữ liệu này từ user 'u'
-    
-    # --- BƯỚC 1: TÍNH CHỈ SỐ GỐC TỪ LEVEL ---
-    atk = lv * 5
-    hp = lv * 50
-    
+    gioi_chi = u.get("gioi_chi") 
+    # --- BƯỚC 1: TÍNH CHỈ SỐ GỐC (CẢI TIẾN ĐỘT PHÁ) ---
+    if lv <= 80:
+        # Chỉ số bình thường cho phàm nhân
+        atk = lv * 5
+        hp = lv * 50
+    else:
+        # Chỉ số cơ bản của lv 80
+        base_atk = 80 * 5
+        base_hp = 80 * 50
+        # Chỉ số cộng thêm mỗi cấp từ lv 81 trở đi (Gấp 10 lần bình thường)
+        extra_lv = lv - 80
+        atk = base_atk + (extra_lv * 20)  # Mỗi cấp Tiên nhân +100 Atk (thay vì 5)
+        hp = base_hp + (extra_lv * 200)   # Mỗi cấp Tiên nhân +1000 Hp (thay vì 50)
     # --- BƯỚC 2: CỘNG DỒN CHỈ SỐ TRANG BỊ ---
     for t in EQ_TYPES:
         eq_lv = eq.get(t, 0)
         if eq_lv <= 0: continue 
-        
-        if t in ["Kiếm", "Nhẫn", "Giới Chỉ"]: # Thêm Giới Chỉ vào đây để cộng Atk nếu là đồ thường
+        if t in ["Kiếm", "Nhẫn"]: 
             atk += eq_lv * 15
         else:
-            hp += eq_lv * 150
-            
+            hp += eq_lv * 150 
     # --- BƯỚC 3: CỘNG DỒN CHỈ SỐ CỰC PHẨM ---
-    
     # 1. Thần Khí
     if than_khi_name and than_khi_name in THAN_KHI_CONFIG:
-        atk += THAN_KHI_CONFIG[than_khi_name].get("atk", 200)
-            
+        atk += THAN_KHI_CONFIG[than_khi_name].get("atk", 200)   
     # 2. Thánh Giáp
     if thanh_giap_name and thanh_giap_name in THANH_GIAP_CONFIG:
         hp += THANH_GIAP_CONFIG[thanh_giap_name].get("hp", 2500)
-
-    # 3. Thánh Giới Chỉ (Giờ đây biến gioi_chi đã tồn tại, không còn lỗi)
+    # 3. Thánh Giới Chỉ
     if gioi_chi and gioi_chi in GIOI_CHI_CONFIG:
         config = GIOI_CHI_CONFIG[gioi_chi]
         atk += config.get("atk", 100)
         hp += config.get("hp", 1500)
-
     # --- BƯỚC 4: LINH THÚ ---
     if pet_name and pet_name in PET_CONFIG:
         p_stats = PET_CONFIG[pet_name]
         atk += p_stats.get("atk", 0)
         hp += p_stats.get("hp", 0) 
-
     # --- BƯỚC 5: TỔNG HỢP ---
+    # Giữ nguyên công thức tính tổng lực chiến của đạo hữu
     total_power = (atk * 10) + hp + random.randint(0, 100)
-    
     return int(total_power)
 async def add_exp(uid: str, amount: int):
     uid = str(uid)
     # 1. Lấy dữ liệu để kiểm tra điều kiện cấp độ
     u = await users_col.find_one({"_id": uid})
-    
     # 2. Nếu là người mới hoàn toàn -> Tạo mới
     if not u:
         await users_col.insert_one({
@@ -3032,6 +3029,7 @@ async def chuathuong(interaction: discord.Interaction, target: discord.Member):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
