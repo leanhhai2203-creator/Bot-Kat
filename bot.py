@@ -1130,12 +1130,31 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
                 umt_quotes = PET_CONFIG.get("U Minh Tước", {}).get("quotes", ["U Minh vĩnh hằng..."])
                 umt_msg = f"\n\n*\"{random.choice(umt_quotes)}\"*\n🌀 **U Minh Tước** tỏa ra hắc khí, nghịch chuyển cục diện!"
 
-            # 3. ĐẶC QUYỀN TIÊN NHÂN (CẤP 81+)
+           # --- 3. ĐẶC QUYỀN TIÊN NHÂN (CẤP 81+) ---
             if winner_lv >= 81:
-                embed_color = discord.Color.from_rgb(255, 255, 0) 
-                embed_title = f"🌌 [TIÊN NHÂN] {embed_title}"
-                uy_ap_msg = f"\n\n**◈ {random.choice(TIEN_NHAN_QUOTES)}**"
-                special_msg = f"✨ **TIÊN NHÂN GIÁ LÂM!**\n{special_msg}"
+                # Thiết lập màu vàng sáng rực rỡ
+                embed_color = 0xFFFF00 
+                
+                # Xác định danh hiệu tu vi
+                if winner_lv >= 100:
+                    tu_vi = "Chí Tôn"
+                elif winner_lv >= 90:
+                    tu_vi = "Thiên Tiên"
+                else:
+                    tu_vi = "Địa Tiên"
+
+                # Lấy chân ngôn ngẫu nhiên
+                chan_ngon = random.choice(TIEN_NHAN_QUOTES)
+
+                # Cập nhật tiêu đề và thông điệp đặc biệt
+                embed_title = f"✨ [{tu_vi.upper()}] TRẬN THƯ HÙNG KẾT THÚC ✨"
+                
+                # Cấu trúc lại special_msg để hiển thị Danh hiệu + Tên + Chân ngôn
+                special_msg = (
+                    f"✨ **TIÊN NHÂN GIÁ LÂM!**\n"
+                    f"🌌 **{tu_vi} {winner_name}:** *\"{chan_ngon}\"*\n"
+                    f"{special_msg}" # Giữ lại thông tin trang bị/pet phía sau
+                )
 
             # --- TÍNH TOÁN HIỂN THỊ CHỈ SỐ ---
             p1_percent = round((p1_power / total_power) * 100, 1)
@@ -3091,6 +3110,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
