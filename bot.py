@@ -816,21 +816,31 @@ async def info(interaction: discord.Interaction):
         extra = f"🐾 **{pet_name or 'Chưa có'}**\n{an}"
         embed.add_field(name="🦄 Linh Thú & Ấn", value=extra, inline=True)
 
-        # 7. Gửi Embeds (Chốt hạ Embed phụ)
+        # 7. Gửi Embeds (Chốt hạ Embed phụ cho lệnh Check)
         res_embeds = [embed]
         if is_immortal:
             import random
-            # Đảm bảo danh sách DANH_NGON đã được khai báo ở trên
+            # Xác định Tu vi dựa trên lv (biến lv lấy từ hồ sơ người chơi)
+            if lv >= 100:
+                tu_vi = "Thiên Tiên"
+            elif lv >= 90:
+                tu_vi = "Kim Tiên"
+            else:
+                tu_vi = "Chân Tiên"
+            # Lấy tên người chơi (Ví dụ dùng display_name của interaction hoặc tên trong DB)
+            name = interaction.user.display_name 
             chan_ngon = random.choice(DANH_NGON)
             sub_embed = discord.Embed(
-                description=f"🌌 **THIÊN ĐẠO CHÂN NGÔN**\n\n*\"{chan_ngon}\"*",
-                color=0xFFFF00
+                description=(
+                    f"🌌 **THIÊN ĐẠO CHÂN NGÔN**\n\n"
+                    f"✨ **{tu_vi} {name}:** *\"{chan_ngon}\"*"
+                ),
+                color=0xFFFF00 # Màu vàng sáng rực rỡ
             )
             sub_embed.set_footer(text="◈ Uy áp Tiên nhân: Vạn dân bái phục ◈")
             res_embeds.append(sub_embed)
         else:
             embed.set_footer(text="Hữu duyên thiên lý năng tương ngộ.")
-
         await interaction.followup.send(embeds=res_embeds)
 
     except Exception as e:
@@ -1137,11 +1147,11 @@ async def solo(interaction: discord.Interaction, target: discord.Member, linh_th
                 
                 # Xác định danh hiệu tu vi
                 if winner_lv >= 100:
-                    tu_vi = "Chí Tôn"
-                elif winner_lv >= 90:
                     tu_vi = "Thiên Tiên"
+                elif winner_lv >= 90:
+                    tu_vi = "Kim Tiên"
                 else:
-                    tu_vi = "Địa Tiên"
+                    tu_vi = "Chân Tiên"
 
                 # Lấy chân ngôn ngẫu nhiên
                 chan_ngon = random.choice(TIEN_NHAN_QUOTES)
@@ -3110,6 +3120,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
