@@ -824,7 +824,7 @@ async def info(interaction: discord.Interaction):
             chan_ngon = random.choice(DANH_NGON)
             sub_embed = discord.Embed(
                 description=f"🌌 **THIÊN ĐẠO CHÂN NGÔN**\n\n*\"{chan_ngon}\"*",
-                color=0x000000
+                color=0xFFFF00
             )
             sub_embed.set_footer(text="◈ Uy áp Tiên nhân: Vạn dân bái phục ◈")
             res_embeds.append(sub_embed)
@@ -3091,6 +3091,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
