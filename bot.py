@@ -379,6 +379,13 @@ BOSS_CONFIG = {
         "penalty": 3000, 
         "color": 0x992d22,
         "desc": "Thượng cổ Ma Thần, sức mạnh đủ để hủy thiên diệt địa."
+    },
+    "Thôn Thiên Kình Ma": {
+        "power_required": 300000, # Yêu cầu lực chiến cao hơn Mục Dã Di
+        "reward": (35, 45),       # Phần thưởng hậu hĩnh hơn
+        "penalty": 8000,          # Thất bại sẽ tổn thất nặng hơn
+        "color": 0x2ecc71,        # Màu xanh bích rực rỡ
+        "desc": "Hung thú dưới đáy biển sâu, máu của nó có thể nhuộm đỏ cả đại dương."
     }
 }
 # ========== UTIL FUNCTIONS (THUẦN MONGODB) ==========
@@ -2078,7 +2085,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
     embed.set_thumbnail(url="https://i.imgur.com/39A72Pj.png")
     
     await interaction.followup.send(embed=embed)
-#BOSS
+#
 active_battles = set()
 async def boss_autocomplete(interaction: discord.Interaction, current: str):
     return [
@@ -2129,15 +2136,27 @@ class BossInviteView(discord.ui.View):
             today = datetime.now().strftime("%Y-%m-%d")
             
             if is_win:
+
                 # --- CHIẾN THẮNG: Tính thưởng theo Reward cũ ---
                 reward_val = random.randint(*self.config['reward'])
                 lt_base = reward_val * 1 
                 reward_exp = reward_val * 20  
                 
                 umt_msg = "\n🌀 **U Minh Tước** hiện thân, nghịch chuyển càn khôn giúp tổ đội thắng lợi!" if has_umt else ""
+                
+                # --- LOGIC RƠI TIÊN THẠCH CHO BOSS ---
                 tien_thach_msg = ""
-                if self.ten_boss == "Mục Dã Di" and random.random() < 0.20:
-                    tien_thach_msg = "\n🔮 **CHÍ TÔN BẢO VẬT:** Cả hai nhận được **1 Tiên Thạch**!"
+                random_rate = random.random()
+
+                if self.ten_boss == "Mục Dã Di":
+                    if random_rate < 0.20: # 20% tỉ lệ
+                        tien_thach_msg = "\n🔮 **CHÍ TÔN BẢO VẬT:** Cả hai nhận được **1 Tiên Thạch**!"
+                        # Logic cộng tiền thạch vào database ở đây (nếu đạo hữu đã viết)
+
+                elif self.ten_boss == "Thôn Thiên Kình Ma":
+                    if random_rate < 0.35: # 35% tỉ lệ cho Boss cao cấp
+                        tien_thach_msg = "\n🔮 **CHÍ TÔN BẢO VẬT:** Cả hai nhận được **1 Tiên Thạch**!"
+                        # Lưu ý: Nhớ cập nhật biến số lượng này vào lệnh update database phía dưới
 
                 player_reports = []
                 for uid in self.ids:
@@ -3128,6 +3147,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
