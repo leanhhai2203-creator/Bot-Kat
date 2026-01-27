@@ -169,21 +169,21 @@ EQ_TYPES = ["Kiếm", "Nhẫn", "Giáp", "Tay", "Ủng"]
 BI_CANH_CONFIG = {
     "tcn": {
         "name": "Tiên Cư Nguyên",
-        "boss_power": 35000,
+        "boss_power": 50000,
         "boss_chance": 0.4, "trap_chance": 0.1, "treasure_chance": 0.2,
         "exp": 500, "lt": 10, "trap_penalty": 500,
         "gear_rate": [6, 7]
     },
     "nmq": {
         "name": "Nhạn Môn Quan",
-        "boss_power": 50000,
+        "boss_power": 900000,
         "boss_chance": 0.4, "trap_chance": 0.15, "treasure_chance": 0.25,
         "exp": 750, "lt": 15, "trap_penalty": 750,
         "gear_rate": [7, 8]
     },
     "bctl": {
         "name": "Biên Cảnh Tống Liêu",
-        "boss_power": 70000,
+        "boss_power": 125000,
         "boss_chance": 0.5, "trap_chance": 0.20, "treasure_chance": 0.2,
         "exp": 1000, "lt": 20, "trap_penalty": 1500,
         "tien_thach_chance": 0.1,
@@ -360,21 +360,21 @@ GIOI_CHI_CONFIG = {
 }
 BOSS_CONFIG = {
     "Hồng Tụ Tôn Sứ": {
-        "power_required": 50000, 
+        "power_required": 75000, 
         "reward": (10, 18), # Giữ nguyên hệ số reward cũ
         "penalty": 500, 
         "color": 0x3498db,
         "desc": "Yêu nữ am tường ảo thuật, thích hợp cho tu sĩ mới vào nghề."
     },
     "Lôi Âm Tôn Sứ": {
-        "power_required": 80000,
+        "power_required": 100000,
         "reward": (18, 25), # Giữ nguyên hệ số reward cũ
         "penalty": 1500, 
         "color": 0xe67e22,
         "desc": "Hộ pháp đọa lạc, lôi điện quanh thân, thực lực không thể coi thường."
     },
     "Mục Dã Di": {
-        "power_required": 125000,
+        "power_required": 150000,
         "reward": (25, 35), # Giữ nguyên hệ số reward cũ
         "penalty": 3000, 
         "color": 0x992d22,
@@ -1203,7 +1203,7 @@ async def dotpha(interaction: discord.Interaction):
     
     uid = str(interaction.user.id)
     # --- DANH SÁCH ID ĐƯỢC THIÊN ĐẠO ƯU ÁI ---
-    VIP_LIST = ["472564016917643264"] 
+    VIP_LIST = ["623071766407020547"] 
 
     try:
         u = await users_col.find_one({"_id": uid})
@@ -2774,7 +2774,7 @@ async def haiduoc(interaction: discord.Interaction):
 @bot.tree.command(name="thuhoach", description="Trở về từ Linh Sơn và bán thảo dược")
 async def thuhoach(interaction: discord.Interaction):
     ALLOWED_CHANNEL_ID = 1461017212365181160
-    VIP_UID = "" # Thay bằng ID Discord bạn muốn ưu tiên (ví dụ: "123456789")
+    VIP_UID = "623071766407020547" # Thay bằng ID Discord bạn muốn ưu tiên (ví dụ: "123456789")
     
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
         return await interaction.response.send_message(
@@ -3120,6 +3120,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
