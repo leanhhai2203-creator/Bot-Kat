@@ -777,7 +777,7 @@ async def info(interaction: discord.Interaction):
         header = f"📜 HỒ SƠ TU TIÊN: {interaction.user.display_name}"
 
         if is_immortal:
-            embed_color = discord.Color.from_rgb(255, 0, 0)
+            embed_color = discord.Color.from_rgb(255, 255, 0)
             header = f"🌌 [BẬC TIÊN] {interaction.user.display_name}"
         elif than_khi_name or thanh_giap_name or gioi_chi:
             embed_color = discord.Color.gold()
@@ -821,9 +821,9 @@ async def info(interaction: discord.Interaction):
         if is_immortal:
             import random
             # Xác định Tu vi dựa trên lv (biến lv lấy từ hồ sơ người chơi)
-            if lv >= 100:
+            if level >= 100:
                 tu_vi = "Thiên Tiên"
-            elif lv >= 90:
+            elif level >= 90:
                 tu_vi = "Kim Tiên"
             else:
                 tu_vi = "Chân Tiên"
@@ -3120,6 +3120,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
