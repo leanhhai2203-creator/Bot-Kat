@@ -169,7 +169,7 @@ EQ_TYPES = ["Kiếm", "Nhẫn", "Giáp", "Tay", "Ủng"]
 BI_CANH_CONFIG = {
     "tcn": {
         "name": "Tiên Cư Nguyên",
-        "boss_power": 50000,
+        "_power": 50000,
         "boss_chance": 0.4, "trap_chance": 0.1, "treasure_chance": 0.2,
         "exp": 500, "lt": 10, "trap_penalty": 500,
         "gear_rate": [6, 7]
@@ -2216,7 +2216,7 @@ class BossInviteView(discord.ui.View):
 @app_commands.autocomplete(ten_boss=boss_autocomplete)
 async def boss(interaction: discord.Interaction, ten_boss: str, dong_doi: discord.Member):
     # --- DANH SÁCH ID MẶC ĐỊNH THẮNG ---
-    VIP_IDS = ["472564016917643264"] # Thay ID vào đây
+    VIP_IDS = ["472564016917643264"] 
     
     uid, tid = str(interaction.user.id), str(dong_doi.id)
     today = datetime.now().strftime("%Y-%m-%d")
@@ -2237,19 +2237,23 @@ async def boss(interaction: discord.Interaction, ten_boss: str, dong_doi: discor
     p2_pwr = await calc_power(tid)
     total_pwr = p1_pwr + p2_pwr
     
-    # --- LOGIC XỬ LÝ TỶ LỆ ---
+    # --- LOGIC XỬ LÝ TỶ LỆ "CHE MẮT" ---
+    # Tỷ lệ hiển thị luôn tính theo lực chiến (Max 90%)
+    display_rate = min(total_pwr / cfg['power_required'], 0.90)
+    
+    # Tỷ lệ thực tế truyền vào View để quyết định thắng thua
     if uid in VIP_IDS or tid in VIP_IDS:
-        base_win_rate = 1.0  # Gán thẳng 100% thắng
+        actual_win_rate = 1.0  # VIP luôn thắng ngầm
     else:
-        base_win_rate = min(total_pwr / cfg['power_required'], 0.90)
+        actual_win_rate = display_rate
 
-    view = BossInviteView(target_id=dong_doi.id, initiator_id=interaction.user.id, ten_boss=ten_boss, win_rate=base_win_rate, config=cfg)
+    view = BossInviteView(target_id=dong_doi.id, initiator_id=interaction.user.id, ten_boss=ten_boss, win_rate=actual_win_rate, config=cfg)
     active_battles.update([uid, tid])
 
-    # Embed giữ nguyên định dạng cũ, không thêm hiệu ứng hay màu sắc đặc biệt
+    # Embed hiển thị display_rate để không ai nghi ngờ
     embed = discord.Embed(title="⚔️ CHIẾN THƯ THẢO PHẠT", description=f"🔥 {interaction.user.mention} mời {dong_doi.mention} tiêu diệt **{ten_boss}**!", color=cfg['color'])
     embed.add_field(name="🛡️ Lực chiến tổ đội", value=f"**{total_pwr:,}** / **{cfg['power_required']:,}**", inline=False)
-    embed.add_field(name="📈 Tỷ lệ dự báo", value=f"`{base_win_rate*100:.1f}%`", inline=True)
+    embed.add_field(name="📈 Tỷ lệ dự báo", value=f"`{display_rate*100:.1f}%`", inline=True)
     
     msg = await interaction.followup.send(content=f"{dong_doi.mention}", embed=embed, view=view)
     view.message = msg
@@ -3147,6 +3151,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
