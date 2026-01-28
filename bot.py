@@ -2154,7 +2154,7 @@ class BossInviteView(discord.ui.View):
                         # Logic cộng tiền thạch vào database ở đây (nếu đạo hữu đã viết)
 
                 elif self.ten_boss == "Thôn Thiên Kình Ma":
-                    if random_rate < 0.35: # 35% tỉ lệ cho Boss cao cấp
+                    if random_rate < 0.5: # 35% tỉ lệ cho Boss cao cấp
                         tien_thach_msg = "\n🔮 **CHÍ TÔN BẢO VẬT:** Cả hai nhận được **1 Tiên Thạch**!"
                         # Lưu ý: Nhớ cập nhật biến số lượng này vào lệnh update database phía dưới
 
@@ -3151,6 +3151,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
