@@ -2129,12 +2129,14 @@ async def boss_autocomplete(interaction: discord.Interaction, current: str):
         for name in BOSS_CONFIG.keys() if current.lower() in name.lower()
     ]
 class BossInviteView(discord.ui.View):
-    def __init__(self, target_id, initiator_id, ten_boss, win_rate, config):
+    # 1. Thêm tham số display_rate vào __init__
+    def __init__(self, target_id, initiator_id, ten_boss, win_rate, display_rate, config):
         super().__init__(timeout=60)
         self.ids = [str(initiator_id), str(target_id)]
         self.target_id = target_id
         self.ten_boss = ten_boss
         self.win_rate = float(win_rate)
+        self.display_rate = float(display_rate) # Lưu lại để dùng sau này
         self.config = config
         self.message = None
 
@@ -2159,7 +2161,7 @@ class BossInviteView(discord.ui.View):
             )
             users_data = {self.ids[0]: u1, self.ids[1]: u2}
             
-            # --- KIỂM TRA U MINH TƯỚC (Buff tỷ lệ thắng) ---
+            # --- KIỂM TRA U MINH TƯỚC ---
             final_win_rate = self.win_rate
             has_umt = False
             for uid in self.ids:
@@ -2172,27 +2174,23 @@ class BossInviteView(discord.ui.View):
             today = datetime.now().strftime("%Y-%m-%d")
             
             if is_win:
-
-                # --- CHIẾN THẮNG: Tính thưởng theo Reward cũ ---
+                # --- CHIẾN THẮNG ---
                 reward_val = random.randint(*self.config['reward'])
                 lt_base = reward_val * 1 
                 reward_exp = reward_val * 20  
                 
                 umt_msg = "\n🌀 **U Minh Tước** hiện thân, nghịch chuyển càn khôn giúp tổ đội thắng lợi!" if has_umt else ""
                 
-                # --- LOGIC RƠI TIÊN THẠCH CHO BOSS ---
+                # --- LOGIC RƠI TIÊN THẠCH ---
                 tien_thach_msg = ""
                 random_rate = random.random()
 
                 if self.ten_boss == "Mục Dã Di":
-                    if random_rate < 0.20: # 20% tỉ lệ
+                    if random_rate < 0.20:
                         tien_thach_msg = "\n🔮 **CHÍ TÔN BẢO VẬT:** Cả hai nhận được **1 Tiên Thạch**!"
-                        # Logic cộng tiền thạch vào database ở đây (nếu đạo hữu đã viết)
-
                 elif self.ten_boss == "Thôn Thiên Kình Ma":
-                    if random_rate < 0.5: # 35% tỉ lệ cho Boss cao cấp
+                    if random_rate < 0.5:
                         tien_thach_msg = "\n🔮 **CHÍ TÔN BẢO VẬT:** Cả hai nhận được **1 Tiên Thạch**!"
-                        # Lưu ý: Nhớ cập nhật biến số lượng này vào lệnh update database phía dưới
 
                 player_reports = []
                 for uid in self.ids:
@@ -2200,7 +2198,6 @@ class BossInviteView(discord.ui.View):
                     lt_final = lt_base
                     fox_msg = ""
 
-                    # --- KIỂM TRA HỒ LY (Buff 20% Linh Thạch) ---
                     if user_info and user_info.get("pet") == "Hóa Hình Hồ Ly":
                         bonus = int(lt_base * 0.2)
                         lt_final += bonus
@@ -2208,20 +2205,21 @@ class BossInviteView(discord.ui.View):
 
                     upd = {"$inc": {"linh_thach": lt_final, "exp": reward_exp}, "$set": {"last_boss": today}}
                     if tien_thach_msg: upd["$inc"]["tien_thach"] = 1
+                    
                     await users_col.update_one({"_id": uid}, upd)
                     
                     member = interaction.guild.get_member(int(uid))
                     name = member.display_name if member else "Tu sĩ"
                     player_reports.append(f"👤 **{name}**: `+{lt_final}` 💎{fox_msg}")
+                    # Gọi check_level_up (đảm bảo hàm này đã được định nghĩa ở ngoài)
                     await check_level_up(uid, interaction.channel, f"{name}{fox_msg}")
 
                 msg = f"🎉 **THÀNH CÔNG:** Tiêu diệt **{self.ten_boss}**!{umt_msg}{tien_thach_msg}"
                 color = 0x4B0082 if has_umt else discord.Color.gold()
             
-            # --- TRONG PHẦN ELSE (THẤT BẠI) CỦA BossInviteView ---
             else:
+                # --- THẤT BẠI ---
                 penalty = self.config['penalty']
-                # 1. Trừ EXP cho cả đội
                 await users_col.update_many(
                     {"_id": {"$in": self.ids}}, 
                     {"$inc": {"exp": -penalty}, "$set": {"last_boss": today}}
@@ -2229,8 +2227,7 @@ class BossInviteView(discord.ui.View):
                 
                 player_reports = []
                 for uid in self.ids:
-                    # 2. Kiểm tra tụt cấp thực tế
-                    is_down = await check_level_down(uid)
+                    is_down = await check_level_down(uid) # Đảm bảo dùng hàm check_level_down mới (có vòng lặp while)
                     u_after = await users_col.find_one({"_id": uid})
                     new_lv = u_after.get("level", 1)
                     
@@ -2242,27 +2239,22 @@ class BossInviteView(discord.ui.View):
 
                 msg = f"💀 **BẠI TRẬN:** {self.ten_boss} quá mạnh, tổ đội trọng thương tổn thất `-{penalty}` EXP!"
                 color = discord.Color.red()
-                player_reports = ["Cả hai cần tu luyện thêm trước khi tái chiến!"]
+                # ❌ ĐÃ XÓA DÒNG GÁN ĐÈ player_reports Ở ĐÂY ĐỂ HIỆN KẾT QUẢ RỚT CẤP
 
             emb = discord.Embed(title=f"⚔️ CHIẾN BÁO: {self.ten_boss}", description=msg, color=color)
-            emb.add_field(name="🎁 Chi tiết thưởng", value="\n".join(player_reports))
-            emb.add_field(name="📈 Tỷ lệ thực tế", value=f"`{display_rate*100:.1f}%`{' (Buff 🌀)' if has_umt else ''}", inline=False)
+            emb.add_field(name="🎁 Chi tiết thưởng", value="\n".join(player_reports), inline=False)
+            
+            # ✅ SỬ DỤNG self.display_rate ĐỂ KHÔNG BỊ LỖI NAME ERROR
+            emb.add_field(name="📈 Tỷ lệ dự báo", value=f"`{self.display_rate*100:.1f}%`{' (Buff 🌀)' if has_umt else ''}", inline=False)
+            
             await interaction.followup.send(content=f"<@{self.ids[0]}> <@{self.ids[1]}>", embed=emb)
 
         except Exception as e:
-            print(f"Lỗi Boss: {e}")
+            print(f"Lỗi Boss: {e}") # Đạo hữu check log ở đây sẽ thấy lỗi cụ thể
             await interaction.followup.send("⚠️ Pháp trận bị nhiễu loạn, thảo phạt thất bại!")
         finally:
             active_battles.difference_update(self.ids)
             self.stop()
-
-    @discord.ui.button(label="❌ Từ Chối", style=discord.ButtonStyle.danger)
-    async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.target_id:
-            return await interaction.response.send_message("❌ Bạn không có quyền từ chối!", ephemeral=True)
-        await interaction.response.edit_message(content="❌ Lời mời thảo phạt bị khước từ.", view=None)
-        active_battles.difference_update(self.ids)
-        self.stop()
 @bot.tree.command(name="boss", description="Mời đồng đạo thảo phạt Boss thế giới")
 @app_commands.describe(ten_boss="Chọn Boss", dong_doi="Người đi cùng")
 @app_commands.autocomplete(ten_boss=boss_autocomplete)
@@ -2290,23 +2282,38 @@ async def boss(interaction: discord.Interaction, ten_boss: str, dong_doi: discor
     total_pwr = p1_pwr + p2_pwr
     
     # --- LOGIC XỬ LÝ TỶ LỆ "CHE MẮT" ---
-    # Tỷ lệ hiển thị luôn tính theo lực chiến (Max 90%)
+    # 1. Tính tỷ lệ hiển thị ảo (Dựa trên lực chiến thực tế)
     display_rate = min(total_pwr / cfg['power_required'], 0.90)
     
-    # Tỷ lệ thực tế truyền vào View để quyết định thắng thua
+    # 2. Quyết định tỷ lệ thắng ngầm
     if uid in VIP_IDS or tid in VIP_IDS:
-        actual_win_rate = 1.0  # VIP luôn thắng ngầm
+        actual_win_rate = 1.0  # VIP chắc chắn thắng
     else:
         actual_win_rate = display_rate
 
-    view = BossInviteView(target_id=dong_doi.id, initiator_id=interaction.user.id, ten_boss=ten_boss, win_rate=actual_win_rate, config=cfg)
+    # 3. Khởi tạo View (CHỈ KHAI BÁO MỘT LẦN DUY NHẤT VỚI ĐẦY ĐỦ THAM SỐ)
+    view = BossInviteView(
+        target_id=dong_doi.id, 
+        initiator_id=interaction.user.id, 
+        ten_boss=ten_boss, 
+        win_rate=actual_win_rate, 
+        display_rate=display_rate, # Biến này cực kỳ quan trọng để không bị lỗi NameError
+        config=cfg
+    )
+    
+    # Thêm vào danh sách đang chiến đấu
     active_battles.update([uid, tid])
 
-    # Embed hiển thị display_rate để không ai nghi ngờ
-    embed = discord.Embed(title="⚔️ CHIẾN THƯ THẢO PHẠT", description=f"🔥 {interaction.user.mention} mời {dong_doi.mention} tiêu diệt **{ten_boss}**!", color=cfg['color'])
+    # 4. Tạo Embed hiển thị cho mọi người xem
+    embed = discord.Embed(
+        title="⚔️ CHIẾN THƯ THẢO PHẠT", 
+        description=f"🔥 {interaction.user.mention} mời {dong_doi.mention} tiêu diệt **{ten_boss}**!", 
+        color=cfg['color']
+    )
     embed.add_field(name="🛡️ Lực chiến tổ đội", value=f"**{total_pwr:,}** / **{cfg['power_required']:,}**", inline=False)
     embed.add_field(name="📈 Tỷ lệ dự báo", value=f"`{display_rate*100:.1f}%`", inline=True)
     
+    # Gửi tin nhắn
     msg = await interaction.followup.send(content=f"{dong_doi.mention}", embed=embed, view=view)
     view.message = msg
 @bot.tree.command(name="thanthu", description="Thần thú thị uy chân ngôn (Chỉ dành cho người có linh thú)")
@@ -3203,6 +3210,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
