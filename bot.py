@@ -381,7 +381,7 @@ BOSS_CONFIG = {
         "desc": "Thượng cổ Ma Thần, sức mạnh đủ để hủy thiên diệt địa."
     },
     "Thôn Thiên Kình Ma": {
-        "power_required": 350000, # Yêu cầu lực chiến cao hơn Mục Dã Di
+        "power_required": 400000, # Yêu cầu lực chiến cao hơn Mục Dã Di
         "reward": (35, 45),       # Phần thưởng hậu hĩnh hơn
         "penalty": 10000,          # Thất bại sẽ tổn thất nặng hơn
         "color": 0x2ecc71,        # Màu xanh bích rực rỡ
@@ -3203,6 +3203,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
