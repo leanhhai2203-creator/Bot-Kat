@@ -2595,9 +2595,12 @@ async def phong_than_bang(interaction: discord.Interaction):
 @app_commands.describe(dong_doi="Mời đồng đội trợ chiến")
 async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = None):
     uid = str(interaction.user.id)
+    
+    # Chặn nếu đang trong một phiên làm việc khác
+    if uid in active_bicanh_sessions:
+        return await interaction.response.send_message("⚠️ Đạo hữu đang có một pháp trận Bí Cảnh chờ xử lý! Hãy hoàn thành nó trước.", ephemeral=True)
+    
     today = datetime.now().strftime("%Y-%m-%d")
-
-    # 1. KIỂM TRA CHỦ PHÒNG (LEADER)
     u_data = await users_col.find_one({"_id": uid})
     if not u_data: 
         return await interaction.response.send_message("❌ Đạo hữu chưa có hồ sơ tu tiên!", ephemeral=True)
@@ -2638,10 +2641,16 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
         if t_bc.get("trong_thuong"):
             return await interaction.response.send_message(f"❌ {dong_doi.display_name} đang trọng thương, không thể xuất chiến!", ephemeral=True)
 
+    active_bicanh_sessions.add(uid)
+
     # --- VIEW CHỌN BÍ CẢNH ---
     class BiCanhSelectView(discord.ui.View):
         def __init__(self):
             super().__init__(timeout=60)
+
+        async def on_timeout(self):
+            # Nếu hết thời gian mà không chọn, giải phóng UID
+            active_bicanh_sessions.discard(uid)
 
         @discord.ui.select(
             placeholder="Chọn Bí Cảnh để khởi hành...",
@@ -2650,6 +2659,9 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
         async def callback(self, i: discord.Interaction, select: discord.ui.Select):
             if str(i.user.id) != uid: 
                 return await i.response.send_message("❌ Đây không phải pháp trận của đạo hữu!", ephemeral=True)
+            
+            # Giải phóng ngay khi bắt đầu xử lý Database để tránh kẹt nếu code lỗi phía dưới
+            active_bicanh_sessions.discard(uid)
             
             choice = select.values[0]
             cfg = BI_CANH_CONFIG[choice]
@@ -2787,6 +2799,7 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
                 embed=discord.Embed(title=f"🏔️ {cfg['name']}", description=final_msg, color=color), 
                 view=None
             )
+            self.stop()
 
     # --- VIEW XÁC NHẬN MỜI ĐỒNG ĐỘI ---
     class ConfirmView(discord.ui.View):
@@ -2794,27 +2807,40 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
             super().__init__(timeout=30)
             self.interaction = interaction
 
+        async def on_timeout(self):
+            # Hết giờ mời đồng đội -> Giải phóng chủ phòng
+            active_bicanh_sessions.discard(uid)
+
         @discord.ui.button(label="Đồng Ý", style=discord.ButtonStyle.green, emoji="⚔️")
         async def confirm(self, i: discord.Interaction, btn: discord.ui.Button):
             if str(i.user.id) != tid: 
                 return await i.response.send_message("❌ Lời mời này không dành cho đạo hữu!", ephemeral=True)
+            
             await i.response.edit_message(content=f"✅ **{dong_doi.display_name}** đã gia nhập pháp trận!", view=None)
-            # Mở view chọn bí cảnh sau khi đồng ý
+            # Chuyển sang View chọn bí cảnh (Vẫn giữ uid trong active_sessions)
             await self.interaction.edit_original_response(view=BiCanhSelectView())
 
         @discord.ui.button(label="Từ Chối", style=discord.ButtonStyle.red)
         async def cancel(self, i: discord.Interaction, btn: discord.ui.Button):
             if str(i.user.id) != tid: return
+            # Đồng đội từ chối -> Giải phóng chủ phòng
+            active_bicanh_sessions.discard(uid)
             await i.response.edit_message(content=f"❌ **{dong_doi.display_name}** đã từ chối trợ chiến.", view=None)
+            self.stop()
 
     # KHỞI CHẠY LỆNH
-    if dong_doi:
-        await interaction.response.send_message(
-            content=f"📜 {interaction.user.mention} mời {dong_doi.mention} trợ chiến Bí Cảnh!\n*(Trợ chiến không tốn lượt, nhưng nếu dính bẫy sẽ cùng Trọng Thương)*", 
-            view=ConfirmView(interaction)
-        )
-    else:
-        await interaction.response.send_message(content="🏔️ Chọn Bí Cảnh thám hiểm:", view=BiCanhSelectView())
+    try:
+        if dong_doi:
+            await interaction.response.send_message(
+                content=f"📜 {interaction.user.mention} mời {dong_doi.mention} trợ chiến Bí Cảnh!\n*(Trợ chiến không tốn lượt, nhưng nếu dính bẫy sẽ cùng Trọng Thương)*", 
+                view=ConfirmView(interaction)
+            )
+        else:
+            await interaction.response.send_message(content="🏔️ Chọn Bí Cảnh thám hiểm:", view=BiCanhSelectView())
+    except Exception as e:
+        # Nếu có lỗi khi gửi tin nhắn, giải phóng UID ngay
+        active_bicanh_sessions.discard(uid)
+        print(f"Lỗi khởi chạy Bí Cảnh: {e}")
 #full lệnh hái dược
 @bot.tree.command(name="haiduoc", description="Khởi hành vào Linh Sơn hái thuốc")
 async def haiduoc(interaction: discord.Interaction):
@@ -3201,6 +3227,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
