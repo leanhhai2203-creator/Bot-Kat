@@ -580,46 +580,37 @@ async def check_level_up(uid, channel, name):
             except:
                 pass 
 async def check_level_down(uid):
-    # Lấy dữ liệu mới nhất sau khi đã bị trừ penalty
     user = await users_col.find_one({"_id": uid})
-    if not user: return False
-    
     current_lv = user.get("level", 1)
     current_exp = user.get("exp", 0)
     
-    # Checkpoints không thay đổi
+    if current_exp >= 0: return False # Không nợ thì không rớt
+
     checkpoints = [11, 21, 31, 41, 51, 61, 71, 81, 91]
-    
-    down_count = 0 # Đếm số cấp đã rớt
-    
-    # Chạy vòng lặp cho đến khi EXP không còn âm HOẶC không thể lùi thêm
+    original_lv = current_lv
+
     while current_exp < 0 and current_lv > 1:
-        # Nếu chạm mốc khóa cảnh giới, reset về 0 và dừng lại
+        # 1. Hạ cấp trước
+        current_lv -= 1
+        
+        # 2. Lấy EXP của cấp vừa hạ để trả nợ
+        # (Người chơi rớt 1 cấp thì "hồi" lại được số EXP để lên cấp đó)
+        current_exp += exp_needed(current_lv) 
+
+        # 3. Nếu chạm mốc bảo hiểm thì xóa nợ, dừng rớt
         if current_lv in checkpoints:
             current_exp = 0
-            await users_col.update_one({"_id": uid}, {"$set": {"exp": 0}})
-            break 
-            
-        # Tính toán lùi 1 cấp
-        current_lv -= 1
-        req_exp_prev_lv = exp_needed(current_lv)
-        current_exp = req_exp_prev_lv + current_exp # EXP âm cộng vào mức trần cấp dưới
-        
-        # Đảm bảo không âm dưới 0 sau khi tính (trừ khi vẫn còn lùi tiếp được)
-        if current_exp < 0 and current_lv == 1:
-            current_exp = 0
-            
-        down_count += 1
+            break
 
-    # Cập nhật kết quả cuối cùng sau khi đã lùi đủ số cấp
-    if down_count > 0:
-        await users_col.update_one(
-            {"_id": uid},
-            {"$set": {"level": current_lv, "exp": max(0, current_exp)}}
-        )
-        return True
+    # Nếu sau khi cộng hết mà vẫn âm (nợ quá nhiều), thì reset về 0
+    if current_exp < 0: current_exp = 0
+
+    await users_col.update_one(
+        {"_id": uid}, 
+        {"$set": {"level": current_lv, "exp": int(current_exp)}}
+    )
     
-    return False
+    return current_lv < original_lv
 # ========== VÒNG LẶP THIÊN Ý (MONGODB) ==========
 @tasks.loop(hours=4.8)
 async def thien_y_loop():
@@ -3210,6 +3201,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
