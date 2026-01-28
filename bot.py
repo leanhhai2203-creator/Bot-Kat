@@ -192,10 +192,10 @@ BI_CANH_CONFIG = {
     }
 }
 PET_CONFIG = {
-    "Tiểu Hỏa Phượng": {
-        "atk": 180, "hp": 2000, 
-        "drop_buff": 0.1, "break_buff": 0, "risk_reduce": 0,
-        "effect": "Tăng 10% rơi đồ", "color": 0xe74c3c, "icon": "🔥",
+    "Cửu Thiên Hỏa Phượng": {
+        "atk": 180, "hp": 2500, 
+        "drop_buff": 0.5, "break_buff": 0, "risk_reduce": 0,
+        "effect": "Tăng 50% rơi đồ", "color": 0xe74c3c, "icon": "🔥",
         "quotes": [
             "🔥 Thân mang Chân Hỏa, nhất vũ kinh thiên, thiêu rụi tà ma!",
             "🔥 Phượng hoàng niết bàn, hỏa diệm ngập trời, vạn vật thành tro!",
@@ -213,7 +213,7 @@ PET_CONFIG = {
         ]
     },
     "Thánh Linh Khưu": {
-        "atk": 160, "hp": 3200,
+        "atk": 160, "hp": 2200,
         "trap_heal": 0.8, 
         "break_buff": 0, "risk_reduce": 0,
         "effect": "Cung cấp khả năng chữa trị", "color": 0x33ff99, "icon": "🦌",
@@ -245,9 +245,9 @@ PET_CONFIG = {
             "❄️ Băng tinh vĩnh cửu, đóng băng thời gian, vạn pháp quy nhất!"
         ]
     },
-    "Thôn Phệ Thú": {
-        "atk": 170, "hp": 2200, 
-        "exp_mult": 1.15, "break_buff": 0, "risk_reduce": 0,
+    "Thượng Cổ Thao Thiết": {
+        "atk": 170, "hp": 2500, 
+        "exp_mult": 2, "break_buff": 0, "risk_reduce": 0,
         "effect": "Tăng 15% EXP", "color": 0x9b59b6, "icon": "🐾",
         "quotes": [
             "🐾 Thôn thiên nạp địa, hấp thụ tinh hoa, tu vi đại tiến!",
@@ -255,9 +255,9 @@ PET_CONFIG = {
             "🐾 Một ngụm sạch bóng, vạn linh quy phục, đạo quả viên mãn!"
         ]
     },
-    "Huyền Quy": {
-        "atk": 120, "hp": 3000, 
-        "break_buff": 0, "risk_reduce": 0.5,
+    "Thái Cổ Trấn Thế Quy": {
+        "atk": 150, "hp": 3000, 
+        "break_buff": 0, "risk_reduce": 1,
         "effect": "Giảm 50% rủi ro Lôi Kiếp", "color": 0x2ecc71, "icon": "🐢",
         "quotes": [
             "🐢 Bất động như sơn, vạn kiếp bất xâm, bảo hộ chân thân!",
@@ -739,7 +739,7 @@ async def on_message(message):
         try: await message.add_reaction(pet_info["icon"])
         except: pass
 
-        if user_pet == "Thôn Phệ Thú":
+        if user_pet == "Thượng Cổ Thao Thiết":
             pet_bonus = int(base_exp * (pet_info.get("exp_mult", 1.15) - 1))
             if is_server_buffed:
                 try: await message.add_reaction("✨")
@@ -1669,9 +1669,9 @@ async def attack(interaction: discord.Interaction):
     additional_buff = 0
     pet_aura = ""
 
-    # Kiểm tra buff từ Linh thú (Tiểu Hỏa Phượng)
-    if u.get("pet") == "Tiểu Hỏa Phượng":
-        additional_buff = 0.25
+    # Kiểm tra buff từ Linh thú (Cửu Thiên Hỏa Phượng)
+    if u.get("pet") == "Cửu Thiên Hỏa Phượng":
+        additional_buff = 0.8
         pet_aura = "✨ *Hỏa Phượng minh khiết, thiên vận gia thân!*"
 
     # Tính toán tỷ lệ rơi cuối cùng
@@ -1697,12 +1697,12 @@ async def attack(interaction: discord.Interaction):
             exp_from_gear = eq_lv * 10
             exp_gain += exp_from_gear 
             drop_msg = f"\n{pet_aura}\n🗑️ Rơi ra `{eq_type} Cấp {eq_lv}`, tự rã nhận **{exp_from_gear} EXP**."
-   # 7. TÍNH TOÁN SỐ LƯỢT MỚI (Xử lý hồi lượt từ Thôn Phệ Thú)
+   # 7. TÍNH TOÁN SỐ LƯỢT MỚI (Xử lý hồi lượt từ pet)
     actual_count_inc = 1
     refund_msg = ""
-    if pet_name == "Tiểu Hỏa Phượng" and random.randint(1, 100) <= 30:
+    if pet_name == "Cửu Thiên Hỏa Phượng" and random.randint(1, 100) <= 50:
         actual_count_inc = 0
-        refund_msg = "\n🌀 **Tiểu Hỏa Phượng** hấp thụ linh khí,Tái Sinh, giúp bạn không tốn thể lực!"
+        refund_msg = "\n🌀 **Cửu Thiên Hỏa Phượng** hấp thụ linh khí,Tái Sinh, giúp bạn không tốn thể lực!"
 
     # CHỐT CHẶN CUỐI CÙNG: Tính con số chính xác để ghi đè vào Database
     final_count_to_save = current_attack_count + actual_count_inc
@@ -3229,6 +3229,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
