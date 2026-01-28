@@ -2684,53 +2684,57 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
             if roll < cfg["trap_chance"]:
                 penalty = cfg["trap_penalty"]
                 
-                # Tính lượt đi mới (chỉ tăng thêm 1 thay vì set cứng bằng 3)
-                new_count_after_trap = u_bc.get("count", 0) + 1
-                if new_count_after_trap > 3: new_count_after_trap = 3 # Giới hạn tối đa là 3
+                # 1. KIỂM TRA GIỚI CHỈ (RING) CHO CHỦ PHÒNG
+                # Giả định dữ liệu giới chỉ lưu tại u_data.get("ring")
+                u_ring = u_data.get("ring", "")
+                is_u_protected = (u_ring == "Thiên Đạo Vô Thượng Lệnh")
+                
+                # Cập nhật Chủ phòng
+                u_update_data = {
+                    "$inc": {"exp": -penalty}, 
+                    "$set": {
+                        "bicanh_daily.date": today,
+                        "bicanh_daily.count": min(u_bc.get("count", 0) + 1, 3),
+                    }
+                }
+                # Nếu không có giới chỉ bảo hiệu mới bị Trọng Thương
+                if not is_u_protected:
+                    u_update_data["$set"]["bicanh_daily.trong_thuong"] = True
+                else:
+                    u_update_data["$set"]["bicanh_daily.trong_thuong"] = False
 
-                # Cập nhật Chủ phòng: Trừ EXP + Tăng 1 lượt + Set Trọng Thương=True
-                await users_col.update_one(
-                    {"_id": uid}, 
-                    {
-                        "$inc": {"exp": -penalty}, 
+                await users_col.update_one({"_id": uid}, u_update_data)
+                
+                # 2. CẬP NHẬT ĐỒNG ĐỘI (NẾU CÓ)
+                if tid:
+                    # Kiểm tra giới chỉ cho đồng đội
+                    t_ring = t_data.get("ring", "")
+                    is_t_protected = (t_ring == "Thiên Đạo Vô Thượng Lệnh")
+
+                    t_update_data = {
+                        "$inc": {"exp": -penalty}, # Phạt EXP cố định, bỏ qua hỗ trợ Pet
                         "$set": {
                             "bicanh_daily.date": today,
-                            "bicanh_daily.count": new_count_after_trap, # Sửa ở đây: Chỉ tăng 1 lượt
-                            "bicanh_daily.trong_thuong": True # Vẫn bị trọng thương
                         }
                     }
-                )
-                
-                # Cập nhật Đồng đội (Nếu có): Set Trọng Thương=True (Không trừ lượt đi của họ)
-                if tid:
-                    # Kiểm tra Pet của đồng đội xem có kháng bẫy không (VD: Thánh Linh Khưu)
-                    t_pet = t_data.get("pet")
-                    t_pet_cfg = globals().get("PET_CONFIG", {}).get(t_pet, {})
-                    
-                    final_t_penalty = penalty
-                    heal_msg = ""
-                    
-                    # Logic Pet kháng bẫy (Nếu có)
-                    if t_pet_cfg.get("trap_heal"):
-                        healed = int(penalty * t_pet_cfg["trap_heal"])
-                        final_t_penalty -= healed
-                        heal_msg = f" (🦌 Hồi {healed})"
+                    # Nếu đồng đội không có giới chỉ bảo hộ mới bị Trọng Thương
+                    if not is_t_protected:
+                        t_update_data["$set"]["bicanh_daily.trong_thuong"] = True
+                    else:
+                        t_update_data["$set"]["bicanh_daily.trong_thuong"] = False
 
-                    await users_col.update_one(
-                        {"_id": tid}, 
-                        {
-                            "$inc": {"exp": -final_t_penalty},
-                            "$set": {
-                                "bicanh_daily.date": today,
-                                "bicanh_daily.trong_thuong": True # Đồng đội cũng bị thương
-                            }
-                        }
-                    )
+                    await users_col.update_one({"_id": tid}, t_update_data)
                 
+                # Kiểm tra rớt cấp
                 await check_level_down(uid)
                 if tid: await check_level_down(tid)
                 
-                msg = f"💥 **ĐẠI NẠN:** Dính cạm bẫy cổ xưa!\n💀 **HẬU QUẢ:** Cả đội trọng thương, chủ phòng mất toàn bộ lượt đi!"
+                # Thông báo kết quả
+                status_msg = ""
+                if is_u_protected:
+                    status_msg += f"\n hộ thân, chủ phòng thoát khỏi kiếp nạn khóa chân!"
+                
+                msg = f"💥 **ĐẠI NẠN:** Dính cạm bẫy cổ xưa!\n💀 **HẬU QUẢ:** Tổn thất {penalty} EXP.{status_msg}"
                 color = discord.Color.red()
 
             # ===== TRƯỜNG HỢP 2 & 3: KHÔNG DÍNH BẪY (AN TOÀN) =====
@@ -3229,6 +3233,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
