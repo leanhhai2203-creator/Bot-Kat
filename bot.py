@@ -496,7 +496,7 @@ async def add_exp(uid: str, amount: int):
         {"$inc": {"exp": amount}}
     )
 
-async def check_level_up(uid, channel, name):
+async def _up(uid, channel, name):
     uid = str(uid)
     u = await users_col.find_one({"_id": uid})
     if not u: return
@@ -539,51 +539,46 @@ async def check_level_up(uid, channel, name):
                 pass # Tránh treo bot nếu channel bị xóa hoặc thiếu quyền
     # Không cần phần 'else' cập nhật exp nếu đạo hữu đã dùng $inc trong hàm add_exp
 async def check_level_down(uid):
+    # Lấy dữ liệu mới nhất sau khi đã bị trừ penalty
     user = await users_col.find_one({"_id": uid})
     if not user: return False
     
-    lv = user.get("level", 1)
-    exp = user.get("exp", 0)
+    current_lv = user.get("level", 1)
+    current_exp = user.get("exp", 0)
     
-    # 1. Nếu EXP vẫn >= 0 hoặc đang ở tân thủ (lv 1) thì không xử lý
-    if exp >= 0 or lv <= 1: 
-        return False
+    # Checkpoints không thay đổi
+    checkpoints = [11, 21, 31, 41, 51, 61, 71, 81, 91]
+    
+    down_count = 0 # Đếm số cấp đã rớt
+    
+    # Chạy vòng lặp cho đến khi EXP không còn âm HOẶC không thể lùi thêm
+    while current_exp < 0 and current_lv > 1:
+        # Nếu chạm mốc khóa cảnh giới, reset về 0 và dừng lại
+        if current_lv in checkpoints:
+            current_exp = 0
+            await users_col.update_one({"_id": uid}, {"$set": {"exp": 0}})
+            break 
+            
+        # Tính toán lùi 1 cấp
+        current_lv -= 1
+        req_exp_prev_lv = exp_needed(current_lv)
+        current_exp = req_exp_prev_lv + current_exp # EXP âm cộng vào mức trần cấp dưới
+        
+        # Đảm bảo không âm dưới 0 sau khi tính (trừ khi vẫn còn lùi tiếp được)
+        if current_exp < 0 and current_lv == 1:
+            current_exp = 0
+            
+        down_count += 1
 
-    # 2. KIỂM TRA MỐC KHÓA (Checkpoints)
-    # Ví dụ: 11 (Trúc Cơ), 21 (Kết Đan)... 
-    # Nếu lv là mốc đầu của một cảnh giới mới, không cho rớt xuống cảnh giới cũ
-    checkpoints = [11, 21, 31, 41, 51, 61, 71, 81, 91] 
-    if lv in checkpoints:
-        # Giữ nguyên cấp, nhưng reset EXP về 0 để phạt
-        await users_col.update_one({"_id": uid}, {"$set": {"exp": 0}})
-        return "reset"
-
-    # 3. LOGIC GIẢM CẤP (PHẢN PHỆ)
-    new_lv = lv - 1
+    # Cập nhật kết quả cuối cùng sau khi đã lùi đủ số cấp
+    if down_count > 0:
+        await users_col.update_one(
+            {"_id": uid},
+            {"$set": {"level": current_lv, "exp": max(0, current_exp)}}
+        )
+        return True
     
-    # Lấy EXP cần có của cấp mới (cấp vừa lùi xuống)
-    # Giả sử hàm exp_needed là hàm đồng bộ (sync), nếu là async hãy thêm await
-    try:
-        req_exp_new_lv = exp_needed(new_lv) 
-    except Exception as e:
-        print(f"❌ Lỗi hàm exp_needed: {e}")
-        return False
-
-    # Tính toán EXP còn lại sau khi lùi cấp
-    # Ví dụ: Cấp 10 cần 1000 EXP. Đang cấp 11 bị âm 200.
-    # New_exp = 1000 + (-200) = 800. Người chơi sẽ ở Lv 10 (800/1000)
-    new_exp = req_exp_new_lv + exp 
-    
-    # Đảm bảo EXP không bị âm sau khi tính toán
-    final_exp = max(0, new_exp)
-    
-    await users_col.update_one(
-        {"_id": uid},
-        {"$set": {"level": new_lv, "exp": final_exp}}
-    )
-    
-    print(f"💀 Đạo hữu {uid} bị phản phệ, rớt xuống cấp {new_lv}")
-    return True
+    return False
 # ========== VÒNG LẶP THIÊN Ý (MONGODB) ==========
 @tasks.loop(hours=4.8)
 async def thien_y_loop():
@@ -2085,7 +2080,7 @@ async def add(interaction: discord.Interaction, target: discord.Member, so_luong
     embed.set_thumbnail(url="https://i.imgur.com/39A72Pj.png")
     
     await interaction.followup.send(embed=embed)
-#
+#BOSS
 active_battles = set()
 async def boss_autocomplete(interaction: discord.Interaction, current: str):
     return [
@@ -2182,12 +2177,28 @@ class BossInviteView(discord.ui.View):
                 msg = f"🎉 **THÀNH CÔNG:** Tiêu diệt **{self.ten_boss}**!{umt_msg}{tien_thach_msg}"
                 color = 0x4B0082 if has_umt else discord.Color.gold()
             
+            # --- TRONG PHẦN ELSE (THẤT BẠI) CỦA BossInviteView ---
             else:
-                # --- THẤT BẠI ---
                 penalty = self.config['penalty']
-                await users_col.update_many({"_id": {"$in": self.ids}}, {"$inc": {"exp": -penalty}, "$set": {"last_boss": today}})
-                for uid in self.ids: await check_level_down(uid)
+                # 1. Trừ EXP cho cả đội
+                await users_col.update_many(
+                    {"_id": {"$in": self.ids}}, 
+                    {"$inc": {"exp": -penalty}, "$set": {"last_boss": today}}
+                )
                 
+                player_reports = []
+                for uid in self.ids:
+                    # 2. Kiểm tra tụt cấp thực tế
+                    is_down = await check_level_down(uid)
+                    u_after = await users_col.find_one({"_id": uid})
+                    new_lv = u_after.get("level", 1)
+                    
+                    member = interaction.guild.get_member(int(uid))
+                    name = member.display_name if member else "Tu sĩ"
+                    
+                    status = f"🔻 Rớt xuống Lv.{new_lv}" if is_down else "Ổn định tu vi"
+                    player_reports.append(f"👤 **{name}**: {status}")
+
                 msg = f"💀 **BẠI TRẬN:** {self.ten_boss} quá mạnh, tổ đội trọng thương tổn thất `-{penalty}` EXP!"
                 color = discord.Color.red()
                 player_reports = ["Cả hai cần tu luyện thêm trước khi tái chiến!"]
@@ -3151,6 +3162,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
