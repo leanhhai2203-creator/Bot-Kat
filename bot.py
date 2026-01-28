@@ -2591,6 +2591,8 @@ async def phong_than_bang(interaction: discord.Interaction):
     except Exception as e:
         print(f"Lỗi Phong Thần Bảng: {e}")
         await interaction.followup.send("⚠️ Pháp trận nhiễu loạn, không thể xem bảng phong thần!")
+#bicanh
+active_bicanh_sessions = set()
 @bot.tree.command(name="bicanh", description="Khám phá Bí Cảnh (Trợ chiến không tốn lượt, dính bẫy cùng chịu)")
 @app_commands.describe(dong_doi="Mời đồng đội trợ chiến")
 async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = None):
@@ -3227,6 +3229,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
