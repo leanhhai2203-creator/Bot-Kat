@@ -538,6 +538,47 @@ async def _up(uid, channel, name):
             except:
                 pass # Tránh treo bot nếu channel bị xóa hoặc thiếu quyền
     # Không cần phần 'else' cập nhật exp nếu đạo hữu đã dùng $inc trong hàm add_exp
+async def check_level_up(uid, channel, name):
+    uid = str(uid)
+    u = await users_col.find_one({"_id": uid})
+    if not u: return
+    
+    lv = u.get("level", 1)
+    exp = u.get("exp", 0)
+    new_lv = lv
+    leveled = False
+
+    # Vòng lặp kiểm tra thăng cấp
+    while exp >= exp_needed(new_lv):
+        # CHỐT CHẶN: Nếu đang ở đỉnh phong 10, 20, 30... thì không cho lên 11, 21, 31...
+        if new_lv % 10 == 0:
+            break
+            
+        exp -= exp_needed(new_lv)
+        new_lv += 1
+        leveled = True
+        
+        if new_lv >= 100: 
+            break
+
+    # Chỉ cập nhật Database nếu thực sự có sự thay đổi về Cấp độ hoặc EXP dư trong vòng lặp
+    if leveled:
+        await users_col.update_one(
+            {"_id": uid}, 
+            {"$set": {"level": new_lv, "exp": exp}}
+        )
+        
+        realm_name = get_realm(new_lv)
+        embed = discord.Embed(
+            title="✨ CẢNH GIỚI PHI THĂNG ✨", 
+            description=f"Chúc mừng đạo hữu **{name}** đã lên **Cấp {new_lv}**!\n🧘 Cảnh giới: **{realm_name}**", 
+            color=discord.Color.green()
+        )
+        if channel: 
+            try:
+                await channel.send(embed=embed)
+            except:
+                pass 
 async def check_level_down(uid):
     # Lấy dữ liệu mới nhất sau khi đã bị trừ penalty
     user = await users_col.find_one({"_id": uid})
@@ -3162,6 +3203,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
