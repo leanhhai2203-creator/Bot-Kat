@@ -2205,7 +2205,7 @@ class BossInviteView(discord.ui.View):
 
             emb = discord.Embed(title=f"⚔️ CHIẾN BÁO: {self.ten_boss}", description=msg, color=color)
             emb.add_field(name="🎁 Chi tiết thưởng", value="\n".join(player_reports))
-            emb.add_field(name="📈 Tỷ lệ thực tế", value=f"`{final_win_rate*100:.1f}%` {'(Buff 🌀)' if has_umt else ''}", inline=False)
+            emb.add_field(name="📈 Tỷ lệ thực tế", value=f"`{display_rate*100:.1f}%`{' (Buff 🌀)' if has_umt else ''}", inline=False)
             await interaction.followup.send(content=f"<@{self.ids[0]}> <@{self.ids[1]}>", embed=emb)
 
         except Exception as e:
@@ -3162,6 +3162,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
