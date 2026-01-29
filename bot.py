@@ -421,7 +421,7 @@ HERB_CONFIG = {
         "time": 86400,          # 24 tiếng (60s * 60m * 24h)
         "reward_lt": 70,
         "reward_exp": 2000,     # Tăng EXP cao vì chờ đợi lâu
-        "tien_thach_chance": 0.3 # 30% nhận được Tiên Thạch thay vì Linh Thạch (hoặc nhận cả hai tùy đạo hữu)
+        "tien_thach_chance": 0.1 # 10% nhận được Tiên Thạch thay vì Linh Thạch (hoặc nhận cả hai tùy đạo hữu)
     }
 }
 # ========== UTIL FUNCTIONS (THUẦN MONGODB) ==========
@@ -3464,6 +3464,7 @@ async def daotac(interaction: discord.Interaction, target: discord.Member):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
