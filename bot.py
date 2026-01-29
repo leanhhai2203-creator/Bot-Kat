@@ -3266,7 +3266,16 @@ async def shop(interaction: discord.Interaction):
     embed.set_footer(text="Giao dịch sòng phẳng, không nợ nần!")
     
     await interaction.response.send_message(embed=embed, view=ShopView())
+
 @bot.tree.command(name="farm", description="Chăm sóc Dược Điền (Gieo trồng và Thu hoạch)")
+async def farm_cmd(interaction: discord.Interaction):
+    ALLOWED_CHANNEL_ID = 1461017212365181160
+    # 1. Kiểm tra kênh (Phải nằm trong hàm và thụt lề)
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        return await interaction.response.send_message(
+            f"❌ Đạo hữu phải đến kênh <#{ALLOWED_CHANNEL_ID}> mới có thể trồng cây.", 
+            ephemeral=True
+        )
 async def farm_cmd(interaction: discord.Interaction):
     uid = str(interaction.user.id)
     u_data = await users_col.find_one({"_id": uid})
@@ -3384,86 +3393,81 @@ from datetime import datetime
 @bot.tree.command(name="daotac", description="Lẻn vào dược điền người khác (Giấu danh tính)")
 @app_commands.describe(target="Chọn 'con mồi' để ra tay")
 async def daotac(interaction: discord.Interaction, target: discord.Member):
-    uid = str(interaction.user.id)
-    tid = str(target.id)
-
-    if uid == tid:
-        return await interaction.response.send_message("❌ Đạo hữu định tự trộm nhà mình sao?", ephemeral=True)
+    ALLOWED_CHANNEL_ID = 1461017212365181160
+    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+        return await interaction.response.send_message(f"❌ Phải đến <#{ALLOWED_CHANNEL_ID}> mới có thể hành nghề.", ephemeral=True)
+    
+    uid, tid = str(interaction.user.id), str(target.id)
+    if uid == tid: return await interaction.response.send_message("❌ Không thể tự trộm nhà mình!", ephemeral=True)
 
     today = datetime.now().strftime("%Y-%m-%d")
-    u_data = await users_col.find_one({"_id": uid})
-    t_data = await users_col.find_one({"_id": tid})
+    u_data, t_data = await users_col.find_one({"_id": uid}), await users_col.find_one({"_id": tid})
+    if not u_data or not t_data: return await interaction.response.send_message("❌ Hồ sơ chưa hoàn thiện!", ephemeral=True)
 
-    if not u_data or not t_data:
-        return await interaction.response.send_message("❌ Hồ sơ tu hành chưa hoàn thiện!", ephemeral=True)
-
-    # Kiểm tra giới hạn trộm
+    # 1. Kiểm tra giới hạn trộm trong ngày
     steal_data = u_data.get("steal_daily", {"date": "", "count": 0})
-    if steal_data.get("date") != today:
-        steal_data = {"date": today, "count": 0}
+    if steal_data.get("date") != today: steal_data = {"date": today, "count": 0}
+    if steal_data["count"] >= 3: return await interaction.response.send_message("❌ Đã hết 3 lượt trộm hôm nay!", ephemeral=True)
 
-    if steal_data["count"] >= 3:
-        return await interaction.response.send_message("❌ Đã hết lượt hành nghề hôm nay!", ephemeral=True)
-
-    # Kiểm tra vườn nạn nhân
+    # 2. Kiểm tra vườn nạn nhân
     t_farm = t_data.get("farm", {})
     seed_id = t_farm.get("seed")
-    if not seed_id or t_farm.get("is_stolen"):
-        return await interaction.response.send_message("❌ Vườn này không có gì để trộm hoặc đã bị trộm rồi!", ephemeral=True)
+    if not seed_id or t_farm.get("is_stolen"): return await interaction.response.send_message("❌ Vườn trống hoặc đã bị trộm!", ephemeral=True)
 
+    # 3. Kiểm tra thời gian chín + 30 giây ân xá
     cfg = HERB_CONFIG.get(seed_id)
     elapsed = (datetime.now() - t_farm.get("start_time")).total_seconds()
-    if elapsed < cfg["time"]:
-        return await interaction.response.send_message("❌ Cây chưa chín, linh khí chưa tụ!", ephemeral=True)
-
-    # --- LOGIC TÍNH TOÁN (Giữ nguyên) ---
-    stolen_lt = int(cfg["reward_lt"] * 0.5)
-    stolen_exp = int(cfg["reward_exp"] * 0.5)
-    stolen_tt = 0
-    if "tien_thach_chance" in cfg and random.random() < cfg["tien_thach_chance"]:
-        stolen_tt = 1
-        stolen_lt = 0
-
-    # Cập nhật DB
-    await users_col.update_one({"_id": uid}, {
-        "$inc": {"linh_thach": stolen_lt, "exp": stolen_exp, "tien_thach": stolen_tt},
-        "$set": {"steal_daily": {"date": today, "count": steal_data["count"] + 1}}
-    })
-    await users_col.update_one({"_id": tid}, {"$set": {"farm.is_stolen": True}})
-
-    # --- PHẦN THÔNG BÁO GIẤU TÊN ---
     
-    # 1. Phản hồi cho người trộm (Chỉ mình người trộm thấy - Ephemeral)
-    loot_info = f"{stolen_lt} LT, {stolen_exp} EXP" + (f", 1 Tiên Thạch" if stolen_tt > 0 else "")
-    await interaction.response.send_message(
-        f"🤫 Đạo hữu đã mặc **Hắc Y**, che giấu tung tích và trộm thành công vườn của {target.mention}!\n💰 Vật phẩm nhận được: `{loot_info}`", 
-        ephemeral=True # <--- QUAN TRỌNG: Chỉ người trộm thấy dòng này
+    if elapsed < (cfg["time"] + 30):
+        if elapsed < cfg["time"]:
+            return await interaction.response.send_message("❌ Cây chưa chín, linh khí chưa tụ!", ephemeral=True)
+        else:
+            wait = int((cfg["time"] + 30) - elapsed)
+            return await interaction.response.send_message(f"❌ Cây vừa chín, linh khí quá nồng dễ bị lộ! Đợi thêm `{wait}s`.", ephemeral=True)
+
+    # --- THỰC HIỆN TRỘM ---
+    stolen_lt, stolen_exp, stolen_tt = int(cfg["reward_lt"] * 0.5), int(cfg["reward_exp"] * 0.5), 0
+    if "tien_thach_chance" in cfg and random.random() < cfg["tien_thach_chance"]:
+        stolen_tt, stolen_lt = 1, 0
+
+    # Cập nhật DB cho cả 2 phía
+    await asyncio.gather(
+        users_col.update_one({"_id": uid}, {
+            "$inc": {"linh_thach": stolen_lt, "exp": stolen_exp, "tien_thach": stolen_tt},
+            "$set": {"steal_daily": {"date": today, "count": steal_data["count"] + 1}}
+        }),
+        users_col.update_one({"_id": tid}, {"$set": {"farm.is_stolen": True}})
     )
 
-    # 2. Thông báo công khai (Nếu muốn hiện trong kênh chat chung)
-    # Chúng ta dùng danh xưng bí ẩn thay cho tên thật
-    anonymous_names = ["Hắc Y Nhân", "Kẻ giấu mặt", "Bóng ma bí ẩn", "Tà Tu vô danh", "Đạo tặc phương nào"]
-    fake_name = random.choice(anonymous_names)
-
+    # --- PHẦN THÔNG BÁO (Cố định danh xưng Kẻ giấu mặt) ---
+    
+    # 1. Gửi phản hồi riêng cho người trộm (Ephemeral)
+    loot_text = f"`{stolen_lt} LT, {stolen_exp} EXP`" + (f", `1 Tiên Thạch`" if stolen_tt > 0 else "")
+    await interaction.response.send_message(
+        f"🤫 Đạo hữu đã mặc **Hắc Y** lẻn vào vườn của {target.mention} trộm thành công!\n💰 Nhận được: {loot_text}", 
+        ephemeral=True
+    )
+    
+    # 2. Thông báo công khai trong kênh (Gọi là Kẻ giấu mặt)
     public_embed = discord.Embed(
-        title="🚨 CẢNH BÁO ĐẠO TẶC",
-        description=f"Một **{fake_name}** vừa lẻn vào vườn của {target.mention} và cuỗm đi sạch linh khí!",
+        title="🚨 CẢNH BÁO ĐẠO TẶC", 
+        description=f"Một **Kẻ giấu mặt** vừa lẻn vào linh điền của {target.mention} và cuỗm đi sạch linh khí!", 
         color=0x34495e
     )
-    if stolen_tt > 0:
-        public_embed.add_field(name="⚠️ MẤT MÁT LỚN", value="Một viên **Tiên Thạch** quý giá đã bị lấy mất!")
+    if stolen_tt > 0: 
+        public_embed.add_field(name="⚠️ MẤT MÁT LỚN", value="Một viên **🔮 Tiên Thạch** quý giá đã bị lấy mất!")
     
-    # Gửi vào kênh hiện tại
     await interaction.channel.send(embed=public_embed)
 
-    # 3. Gửi tin nhắn riêng (DM) cho nạn nhân
+    # 3. Gửi tin nhắn riêng cho nạn nhân
     try:
-        await target.send(f"⚠️ **CẢNH BÁO:** Vườn dược của đạo hữu vừa bị một **{fake_name}** ghé thăm. Linh khí đã bị tổn hao nghiêm trọng!")
+        await target.send(f"🚨 **CẢNH BÁO:** Linh điền của đạo hữu vừa bị một **Kẻ giấu mặt** đột nhập và trộm mất sản lượng quý giá!")
     except:
         pass
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
