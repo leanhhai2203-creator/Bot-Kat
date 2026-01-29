@@ -3269,56 +3269,51 @@ async def shop(interaction: discord.Interaction):
 
 @bot.tree.command(name="farm", description="Chăm sóc Dược Điền (Gieo trồng và Thu hoạch)")
 async def farm_cmd(interaction: discord.Interaction):
+    # 1. Kiểm tra kênh trước khi làm bất cứ việc gì khác
     ALLOWED_CHANNEL_ID = 1461017212365181160
-    # 1. Kiểm tra kênh (Phải nằm trong hàm và thụt lề)
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
         return await interaction.response.send_message(
             f"❌ Đạo hữu phải đến kênh <#{ALLOWED_CHANNEL_ID}> mới có thể trồng cây.", 
             ephemeral=True
         )
-async def farm_cmd(interaction: discord.Interaction):
+
+    # 2. Phản hồi ngay lập tức để tránh lỗi "Ứng dụng không phản hồi"
+    # Chúng ta dùng ephemeral=True để chỉ người gọi lệnh thấy giao diện farm
+    await interaction.response.defer(ephemeral=True)
+
     uid = str(interaction.user.id)
     u_data = await users_col.find_one({"_id": uid})
+    
     if not u_data:
-        return await interaction.response.send_message("❌ Đạo hữu chưa nhập đạo!", ephemeral=True)
+        return await interaction.followup.send("❌ Đạo hữu chưa nhập đạo!", ephemeral=True)
 
     farm = u_data.get("farm", {"seed": None, "start_time": None, "is_stolen": False})
     current_time = datetime.now()
 
+    # --- LỚP GIAO DIỆN ---
     class FarmView(discord.ui.View):
         def __init__(self):
             super().__init__(timeout=60)
 
         @discord.ui.button(label="Thu Hoạch", style=discord.ButtonStyle.green, emoji="🪓", disabled=True)
         async def harvest(self, i: discord.Interaction, btn: discord.ui.Button):
-            if str(i.user.id) != uid: return
-            
+            # Không cần defer ở đây vì edit_message thường rất nhanh
             seed_id = farm["seed"]
             cfg = HERB_CONFIG.get(seed_id)
-            
-            final_lt = cfg["reward_lt"]
-            final_exp = cfg["reward_exp"]
-            final_tt = 0
+            if not cfg: return
+
+            final_lt, final_exp, final_tt = cfg["reward_lt"], cfg["reward_exp"], 0
             is_stolen = farm.get("is_stolen", False)
 
-            # --- LOGIC XỬ LÝ PHẦN THƯỞNG ---
-            # 1. Nếu có cơ hội rơi Tiên Thạch
             if "tien_thach_chance" in cfg:
                 if is_stolen:
-                    # Bị trộm mất linh khí -> 0% nhận Tiên Thạch
                     final_tt = 0 
-                else:
-                    # Chưa bị trộm -> Tính tỉ lệ như bình thường
-                    if random.random() < cfg["tien_thach_chance"]:
-                        final_tt = 1
-                        final_lt = 0 # Nhận Tiên Thạch thì thôi Linh Thạch
+                elif random.random() < cfg["tien_thach_chance"]:
+                    final_tt, final_lt = 1, 0
 
-            # 2. Nếu bị trộm -> Giảm 50% Linh Thạch và EXP
             if is_stolen:
-                final_lt = int(final_lt * 0.5)
-                final_exp = int(final_exp * 0.5)
+                final_lt, final_exp = int(final_lt * 0.5), int(final_exp * 0.5)
 
-            # 3. Cập nhật Database
             await users_col.update_one(
                 {"_id": uid},
                 {
@@ -3327,18 +3322,13 @@ async def farm_cmd(interaction: discord.Interaction):
                 }
             )
             
-            # 4. Hiển thị thông báo
             res_msg = []
             if final_tt > 0: res_msg.append(f"`{final_tt}` 🔮 Tiên Thạch")
             if final_lt > 0: res_msg.append(f"`{final_lt}` 💎 Linh Thạch")
             if final_exp > 0: res_msg.append(f"`{final_exp}` EXP")
             
             warn = "\n⚠️ **CẢNH BÁO:** Đạo tặc đã cuỗm mất linh khí quý giá nhất!" if is_stolen else ""
-            
-            await i.response.edit_message(
-                content=f"✅ **THU HOẠCH THÀNH CÔNG!**\nNhận được: {', '.join(res_msg)}.{warn}", 
-                view=None, embed=None
-            )
+            await i.response.edit_message(content=f"✅ **THU HOẠCH THÀNH CÔNG!**\nNhận được: {', '.join(res_msg)}.{warn}", view=None, embed=None)
 
         @discord.ui.select(
             placeholder="Chọn Tiên Thảo để gieo trồng...",
@@ -3348,7 +3338,6 @@ async def farm_cmd(interaction: discord.Interaction):
             ]
         )
         async def plant(self, i: discord.Interaction, select: discord.ui.Select):
-            if str(i.user.id) != uid: return
             seed_choice = select.values[0]
             cfg = HERB_CONFIG[seed_choice]
             
@@ -3365,7 +3354,7 @@ async def farm_cmd(interaction: discord.Interaction):
             )
             await i.response.edit_message(content=f"🌱 Đã gieo trồng **{cfg['name']}**!", view=None, embed=None)
 
-    # --- HIỂN THỊ GIAO DIỆN ---
+    # --- XỬ LÝ HIỂN THỊ ---
     view = FarmView()
     embed = discord.Embed(title="🏡 LINH ĐIỀN ĐỘNG PHỦ", color=0x2ecc71)
     
@@ -3386,9 +3375,8 @@ async def farm_cmd(interaction: discord.Interaction):
             embed.description = f"✨ **{seed_cfg['name']}** đã chín!\nTrạng thái: **{status}**"
             view.children[0].disabled = False
 
-    await interaction.response.send_message(embed=embed, view=view)
-import random
-from datetime import datetime
+    # Vì đã dùng defer(), nên ở đây phải dùng followup.send
+    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
 @bot.tree.command(name="daotac", description="Lẻn vào dược điền người khác (Giấu danh tính)")
 @app_commands.describe(target="Chọn 'con mồi' để ra tay")
@@ -3467,6 +3455,7 @@ async def daotac(interaction: discord.Interaction, target: discord.Member):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
