@@ -395,7 +395,7 @@ HERB_CONFIG = {
         "emoji": "🌿",
         "price": 2,          # Giá mua hạt (Linh Thạch)
         "time": 7200,           # Thời gian trưởng thành (Giây) - Để 120s test cho lẹ, thực tế đạo hữu sửa thành 3600 (1h) hoặc hơn
-        "reward_lt": 5,      # Linh thạch thu được
+        "reward_lt": 7,      # Linh thạch thu được
         "reward_exp": 200      # EXP thu được
     },
     "nhan_sam": {
@@ -403,7 +403,7 @@ HERB_CONFIG = {
         "emoji": "🥕",
         "price": 5,
         "time": 14400,         # 4 tiếng
-        "reward_lt": 10,
+        "reward_lt": 13,
         "reward_exp": 400
     },
     "thien_son_tuyet_lien": {
@@ -411,7 +411,7 @@ HERB_CONFIG = {
         "emoji": "🌺",
         "price": 10,
         "time": 28800,         # 8 tiếng
-        "reward_lt": 18,
+        "reward_lt": 22,
         "reward_exp": 800
     },
     "than_long_qua": {
@@ -3464,6 +3464,7 @@ async def daotac(interaction: discord.Interaction, target: discord.Member):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
