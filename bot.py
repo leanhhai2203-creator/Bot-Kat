@@ -388,6 +388,33 @@ BOSS_CONFIG = {
         "desc": "Hung thú dưới đáy biển sâu, máu của nó có thể nhuộm đỏ cả đại dương."
     }
 }
+# Cấu hình các loại Tiên Thảo
+HERB_CONFIG = {
+    "huyet_tinh_thao": {
+        "name": "Huyết Tinh Thảo",
+        "emoji": "🌿",
+        "price": 2,          # Giá mua hạt (Linh Thạch)
+        "time": 120,           # Thời gian trưởng thành (Giây) - Để 120s test cho lẹ, thực tế đạo hữu sửa thành 3600 (1h) hoặc hơn
+        "reward_lt": 5,      # Linh thạch thu được
+        "reward_exp": 200      # EXP thu được
+    },
+    "nhan_sam": {
+        "name": "Nhân Sâm Ngàn Năm",
+        "emoji": "🥕",
+        "price": 5,
+        "time": 14400,         # 4 tiếng
+        "reward_lt": 10,
+        "reward_exp": 800
+    },
+    "thien_son_tuyet_lien": {
+        "name": "Thiên Sơn Tuyết Liên",
+        "emoji": "🌺",
+        "price": 10,
+        "time": 28800,         # 8 tiếng
+        "reward_lt": 20,
+        "reward_exp": 1500
+    }
+}
 # ========== UTIL FUNCTIONS (THUẦN MONGODB) ==========
 
 def exp_needed(lv: int):
@@ -3230,9 +3257,143 @@ async def shop(interaction: discord.Interaction):
     embed.set_footer(text="Giao dịch sòng phẳng, không nợ nần!")
     
     await interaction.response.send_message(embed=embed, view=ShopView())
+@bot.tree.command(name="duocdien", description="Chăm sóc Dược Điền (Trồng cây, Thu hoạch)")
+async def duocdien(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    u_data = await users_col.find_one({"_id": uid})
+    if not u_data:
+        return await interaction.response.send_message("❌ Đạo hữu chưa nhập đạo!", ephemeral=True)
+
+    # Lấy dữ liệu farm, nếu chưa có thì tạo mới
+    farm = u_data.get("farm", {
+        "seed": None,           # Loại hạt đang trồng
+        "start_time": None,     # Thời gian bắt đầu trồng
+        "is_stolen": False      # Đã bị trộm chưa?
+    })
+
+    current_time = datetime.now()
+
+    # --- VIEW: MENU TƯƠNG TÁC ---
+    class FarmView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+
+        # NÚT THU HOẠCH (Chỉ hiện khi cây chín)
+        @discord.ui.button(label="Thu Hoạch", style=discord.ButtonStyle.green, emoji="🪓", disabled=True, custom_id="btn_harvest")
+        async def harvest(self, i: discord.Interaction, btn: discord.ui.Button):
+            if str(i.user.id) != uid: return
+            
+            # Tính toán phần thưởng
+            seed_id = farm["seed"]
+            cfg = HERB_CONFIG.get(seed_id)
+            
+            final_lt = cfg["reward_lt"]
+            final_exp = cfg["reward_exp"]
+            msg_stolen = ""
+
+            # Kiểm tra nếu đã bị trộm
+            if farm.get("is_stolen"):
+                final_lt = int(final_lt * 0.5) # Chỉ còn 50%
+                final_exp = int(final_exp * 0.5)
+                msg_stolen = "\n⚠️ **CẢNH BÁO:** Dược điền đã bị đạo tặc ghé thăm! Sản lượng giảm 50%."
+
+            # Update DB: Xóa cây, cộng tiền
+            await users_col.update_one(
+                {"_id": uid},
+                {
+                    "$set": {"farm": {"seed": None, "start_time": None, "is_stolen": False}},
+                    "$inc": {"linh_thach": final_lt, "exp": final_exp}
+                }
+            )
+            
+            await i.response.edit_message(
+                content=f"✅ **THU HOẠCH THÀNH CÔNG!**\nNhận được: `{final_lt}` Linh Thạch, `{final_exp}` EXP.{msg_stolen}", 
+                view=None, embed=None
+            )
+            # Check lên cấp (nếu có hàm này)
+            # await check_level_up(uid, i.channel, i.user.display_name)
+
+        # MENU CHỌN HẠT GIỐNG (Chỉ hiện khi đất trống)
+        @discord.ui.select(
+            placeholder="Chọn Tiên Thảo để gieo trồng...",
+            options=[
+                discord.SelectOption(
+                    label=f"{v['name']} (Giá: {v['price']} LT)", 
+                    description=f"Thu hoạch sau {v['time']//60} phút", 
+                    value=k, 
+                    emoji=v["emoji"]
+                ) for k, v in HERB_CONFIG.items()
+            ],
+            custom_id="select_seed"
+        )
+        async def plant(self, i: discord.Interaction, select: discord.ui.Select):
+            if str(i.user.id) != uid: return
+            
+            seed_choice = select.values[0]
+            cfg = HERB_CONFIG[seed_choice]
+            
+            # Check tiền
+            user_now = await users_col.find_one({"_id": uid})
+            if user_now.get("linh_thach", 0) < cfg["price"]:
+                return await i.response.send_message("❌ Không đủ Linh Thạch để mua hạt giống!", ephemeral=True)
+
+            # Trừ tiền, Lưu trạng thái trồng cây
+            await users_col.update_one(
+                {"_id": uid},
+                {
+                    "$inc": {"linh_thach": -cfg["price"]},
+                    "$set": {
+                        "farm.seed": seed_choice,
+                        "farm.start_time": datetime.now(),
+                        "farm.is_stolen": False
+                    }
+                }
+            )
+            
+            await i.response.edit_message(
+                content=f"🌱 Đã gieo trồng **{cfg['name']}**! Hãy kiên nhẫn chờ đợi.",
+                view=None, embed=None
+            )
+
+    # --- LOGIC HIỂN THỊ TRẠNG THÁI ---
+    view = FarmView()
+    embed = discord.Embed(title="🏡 DƯỢC ĐIỀN ĐỘNG PHỦ", color=discord.Color.green())
+    
+    # TRƯỜNG HỢP 1: Đất trống
+    if not farm.get("seed"):
+        embed.description = "Đất đai màu mỡ, nhưng chưa có cây nào.\nHãy chọn hạt giống bên dưới để canh tác."
+        # Xóa nút Thu Hoạch, Giữ Select Menu
+        view.remove_item(view.children[0]) # Remove button, keep select
+    
+    # TRƯỜNG HỢP 2: Đang trồng cây
+    else:
+        seed_cfg = HERB_CONFIG.get(farm["seed"])
+        start_time = farm["start_time"]
+        
+        # Tính thời gian đã trôi qua
+        elapsed = (current_time - start_time).total_seconds()
+        remaining = seed_cfg["time"] - elapsed
+        
+        # Xóa Select Menu, chỉ giữ nút Thu Hoạch
+        view.remove_item(view.children[1]) 
+
+        if remaining > 0:
+            # Cây chưa chín
+            time_str = str(timedelta(seconds=int(remaining)))
+            embed.description = f"🌱 **{seed_cfg['name']}** đang sinh trưởng...\n⏳ Còn lại: `{time_str}`"
+            embed.set_footer(text="Cây chưa chín, chưa thể thu hoạch!")
+            view.children[0].disabled = True # Disable nút thu hoạch
+        else:
+            # Cây đã chín -> Cho phép thu hoạch
+            status_stolen = " (Đã bị trộm 1 phần)" if farm.get("is_stolen") else " (Nguyên vẹn)"
+            embed.description = f"✨ **{seed_cfg['name']}** đã trưởng thành!\nTrạng thái: **{status_stolen}**"
+            view.children[0].disabled = False # Enable nút thu hoạch
+
+    await interaction.response.send_message(embed=embed, view=view)
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
