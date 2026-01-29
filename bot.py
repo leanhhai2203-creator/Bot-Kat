@@ -176,7 +176,7 @@ BI_CANH_CONFIG = {
     },
     "nmq": {
         "name": "Nhạn Môn Quan",
-        "boss_power": 900000,
+        "boss_power": 90000,
         "boss_chance": 0.4, "trap_chance": 0.15, "treasure_chance": 0.25,
         "exp": 750, "lt": 15, "trap_penalty": 750,
         "gear_rate": [7, 8]
@@ -3233,6 +3233,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
