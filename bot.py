@@ -1015,9 +1015,9 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
     current_user_tg = u.get("gioi_chi") 
     current_user_pet = u.get("pet")
     
-    # --- VÒNG LẶP GACHA ---
+    # --- VÒNG LẶP GACHA (Tất cả logic phải thụt lề vào đây) ---
     for _ in range(lan):
-        # 1. LOGIC THÁNH GIỚI CHỈ (0.2%)
+        # 1. LOGIC THÁNH GIỚI CHỈ (0.25%)
         if not current_user_tg and not got_tg_this_turn and random.random() <= 0.0025:
             try:
                 owned_tg = await users_col.distinct("gioi_chi", {"gioi_chi": {"$ne": None}})
@@ -1035,11 +1035,22 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
         # 2. LOGIC LINH THÚ (0.1%)
         if not current_user_pet and not got_pet_this_turn and random.random() <= 0.001:
             try:
-                p_name = random.choice(list(PET_CONFIG.keys()))
-                await users_col.update_one({"_id": uid}, {"$set": {"pet": p_name}})
-                got_pet_this_turn = True
-                current_user_pet = p_name
-                list_pets.append(p_name)
+                all_pets = list(PET_CONFIG.keys())
+                occupied_pets = await users_col.distinct("pet", {"pet": {"$ne": None}})
+                available_pets = [p for p in all_pets if p not in occupied_pets]
+                
+                if available_pets:
+                    p_name = random.choice(available_pets)
+                    await users_col.update_one({"_id": uid}, {"$set": {"pet": p_name}})
+                    got_pet_this_turn = True
+                    current_user_pet = p_name
+                    list_pets.append(p_name)
+                    
+                    # Thông báo ngay lập tức khi trúng thú độc bản
+                    await interaction.channel.send(
+                        f"🎊 **THIÊN GIÁNG DỊ TƯỢNG!**\n"
+                        f"Đạo hữu **{interaction.user.display_name}** đã thu phục được Linh Thú độc bản: **{p_name}**!"
+                    )
             except Exception as e:
                 print(f"Lỗi Gacha Linh Thú: {e}")
 
@@ -1054,7 +1065,7 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
         else:
             total_exp_bonus += lv * 10
 
-    # --- CẬP NHẬT DATABASE ---
+    # --- CẬP NHẬT DATABASE (Sau khi hết vòng lặp) ---
     new_count = gacha_count + lan
     await users_col.update_one(
         {"_id": uid},
@@ -1065,26 +1076,23 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
     )
     
     if total_exp_bonus > 0:
-        await add_exp(uid, total_exp_bonus) # Đảm bảo hàm này đã có sẵn
+        await add_exp(uid, total_exp_bonus)
 
-    # --- CHUẨN BỊ HIỂN THỊ ---
+    # --- HIỂN THỊ KẾT QUẢ ---
     exp_str = f"♻️ Rã đồ yếu: `+{total_exp_bonus} EXP`" if total_exp_bonus > 0 else ""
     status = f"🎰 Lượt miễn phí: {new_count}/3" if new_count <= 3 and lan == 1 else f"💎 Chi phí: {cost} Linh thạch"
 
-    # 1. TRƯỜNG HỢP TRÚNG THÁNH VẬT (NHẪN XỊN HOẶC LINH THÚ)
     if got_tg_this_turn or got_pet_this_turn:
         embed_vip = discord.Embed(
             title=f"🎊 CHÚC MỪNG: {user_name.upper()} 🎊",
             description=f"Đạo hữu đã nhận được cơ duyên cực phẩm!",
             color=0xFFD700
         )
-        
         if got_tg_this_turn:
-            kq = GIOI_CHI_CONFIG[current_user_tg].get('khau_quyet', 'Vô song')
-            desc_vip = GIOI_CHI_CONFIG[current_user_tg].get('desc', 'Thần vật thượng cổ.')
+            config = GIOI_CHI_CONFIG.get(current_user_tg, {})
             embed_vip.add_field(
                 name=f"💍 THÁNH GIỚI CHỈ: {current_user_tg}",
-                value=f"📜 *{desc_vip}*\n🔥 **Khẩu quyết:** `{kq}`",
+                value=f"📜 *{config.get('desc', 'Thần vật thượng cổ.')}*\n🔥 **Khẩu quyết:** `{config.get('khau_quyet', 'Vô song')}`",
                 inline=False
             )
         if got_pet_this_turn:
@@ -1093,22 +1101,18 @@ async def gacha(interaction: discord.Interaction, lan: int = 1):
                 value=f"Vạn thú quy phục, linh lực tràn đầy!",
                 inline=False
             )
-        # Gộp các quà phụ vào field cuối
+        
         misc_rewards = f"{new_eq_msg}\n{exp_str}" if new_eq_msg or exp_str else "Không có"
         embed_vip.add_field(name="🎁 Trang bị & Linh khí kèm theo", value=misc_rewards, inline=False)
         embed_vip.set_image(url="https://i.imgur.com/m99Fm6h.jpeg")
         embed_vip.set_footer(text=f"{status} | Chúc mừng đạo hữu!")
-        
         return await interaction.followup.send(content=f"🎉 **THÔNG BÁO TOÀN SERVER:** {interaction.user.mention} vừa tìm thấy bảo vật!", embed=embed_vip)
 
-    # 2. TRƯỜNG HỢP CHỈ TRÚNG ĐỒ THƯỜNG
     embed_normal = discord.Embed(
         title=f"🔮 KẾT QUẢ TẦM BẢO x{lan} 🔮",
         description=f"{new_eq_msg if new_eq_msg else 'Không nhận được trang bị mới.'}\n{exp_str}\n\n**{status}**",
         color=discord.Color.blue()
     )
-    embed_normal.set_footer(text="Cơ duyên chưa đủ, đạo hữu hãy thử lại sau.")
-    
     await interaction.followup.send(embed=embed_normal)
 @bot.tree.command(name="solo", description="Thách đấu người chơi khác")
 async def solo(interaction: discord.Interaction, target: discord.Member, linh_thach: int | None = None):
@@ -3250,6 +3254,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
