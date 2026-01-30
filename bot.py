@@ -388,14 +388,7 @@ BOSS_CONFIG = {
         "desc": "Hung thú dưới đáy biển sâu, máu của nó có thể nhuộm đỏ cả đại dương."
     }
 }
-# Cấu hình các loại Tiên Thảo
-ALLOWED_CHANNEL_ID = 1461017212365181160
-HERB_CONFIG = {
-    "huyet_tinh_thao": {"name": "Huyết Tinh Thảo", "emoji": "🌿", "price": 2, "time": 7200, "reward_lt": 7, "reward_exp": 200},
-    "nhan_sam": {"name": "Nhân Sâm Ngàn Năm", "emoji": "🥕", "price": 5, "time": 14400, "reward_lt": 13, "reward_exp": 400},
-    "thien_son_tuyet_lien": {"name": "Thiên Sơn Tuyết Liên", "emoji": "🌺", "price": 10, "time": 28800, "reward_lt": 22, "reward_exp": 800},
-    "than_long_qua": {"name": "Thái Cổ Thần Long Quả", "emoji": "🍎", "price": 50, "time": 86400, "reward_lt": 70, "reward_exp": 2000, "tien_thach_chance": 0.1}
-}
+
 # ========== UTIL FUNCTIONS (THUẦN MONGODB) ==========
 
 def exp_needed(lv: int):
@@ -3239,123 +3232,10 @@ async def shop(interaction: discord.Interaction):
     
     await interaction.response.send_message(embed=embed, view=ShopView())
 
-@bot.tree.command(name="farm", description="Chăm sóc Dược Điền (Gieo trồng và Thu hoạch)")
-async def farm_cmd(interaction: discord.Interaction):
-    if interaction.channel_id != ALLOWED_CHANNEL_ID:
-        return await interaction.response.send_message(f"❌ Hãy đến <#{ALLOWED_CHANNEL_ID}> để trồng trọt.", ephemeral=True)
-
-    await interaction.response.defer(ephemeral=False)
-    uid = str(interaction.user.id)
-    u_data = await users_col.find_one({"_id": uid})
-    if not u_data: return await interaction.followup.send("❌ Đạo hữu chưa nhập đạo!")
-
-    farm = u_data.get("farm", {"seed": None, "start_time": None, "is_stolen": False})
-
-    class FarmView(discord.ui.View):
-        def __init__(self): super().__init__(timeout=120)
-
-        @discord.ui.button(label="Thu Hoạch", style=discord.ButtonStyle.green, emoji="🪓")
-        async def harvest(self, i: discord.Interaction, btn: discord.ui.Button):
-            if str(i.user.id) != uid: return await i.response.send_message("❌ Đây không phải vườn của đạo hữu!", ephemeral=True)
-            
-            # Lấy data mới nhất để check trộm
-            fresh_u = await users_col.find_one({"_id": uid})
-            f_farm = fresh_u.get("farm", {})
-            cfg = HERB_CONFIG.get(f_farm.get("seed"))
-            if not cfg: return
-            
-            final_lt, final_exp, final_tt = cfg["reward_lt"], cfg["reward_exp"], 0
-            is_stolen = f_farm.get("is_stolen", False)
-
-            if "tien_thach_chance" in cfg:
-                if is_stolen: final_tt = 0
-                elif random.random() < cfg["tien_thach_chance"]: final_tt, final_lt = 1, 0
-
-            if is_stolen:
-                final_lt, final_exp = int(final_lt * 0.5), int(final_exp * 0.5)
-
-            await users_col.update_one({"_id": uid}, {
-                "$set": {"farm": {"seed": None, "start_time": None, "is_stolen": False}},
-                "$inc": {"linh_thach": final_lt, "exp": final_exp, "tien_thach": final_tt}
-            })
-            
-            res = [f"`{final_tt}` 🔮 Tiên Thạch" if final_tt > 0 else "", f"`{final_lt}` 💎 Linh Thạch" if final_lt > 0 else "", f"`{final_exp}` EXP"]
-            msg = f"✅ **{i.user.display_name}** đã thu hoạch thành công!\nNhận: {', '.join(filter(None, res))}"
-            if is_stolen: msg += "\n⚠️ *Linh khí bị tổn hao 50% do Kẻ giấu mặt viếng thăm!*"
-            await i.response.edit_message(content=msg, view=None, embed=None)
-
-        @discord.ui.select(placeholder="Gieo hạt giống...", options=[discord.SelectOption(label=v['name'], value=k, emoji=v["emoji"]) for k, v in HERB_CONFIG.items()])
-        async def plant(self, i: discord.Interaction, select: discord.ui.Select):
-            if str(i.user.id) != uid: return await i.response.send_message("❌ Hãy tự dùng `/farm`!", ephemeral=True)
-            cfg = HERB_CONFIG[select.values[0]]
-            
-            if (await users_col.find_one({"_id": uid})).get("linh_thach", 0) < cfg["price"]:
-                return await i.response.send_message("❌ Thiếu Linh Thạch!", ephemeral=True)
-
-            await users_col.update_one({"_id": uid}, {
-                "$inc": {"linh_thach": -cfg["price"]},
-                "$set": {"farm": {"seed": select.values[0], "start_time": datetime.now(), "is_stolen": False}}
-            })
-            await i.response.edit_message(content=f"🌱 **{i.user.display_name}** đã gieo trồng **{cfg['name']}**!", view=None, embed=None)
-
-    view = FarmView()
-    embed = discord.Embed(title=f"🏡 LINH ĐIỀN: {interaction.user.display_name}", color=0x2ecc71)
-    if not farm.get("seed"):
-        embed.description = "Đất trống. Chọn hạt giống bên dưới:"
-        view.remove_item(view.children[0])
-    else:
-        cfg = HERB_CONFIG[farm["seed"]]
-        rem = cfg["time"] - (datetime.now() - farm["start_time"]).total_seconds()
-        view.remove_item(view.children[1])
-        if rem > 0:
-            embed.description = f"🌿 **{cfg['name']}**\n⏳ Chín sau: `{timedelta(seconds=int(rem))}`"
-            view.children[0].disabled = True
-        else:
-            embed.description = f"✨ **{cfg['name']}** đã chín!\n🛡️ Trạng thái: {'❌ BỊ TRỘM' if farm.get('is_stolen') else '✅ NGUYÊN VẸN'}"
-    
-    await interaction.followup.send(embed=embed, view=view)
-
-# --- LỆNH /DAOTAC (KẺ GIẤU MẶT + 30S ÂN XÁ) ---
-@bot.tree.command(name="daotac", description="Lẻn vào dược điền (Giấu danh tính)")
-async def daotac(interaction: discord.Interaction, target: discord.Member):
-    if interaction.channel_id != ALLOWED_CHANNEL_ID: return await interaction.response.send_message("❌ Sai kênh!", ephemeral=True)
-    uid, tid = str(interaction.user.id), str(target.id)
-    if uid == tid: return await interaction.response.send_message("❌ Không thể tự trộm!", ephemeral=True)
-
-    today = datetime.now().strftime("%Y-%m-%d")
-    u_data, t_data = await users_col.find_one({"_id": uid}), await users_col.find_one({"_id": tid})
-    
-    s_data = u_data.get("steal_daily", {"date": "", "count": 0})
-    if s_data["date"] != today: s_data = {"date": today, "count": 0}
-    if s_data["count"] >= 3: return await interaction.response.send_message("❌ Hết lượt trộm!", ephemeral=True)
-
-    t_farm = t_data.get("farm", {})
-    if not t_farm.get("seed") or t_farm.get("is_stolen"): return await interaction.response.send_message("❌ Không có gì để trộm!", ephemeral=True)
-
-    cfg = HERB_CONFIG[t_farm["seed"]]
-    elapsed = (datetime.now() - t_farm["start_time"]).total_seconds()
-    
-    if elapsed < (cfg["time"] + 30):
-        wait = int((cfg["time"] + 30) - elapsed)
-        return await interaction.response.send_message(f"❌ Chưa thể ra tay! {'Cây chưa chín' if elapsed < cfg["time"] else f'Linh khí quá nồng, đợi {wait}s'}.", ephemeral=True)
-
-    # Thực hiện trộm
-    st_lt, st_exp, st_tt = int(cfg["reward_lt"] * 0.5), int(cfg["reward_exp"] * 0.5), 0
-    if "tien_thach_chance" in cfg and random.random() < cfg["tien_thach_chance"]: st_tt, st_lt = 1, 0
-
-    await asyncio.gather(
-        users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": st_lt, "exp": st_exp, "tien_thach": st_tt}, "$set": {"steal_daily": {"date": today, "count": s_data["count"] + 1}}}),
-        users_col.update_one({"_id": tid}, {"$set": {"farm.is_stolen": True}})
-    )
-
-    await interaction.response.send_message(f"🤫 Trộm thành công vườn của {target.mention}!\n💰 Nhận: `{st_lt} LT, {st_exp} EXP`" + (f", `1 Tiên Thạch`" if st_tt > 0 else ""), ephemeral=True)
-    
-    embed = discord.Embed(title="🚨 CẢNH BÁO", description=f"Một **Kẻ giấu mặt** vừa cuỗm sạch linh khí vườn của {target.mention}!", color=0x34495e)
-    if st_tt > 0: embed.add_field(name="⚠️ MẤT MÁT LỚN", value="Một viên **🔮 Tiên Thạch** đã bị lấy mất!")
-    await interaction.channel.send(embed=embed)
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
