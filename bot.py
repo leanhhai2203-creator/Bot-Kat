@@ -2700,123 +2700,96 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
             new_count = u_bc["count"] + 1
             
             msg, color = "", discord.Color.blue()
+            reward_exp = 0
+            reward_lt = 0
+            drop_msg = ""
             
+            # ===== TRƯỜNG HỢP 1: DÍNH BẪY =====
             if roll < cfg["trap_chance"]:
                 penalty = cfg["trap_penalty"]
                 
                 # 1. KIỂM TRA GIỚI CHỈ (RING) CHO CHỦ PHÒNG
-                # Giả định dữ liệu giới chỉ lưu tại u_data.get("ring")
                 u_ring = u_data.get("ring", "")
                 is_u_protected = (u_ring == "Thiên Đạo Vô Thượng Lệnh")
                 
-                # Cập nhật Chủ phòng
                 u_update_data = {
                     "$inc": {"exp": -penalty}, 
                     "$set": {
                         "bicanh_daily.date": today,
                         "bicanh_daily.count": min(u_bc.get("count", 0) + 1, 3),
+                        "bicanh_daily.trong_thuong": not is_u_protected
                     }
                 }
-                # Nếu không có giới chỉ bảo hiệu mới bị Trọng Thương
-                if not is_u_protected:
-                    u_update_data["$set"]["bicanh_daily.trong_thuong"] = True
-                else:
-                    u_update_data["$set"]["bicanh_daily.trong_thuong"] = False
-
                 await users_col.update_one({"_id": uid}, u_update_data)
                 
                 # 2. CẬP NHẬT ĐỒNG ĐỘI (NẾU CÓ)
                 if tid:
-                    # Kiểm tra giới chỉ cho đồng đội
                     t_ring = t_data.get("ring", "")
                     is_t_protected = (t_ring == "Thiên Đạo Vô Thượng Lệnh")
-
                     t_update_data = {
-                        "$inc": {"exp": -penalty}, # Phạt EXP cố định, bỏ qua hỗ trợ Pet
+                        "$inc": {"exp": -penalty},
                         "$set": {
                             "bicanh_daily.date": today,
+                            "bicanh_daily.trong_thuong": not is_t_protected
                         }
                     }
-                    # Nếu đồng đội không có giới chỉ bảo hộ mới bị Trọng Thương
-                    if not is_t_protected:
-                        t_update_data["$set"]["bicanh_daily.trong_thuong"] = True
-                    else:
-                        t_update_data["$set"]["bicanh_daily.trong_thuong"] = False
-
                     await users_col.update_one({"_id": tid}, t_update_data)
                 
                 # Kiểm tra rớt cấp
                 await check_level_down(uid)
                 if tid: await check_level_down(tid)
                 
-                # Thông báo kết quả
-                status_msg = ""
-                if is_u_protected:
-                    status_msg += f"\n hộ thân, chủ phòng thoát khỏi kiếp nạn khóa chân!"
-                
+                status_msg = "\n🛡️ **HỘ THÂN:** Thiên Đạo Vô Thượng Lệnh giúp đạo hữu thoát kiếp khóa chân!" if is_u_protected else ""
                 msg = f"💥 **ĐẠI NẠN:** Dính cạm bẫy cổ xưa!\n💀 **HẬU QUẢ:** Tổn thất {penalty} EXP.{status_msg}"
                 color = discord.Color.red()
 
-            # ===== TRƯỜNG HỢP 2 & 3: KHÔNG DÍNH BẪY (AN TOÀN) =====
-            # ===== TRƯỜNG HỢP 2, 3 & 4: KHÔNG DÍNH BẪY (Sau khi check roll >= trap_chance) =====
-else:
-    # 1. Tính toán các mốc ngưỡng (Threshold) dựa theo config
-    # Mốc Boss = Trap + Boss
-    boss_threshold = cfg["trap_chance"] + cfg["boss_chance"]
-    # Mốc Kho báu = Trap + Boss + Treasure
-    treasure_threshold = boss_threshold + cfg["treasure_chance"]
+            # ===== TRƯỜNG HỢP 2, 3 & 4: KHÔNG DÍNH BẪY =====
+            else:
+                # Tính toán các mốc dựa trên config
+                boss_threshold = cfg["trap_chance"] + cfg["boss_chance"]
+                treasure_threshold = boss_threshold + cfg["treasure_chance"]
 
-    reward_exp = cfg["exp"]
-    reward_lt = 0
-    drop_msg = ""
-    fox_bonus = 0
+                # --- NHÁNH BOSS ---
+                if roll < boss_threshold:
+                    b_pwr = cfg.get("boss_power") or cfg.get("_power", 50000)
+                    win_rate = min(total_pwr / (b_pwr * 1.0), 0.9)
+                    
+                    if random.random() < win_rate:
+                        reward_lt = cfg["lt"]
+                        reward_exp = cfg["exp"]
+                        
+                        # Buff Hồ Ly
+                        if u_data.get("pet") == "Hóa Hình Hồ Ly":
+                            reward_lt = int(reward_lt * 1.2)
+                        
+                        # Check rơi Tiên Thạch
+                        if random.random() < cfg.get("tien_thach_chance", 0):
+                            amt = cfg.get("tien_thach_amount", 1)
+                            await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": amt}})
+                            drop_msg = f"\n🔮 **CƠ DUYÊN:** Nhặt được `{amt}` Tiên Thạch!"
+                        
+                        msg = f"⚔️ **THẮNG BOSS:** Nhận `+{reward_exp}` EXP, `+{reward_lt}` 💎{drop_msg}"
+                        color = discord.Color.green()
+                    else:
+                        penalty_loss = cfg["trap_penalty"] // 2
+                        reward_exp = -penalty_loss
+                        msg = f"💀 **BẠI TRẬN:** Boss quá mạnh, tổn thất `-{penalty_loss}` EXP!"
+                        color = discord.Color.dark_red()
 
-    # 2. XỬ LÝ CÁC NHÁNH CƠ DUYÊN
-    # --- NHÁNH 1: GẶP BOSS ---
-    if roll < boss_threshold:
-        # Lấy boss_power (Xử lý cả trường hợp đặt tên là _power hoặc boss_power)
-        b_pwr = cfg.get("boss_power") or cfg.get("_power", 50000)
-        
-        win_rate = min(total_pwr / (b_pwr * 1.0), 0.9)
-        if random.random() < win_rate:
-            # Thắng Boss
-            reward_lt = cfg["lt"]
-            
-            # Buff Hồ Ly
-            if u_data.get("pet") == "Hóa Hình Hồ Ly":
-                reward_lt = int(reward_lt * 1.2)
-                fox_bonus = reward_lt - cfg["lt"]
-            
-            # Check rơi Tiên Thạch (Chỉ map bctl mới có)
-            if random.random() < cfg.get("tien_thach_chance", 0):
-                amt = cfg.get("tien_thach_amount", 1)
-                await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": amt}})
-                drop_msg = f"\n🔮 **CƠ DUYÊN:** Nhặt được `{amt}` Tiên Thạch!"
-            
-            msg = f"⚔️ **THẮNG BOSS:** Nhận `+{reward_exp}` EXP, `+{reward_lt}` 💎{drop_msg}"
-            color = discord.Color.green()
-        else:
-            # Thua Boss
-            penalty_loss = cfg["trap_penalty"] // 2
-            reward_exp = -penalty_loss
-            msg = f"💀 **BẠI TRẬN:** Boss quá mạnh, tổn thất `-{penalty_loss}` EXP!"
-            color = discord.Color.dark_red()
+                # --- NHÁNH KHO BÁU ---
+                elif roll < treasure_threshold:
+                    reward_lt = cfg["lt"] // 2
+                    reward_exp = int(cfg["exp"] * 1.5)
+                    msg = f"💰 **KHO BÁU:** Lạc vào mật thất, nhặt được `+{reward_lt}` 💎 và `+{reward_exp}` EXP!"
+                    color = discord.Color.blue()
 
-    # --- NHÁNH 2: TÌM THẤY KHO BÁU (Dựa trên treasure_chance trong config) ---
-    elif roll < treasure_threshold:
-        reward_lt = cfg["lt"] // 2 # 50% linh thạch của map
-        reward_exp = int(cfg["exp"] * 1.5) # Thưởng thêm 50% EXP
-        
-        msg = f"💰 **KHO BÁU:** Đạo hữu vô tình lạc vào mật thất, nhặt được `+{reward_lt}` 💎 và `+{reward_exp}` EXP!"
-        color = discord.Color.blue()
+                # --- NHÁNH ĐI DẠO ---
+                else:
+                    reward_exp = cfg["exp"]
+                    msg = f"✨ **THÀNH CÔNG:** Khám phá bí cảnh an toàn, nhận `+{reward_exp}` EXP."
+                    color = discord.Color.gold()
 
-    # --- NHÁNH 3: ĐI DẠO AN TOÀN ---
-    else:
-        msg = f"✨ **THÀNH CÔNG:** Khám phá bí cảnh an toàn, nhận `+{reward_exp}` EXP."
-        color = discord.Color.gold()
-
-                # --- QUAN TRỌNG: CẬP NHẬT DB KHI KHÔNG TRỌNG THƯƠNG ---
-                # Phải set trong_thuong: False để đảm bảo logic reset ngày hoạt động đúng
+                # Cập nhật DB cho trường hợp an toàn (không dính bẫy)
                 await users_col.update_one(
                     {"_id": uid}, 
                     {
@@ -2824,12 +2797,10 @@ else:
                         "$set": {
                             "bicanh_daily.date": today,
                             "bicanh_daily.count": new_count, 
-                            "bicanh_daily.trong_thuong": False  # <--- FIX BUG Ở ĐÂY
+                            "bicanh_daily.trong_thuong": False
                         }
                     }
                 )
-                
-                # Check lên/xuống cấp
                 if reward_exp > 0:
                     await check_level_up(uid, i.channel, i.user.display_name)
                 else:
@@ -3273,6 +3244,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
