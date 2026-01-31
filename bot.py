@@ -2758,43 +2758,62 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
                 color = discord.Color.red()
 
             # ===== TRƯỜNG HỢP 2 & 3: KHÔNG DÍNH BẪY (AN TOÀN) =====
-            else:
-                # Xử lý Logic Boss hoặc Nhặt đồ
-                is_boss = roll < (cfg["trap_chance"] + cfg["boss_chance"])
-                reward_exp = cfg["exp"]
-                reward_lt = 0
-                drop_msg = ""
-                fox_bonus = 0
+            # ===== TRƯỜNG HỢP 2, 3 & 4: KHÔNG DÍNH BẪY (Sau khi check roll >= trap_chance) =====
+else:
+    # 1. Tính toán các mốc ngưỡng (Threshold) dựa theo config
+    # Mốc Boss = Trap + Boss
+    boss_threshold = cfg["trap_chance"] + cfg["boss_chance"]
+    # Mốc Kho báu = Trap + Boss + Treasure
+    treasure_threshold = boss_threshold + cfg["treasure_chance"]
 
-                if is_boss:
-                    win_rate = min(total_pwr / (cfg["boss_power"] * 1.0), 0.9)
-                    if random.random() < win_rate:
-                        # Thắng Boss
-                        reward_lt = cfg["lt"]
-                        
-                        # Check Buff Hồ Ly (Chủ phòng)
-                        if u_data.get("pet") == "Hóa Hình Hồ Ly":
-                            reward_lt = int(reward_lt * 1.2)
-                            fox_bonus = reward_lt - cfg["lt"]
-                        
-                        # Check rơi Tiên Thạch
-                        if random.random() < cfg.get("tien_thach_chance", 0):
-                            amt = cfg.get("tien_thach_amount", 1)
-                            await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": amt}})
-                            drop_msg = f"\n🔮 **CƠ DUYÊN:** Nhặt được `{amt}` Tiên Thạch!"
-                        
-                        msg = f"⚔️ **THẮNG BOSS:** Nhận `+{reward_exp}` EXP, `+{reward_lt}` 💎{drop_msg}"
-                        color = discord.Color.green()
-                    else:
-                        # Thua Boss
-                        penalty_loss = cfg["trap_penalty"] // 2
-                        reward_exp = -penalty_loss
-                        msg = f"💀 **BẠI TRẬN:** Boss quá mạnh, tổn thất `-{penalty_loss}` EXP!"
-                        color = discord.Color.dark_red()
-                else:
-                    # Đi dạo (Free)
-                    msg = f"✨ **THÀNH CÔNG:** Khám phá bí cảnh an toàn, nhận `+{reward_exp}` EXP."
-                    color = discord.Color.gold()
+    reward_exp = cfg["exp"]
+    reward_lt = 0
+    drop_msg = ""
+    fox_bonus = 0
+
+    # 2. XỬ LÝ CÁC NHÁNH CƠ DUYÊN
+    # --- NHÁNH 1: GẶP BOSS ---
+    if roll < boss_threshold:
+        # Lấy boss_power (Xử lý cả trường hợp đặt tên là _power hoặc boss_power)
+        b_pwr = cfg.get("boss_power") or cfg.get("_power", 50000)
+        
+        win_rate = min(total_pwr / (b_pwr * 1.0), 0.9)
+        if random.random() < win_rate:
+            # Thắng Boss
+            reward_lt = cfg["lt"]
+            
+            # Buff Hồ Ly
+            if u_data.get("pet") == "Hóa Hình Hồ Ly":
+                reward_lt = int(reward_lt * 1.2)
+                fox_bonus = reward_lt - cfg["lt"]
+            
+            # Check rơi Tiên Thạch (Chỉ map bctl mới có)
+            if random.random() < cfg.get("tien_thach_chance", 0):
+                amt = cfg.get("tien_thach_amount", 1)
+                await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": amt}})
+                drop_msg = f"\n🔮 **CƠ DUYÊN:** Nhặt được `{amt}` Tiên Thạch!"
+            
+            msg = f"⚔️ **THẮNG BOSS:** Nhận `+{reward_exp}` EXP, `+{reward_lt}` 💎{drop_msg}"
+            color = discord.Color.green()
+        else:
+            # Thua Boss
+            penalty_loss = cfg["trap_penalty"] // 2
+            reward_exp = -penalty_loss
+            msg = f"💀 **BẠI TRẬN:** Boss quá mạnh, tổn thất `-{penalty_loss}` EXP!"
+            color = discord.Color.dark_red()
+
+    # --- NHÁNH 2: TÌM THẤY KHO BÁU (Dựa trên treasure_chance trong config) ---
+    elif roll < treasure_threshold:
+        reward_lt = cfg["lt"] // 2 # 50% linh thạch của map
+        reward_exp = int(cfg["exp"] * 1.5) # Thưởng thêm 50% EXP
+        
+        msg = f"💰 **KHO BÁU:** Đạo hữu vô tình lạc vào mật thất, nhặt được `+{reward_lt}` 💎 và `+{reward_exp}` EXP!"
+        color = discord.Color.blue()
+
+    # --- NHÁNH 3: ĐI DẠO AN TOÀN ---
+    else:
+        msg = f"✨ **THÀNH CÔNG:** Khám phá bí cảnh an toàn, nhận `+{reward_exp}` EXP."
+        color = discord.Color.gold()
 
                 # --- QUAN TRỌNG: CẬP NHẬT DB KHI KHÔNG TRỌNG THƯƠNG ---
                 # Phải set trong_thuong: False để đảm bảo logic reset ngày hoạt động đúng
@@ -3254,6 +3273,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
