@@ -481,9 +481,10 @@ async def calc_power(uid: str) -> int:
     than_khi_name = u.get("than_khi") 
     thanh_giap_name = u.get("thanh_giap")
     gioi_chi = u.get("gioi_chi") 
-    an_de_name = u.get("an_de") # <--- Lấy dữ liệu Ấn Đế từ DB
+    an_de_name = u.get("an_de")
+    chien_ung_name = u.get("chien_ung") # <--- Lấy dữ liệu Chiến Ủng từ DB
 
-    # --- BƯỚC 1: TÍNH CHỈ SỐ GỐC (CẢI TIẾN ĐỘT PHÁ) ---
+    # --- BƯỚC 1: TÍNH CHỈ SỐ GỐC ---
     if lv <= 80:
         atk = lv * 5
         hp = lv * 50
@@ -495,7 +496,6 @@ async def calc_power(uid: str) -> int:
         hp = base_hp + (extra_lv * 200)   
 
     # --- BƯỚC 2: CỘNG DỒN CHỈ SỐ TRANG BỊ THƯỜNG ---
-    # EQ_TYPES giả định: ["Kiếm", "Nhẫn", "Áo", "Mũ", "Giày", "Hạng Liên"]
     for t in EQ_TYPES:
         eq_lv = eq.get(t, 0)
         if eq_lv <= 0: continue 
@@ -504,10 +504,10 @@ async def calc_power(uid: str) -> int:
         else:
             hp += eq_lv * 150 
 
-    # --- BƯỚC 3: CỘNG DỒN CHỈ SỐ CỰC PHẨM & ẤN ĐẾ ---
+    # --- BƯỚC 3: CỘNG DỒN CHỈ SỐ CỰC PHẨM, ẤN ĐẾ & CHIẾN ỦNG ---
     # 1. Thần Khí
     if than_khi_name and than_khi_name in THAN_KHI_CONFIG:
-        atk += THAN_KHI_CONFIG[than_khi_name].get("atk", 200)   
+        atk += THAN_KHI_CONFIG[than_khi_name].get("atk", 200)    
     
     # 2. Thánh Giáp
     if thanh_giap_name and thanh_giap_name in THANH_GIAP_CONFIG:
@@ -515,23 +515,29 @@ async def calc_power(uid: str) -> int:
     
     # 3. Thánh Giới Chỉ
     if gioi_chi and gioi_chi in GIOI_CHI_CONFIG:
-        config = GIOI_CHI_CONFIG[gioi_chi]
-        atk += config.get("atk", 100)
-        hp += config.get("hp", 1500)
+        gc_stats = GIOI_CHI_CONFIG[gioi_chi]
+        atk += gc_stats.get("atk", 100)
+        hp += gc_stats.get("hp", 1500)
 
-    # 4. Tích hợp Ấn Đế (MỚI)
+    # 4. Ấn Đế
     if an_de_name and an_de_name in AN_DE_DATA:
         an_stats = AN_DE_DATA[an_de_name]
         atk += an_stats.get("atk", 0)
         hp += an_stats.get("hp", 0)
 
-    # --- BƯỚC 4: LINH THÚ ---
+    # 5. CHIẾN ỦNG (MỚI BỔ SUNG)
+    if chien_ung_name and chien_ung_name in CHIEN_UNG_CONFIG:
+        ung_stats = CHIEN_UNG_CONFIG[chien_ung_name]
+        atk += ung_stats.get("atk", 0)
+        hp += ung_stats.get("hp", 0)
+
+    # --- BƯỚC 6: LINH THÚ ---
     if pet_name and pet_name in PET_CONFIG:
         p_stats = PET_CONFIG[pet_name]
         atk += p_stats.get("atk", 0)
         hp += p_stats.get("hp", 0) 
 
-    # --- BƯỚC 5: TỔNG HỢP ---
+    # --- BƯỚC 7: TỔNG HỢP ---
     # Công thức: (Công * 10) + Thủ + Random may mắn
     total_power = (atk * 10) + hp + random.randint(0, 100)
     
@@ -2526,7 +2532,7 @@ async def show_thankhi(interaction: discord.Interaction):
     await interaction.response.defer()
     uid = str(interaction.user.id)
 
-    # 1. DỮ LIỆU THẦN KHÍ 
+    # 1. DỮ LIỆU THẦN KHÍ (Cố định 10 đại thần khí)
     THAN_KHI_DATA = {
         "Hiên Viên Kiếm": {"quote": "『 THÁNH ĐẠO PHỤC HƯNG - VẠN KIẾM QUY TÔNG 』", "desc": "Ý chí của thánh đạo ngưng tụ thành hình.", "color": 0xFFD700, "icon": "⚔️"},
         "Thần Nông Đỉnh": {"quote": "『 SINH LINH VẠN ĐẠI - NHẤT ĐỈNH TRƯỜNG SINH 』", "desc": "Hơi thở của sự sống ẩn mình.", "color": 0x2ECC71, "icon": "🧪"},
@@ -2541,31 +2547,37 @@ async def show_thankhi(interaction: discord.Interaction):
     }
 
     try:
-        # 2. TRUY VẤN DỮ LIỆU
+        # 2. TRUY VẤN DỮ LIỆU TỪ DATABASE
         u = await users_col.find_one({"_id": uid})
+        if not u:
+            return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ tu tiên.")
+
         my_tk = u.get("than_khi")
         my_tg = u.get("thanh_giap")
         my_gc = u.get("gioi_chi")
         my_pet = u.get("pet")
+        my_ung = u.get("chien_ung")
 
         # Quét chủ nhân toàn server
         owned_tk = await users_col.distinct("than_khi", {"than_khi": {"$ne": None}})
         owned_tg = await users_col.distinct("thanh_giap", {"thanh_giap": {"$ne": None}})
         owned_gc = await users_col.distinct("gioi_chi", {"gioi_chi": {"$ne": None}})
+        owned_ung = await users_col.distinct("chien_ung", {"chien_ung": {"$ne": None}})
 
-        # Lọc danh sách vô chủ
+        # Lọc danh sách vô chủ (Dựa trên CONFIG của đạo hữu)
         avail_tk = [name for name in THAN_KHI_DATA.keys() if name not in owned_tk]
         avail_tg = [name for name in THANH_GIAP_CONFIG.keys() if name not in owned_tg]
         avail_gc = [name for name in GIOI_CHI_CONFIG.keys() if name not in owned_gc]
+        avail_ung = [name for name in CHIEN_UNG_CONFIG.keys() if name not in owned_ung]
 
-        # Đếm số lượng báu vật đang sở hữu (Tính cả Pet là 4 mốc cực phẩm)
-        count = sum(1 for x in [my_tk, my_tg, my_gc, my_pet] if x)
+        # Đếm số lượng cực phẩm (Mốc mới: 5 vật phẩm)
+        count = sum(1 for x in [my_tk, my_tg, my_gc, my_pet, my_ung] if x)
         medals = "⭐" * count if count > 0 else "🌑"
 
         # 3. KHỞI TẠO EMBED
         embed = discord.Embed(
             title="🏛️ LINH BẢO MINH BẢNG", 
-            description=f"**Khí vận tu sĩ:** {medals} ({count}/4 cực phẩm tái thế)",
+            description=f"**Khí vận tu sĩ:** {medals} ({count}/5 cực phẩm tái thế)",
             color=0x2F3136
         )
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
@@ -2576,7 +2588,7 @@ async def show_thankhi(interaction: discord.Interaction):
             embed.add_field(name=f"{tk['icon']} Thần Khí: {my_tk}", value=f"**{tk['quote']}**\n*{tk['desc']}*", inline=False)
             embed.color = tk['color']
         else:
-            embed.add_field(name="⚔️ Thần Khí", value="🥀 *Cơ duyên chưa tới.*", inline=True)
+            embed.add_field(name="⚔️ Thần Khí", value="🥀 *Chưa tìm thấy duyên nợ.*", inline=True)
 
         # --- HIỂN THỊ THÁNH GIÁP ---
         if my_tg in THANH_GIAP_CONFIG:
@@ -2584,30 +2596,44 @@ async def show_thankhi(interaction: discord.Interaction):
             embed.add_field(name=f"🛡️ Thánh Giáp: {my_tg}", value=f"**{tg.get('quote', '『 HÀO QUANG VẠN TRƯỢNG 』')}**\n*{tg['desc']}*", inline=False)
             if not my_tk: embed.color = tg['color']
         else:
-            embed.add_field(name="🛡️ Thánh Giáp", value="🥀 *Chưa mặc giáp trụ.*", inline=True)
+            embed.add_field(name="🛡️ Thánh Giáp", value="🥀 *Chưa có hộ thân giáp.*", inline=True)
 
         # --- HIỂN THỊ THÁNH GIỚI CHỈ ---
         if my_gc in GIOI_CHI_CONFIG:
             gc = GIOI_CHI_CONFIG[my_gc]
-            # Sử dụng key 'khau_quyet' hoặc 'quote' tùy theo config của đạo hữu
             quote_gc = gc.get('khau_quyet') or gc.get('quote', '『 NGHỊCH CHUYỂN CÀN KHÔN 』')
             embed.add_field(name=f"💍 Thánh Giới Chỉ: {my_gc}", value=f"**{quote_gc}**\n*{gc['desc']}*", inline=False)
             if not my_tk and not my_tg: embed.color = gc.get('color', 0x00FFFF)
         else:
             embed.add_field(name="💍 Giới Chỉ", value="🥀 *Nhẫn cỏ ven đường.*", inline=True)
 
-        # --- HIỂN THỊ LINH THÚ (Bổ sung thêm để đủ bộ 4) ---
+        # --- HIỂN THỊ CHIẾN ỦNG (Đồng bộ với CHIEN_UNG_CONFIG) ---
+        if my_ung in CHIEN_UNG_CONFIG:
+            ung = CHIEN_UNG_CONFIG[my_ung]
+            embed.add_field(
+                name=f"👢 Chiến Ủng: {my_ung}", 
+                value=f"**{ung['quote']}**\n*{ung['desc']}*\n❤️ HP: `+{ung['hp']}` | ⚔️ ATK: `+{ung['atk']}`", 
+                inline=False
+            )
+            # Nếu chưa có Thần Khí/Giáp/Nhẫn thì lấy màu của Giày làm màu Embed
+            if not any([my_tk, my_tg, my_gc]): 
+                embed.color = ung.get('color', 0xADFF2F)
+        else:
+            embed.add_field(name="👢 Chiến Ủng", value="🥀 *Chân trần dặm thẳm.*", inline=True)
+
+        # --- HIỂN THỊ LINH THÚ ---
         if my_pet:
-            embed.add_field(name=f"🐾 Linh Thú: {my_pet}", value=f"🐾 *Đang đồng hành cùng báu vật phương xa.*", inline=False)
+            embed.add_field(name=f"🐾 Linh Thú: {my_pet}", value=f"🐾 *Đang hộ giá chủ nhân.*", inline=False)
 
         # --- DANH SÁCH VẬT PHẨM VÔ CHỦ ---
-        avail_text = ""
-        if avail_tk: avail_text += f"⚔️ **Thần Khí:** {', '.join(avail_tk)}\n"
-        if avail_tg: avail_text += f"🛡️ **Thánh Giáp:** {', '.join(avail_tg)}\n"
-        if avail_gc: avail_text += f"💍 **Giới Chỉ:** {', '.join(avail_gc)}"
+        avail_list = []
+        if avail_tk: avail_list.append(f"⚔️ **Thần Khí:** {len(avail_tk)} món")
+        if avail_tg: avail_list.append(f"🛡️ **Thánh Giáp:** {len(avail_tg)} bộ")
+        if avail_gc: avail_list.append(f"💍 **Giới Chỉ:** {len(avail_gc)} chiếc")
+        if avail_ung: avail_list.append(f"👢 **Chiến Ủng:** {', '.join(avail_ung)}")
         
-        if avail_text:
-            embed.add_field(name="🌍 Báu Vật Thất Lạc (Vô Chủ)", value=avail_text, inline=False)
+        if avail_list:
+            embed.add_field(name="🌍 Báu Vật Thất Lạc (Vô Chủ)", value="\n".join(avail_list), inline=False)
 
         embed.set_footer(text="Hào quang vạn trượng, chỉ dành cho kẻ có chân mệnh thiên tử.")
         await interaction.followup.send(embed=embed)
@@ -3372,6 +3398,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
