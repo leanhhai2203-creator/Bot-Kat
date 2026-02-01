@@ -1173,8 +1173,11 @@ async def gachachienung(interaction: discord.Interaction, lan: int = 1):
     if not u:
         return await interaction.followup.send("❌ Đạo hữu chưa bước vào con đường tu tiên (Cần khởi tạo nhân vật).")
 
-    # Thiết lập chi phí (Ví dụ: 5 Linh thạch/lần vì đây là gacha chuyên biệt)
+    # Chi phí 1 Linh thạch/lần
     cost = 1 * lan 
+    # Phần thưởng EXP: 20 mỗi lượt quay
+    reward_exp = 20 * lan
+
     if u.get("linh_thach", 0) < cost:
         return await interaction.followup.send(f"❌ Đạo hữu không đủ **{cost} Linh thạch** để tầm bảo chiến ủng.")
 
@@ -1183,43 +1186,42 @@ async def gachachienung(interaction: discord.Interaction, lan: int = 1):
     old_ung_name = u.get("chien_ung")
     got_any_ung = False
     
-    # Tỷ lệ trúng cho mỗi lượt (Ví dụ: 1% vì đây là lệnh chuyên biệt)
-    win_rate = 0.002 
+    win_rate = 0.0025 # Tỷ lệ 0.2%
 
     for _ in range(lan):
         if random.random() <= win_rate:
             try:
-                # 1. Tìm những đôi ủng đang có chủ (ngoại trừ bản thân)
+                # Tìm những đôi ủng đang có chủ (ngoại trừ bản thân)
                 occupied_boots = await users_col.distinct("chien_ung", {"chien_ung": {"$ne": None}, "_id": {"$ne": uid}})
                 
-                # 2. Lọc ra danh sách ủng còn trống trong kho
-                available_boots = [b for b in GIAY_CONFIG.keys() if b not in occupied_boots]
+                # Lọc ra danh sách ủng còn trống trong kho (Dùng CHIEN_UNG_CONFIG của đạo hữu)
+                available_boots = [b for b in CHIEN_UNG_CONFIG.keys() if b not in occupied_boots]
 
                 if available_boots:
-                    # 3. Chọn ngẫu nhiên một đôi
                     picked_ung = random.choice(available_boots)
                     
-                    # 4. Cập nhật Database (Món cũ sẽ tự động bị thay thế và trở lại kho trống)
+                    # Cập nhật ngay món mới vào DB (đè lên món cũ)
                     await users_col.update_one({"_id": uid}, {"$set": {"chien_ung": picked_ung}})
                     
                     new_ung_name = picked_ung
                     got_any_ung = True
-                    # Nếu quay x10 mà trúng liên tiếp, món sau sẽ đè món trước
             except Exception as e:
                 print(f"Lỗi Gacha Chiến Ủng: {e}")
 
-    # --- CẬP NHẬT CHI PHÍ ---
-    await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": -cost}})
+    # --- CẬP NHẬT CHI PHÍ VÀ THƯỞNG EXP ---
+    # Trừ linh thạch và cộng 20 EXP mỗi lượt quay bất kể thắng thua
+    await users_col.update_one(
+        {"_id": uid}, 
+        {"$inc": {"linh_thach": -cost, "exp": reward_exp}}
+    )
 
     # --- HIỂN THỊ KẾT QUẢ ---
     if got_any_ung:
-        config = GIAY_CONFIG.get(new_ung_name, {})
-        
-        # Tạo Embed thông báo trúng đồ
+        config = CHIEN_UNG_CONFIG.get(new_ung_name, {})
         embed = discord.Embed(
             title="👢 CHIẾN ỦNG XUẤT THẾ!",
-            description=f"Chúc mừng **{user_name}** đã tầm bảo thành công!",
-            color=0x00ff00 # Màu xanh lá cực phẩm
+            description=f"Chúc mừng **{user_name}** đã tầm bảo thành công!\nĐạo hữu nhận thêm **{reward_exp} EXP** tu vi.",
+            color=0x00ff00 
         )
         
         if old_ung_name:
@@ -1230,15 +1232,12 @@ async def gachachienung(interaction: discord.Interaction, lan: int = 1):
             value=f"📜 *{config.get('quote', 'Tuyệt thế vô song')}*\n❤️ HP: `+{config.get('hp')}` | ⚔️ ATK: `+{config.get('atk')}`",
             inline=False
         )
-        embed.set_thumbnail(url="https://i.imgur.com/your_boot_icon.png") # Thay bằng icon giày của bạn
-        embed.set_footer(text=f"Chi phí: {cost} Linh thạch | Đồ cũ đã quay lại vòng quay gacha.")
-        
+        embed.set_footer(text=f"Chi phí: {cost} LT | Nhận: {reward_exp} EXP | Đồ cũ đã quay lại kho báu.")
         await interaction.followup.send(content=f"🎉 **{interaction.user.mention} vừa đoạt được bảo vật!**", embed=embed)
     else:
-        # Thất bại
         embed_fail = discord.Embed(
             title="🔮 Kết quả Tầm Bảo",
-            description=f"Đạo hữu đã tiêu tốn **{cost} Linh thạch** nhưng chưa tìm thấy cơ duyên nào với Chiến Ủng.",
+            description=f"Đạo hữu đã tiêu tốn **{cost} Linh thạch** nhưng chưa tìm thấy chiến ủng nào.\n\n✨ **Bù đắp:** Đạo hữu nhận được **{reward_exp} EXP** tu vi từ quá trình rèn luyện thân pháp.",
             color=discord.Color.red()
         )
         await interaction.followup.send(embed=embed_fail)
@@ -3373,6 +3372,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
