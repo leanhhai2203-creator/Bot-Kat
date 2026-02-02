@@ -621,79 +621,85 @@ async def _up(uid, channel, name):
             except:
                 pass # Tránh treo bot nếu channel bị xóa hoặc thiếu quyền
     # Không cần phần 'else' cập nhật exp nếu đạo hữu đã dùng $inc trong hàm add_exp
-async def _level_up(uid, channel, name):
-    uid = str(uid)
-    u = await users_col.find_one({"_id": uid})
-    if not u: return
-    
-    lv = u.get("level", 1)
-    exp = u.get("exp", 0)
-    new_lv = lv
-    leveled = False
-
-    # Vòng lặp kiểm tra thăng cấp
-    while exp >= exp_needed(new_lv):
-        # CHỐT CHẶN: Nếu đang ở đỉnh phong 10, 20, 30... thì không cho lên 11, 21, 31...
-        if new_lv % 10 == 0:
-            break
-            
-        exp -= exp_needed(new_lv)
-        new_lv += 1
-        leveled = True
+async def check_level_up(uid, channel, name): # Đổi tên cho khớp với lệnh gọi
+    try:
+        uid = str(uid)
+        u = await users_col.find_one({"_id": uid})
+        if not u: return
         
-        if new_lv >= 100: 
-            break
+        lv = u.get("level", 1)
+        exp = u.get("exp", 0)
+        new_lv = lv
+        leveled = False
 
-    # Chỉ cập nhật Database nếu thực sự có sự thay đổi về Cấp độ hoặc EXP dư trong vòng lặp
-    if leveled:
+        # Giới hạn vòng lặp tối đa 100 lần để tránh treo bot (Infinite Loop Protection)
+        loop_count = 0
+        while exp >= exp_needed(new_lv) and loop_count < 100:
+            loop_count += 1
+            # Chốt chặn đại cảnh giới (10, 20, 30...)
+            if new_lv % 10 == 0:
+                break
+                
+            exp -= exp_needed(new_lv)
+            new_lv += 1
+            leveled = True
+            
+            if new_lv >= 100: break
+
+        if leveled:
+            # Dùng update_one với $set một cách dứt khoát
+            await users_col.update_one(
+                {"_id": uid}, 
+                {"$set": {"level": new_lv, "exp": max(0, exp)}}
+            )
+            
+            realm_name = get_realm(new_lv)
+            embed = discord.Embed(
+                title="✨ CẢNH GIỚI PHI THĂNG ✨", 
+                description=f"Chúc mừng đạo hữu **{name}** đã lên **Cấp {new_lv}**!\n🧘 Cảnh giới: **{realm_name}**", 
+                color=discord.Color.green()
+            )
+            # Không được quên footer để tránh trống trải
+            embed.set_footer(text="Tu vi tinh tiến, thiên địa chúc mừng!")
+            
+            if channel:
+                try:
+                    await channel.send(embed=embed)
+                except Exception as e:
+                    print(f"Không thể gửi tin nhắn thăng cấp: {e}")
+    except Exception as e:
+        print(f"Lỗi nghiêm trọng trong check_level_up: {e}")
+
+async def check_level_down(uid):
+    try:
+        user = await users_col.find_one({"_id": uid})
+        if not user: return False
+        
+        current_lv = user.get("level", 1)
+        current_exp = user.get("exp", 0)
+        
+        if current_exp >= 0: return False
+
+        original_lv = current_lv
+        points = [11, 21, 31, 41, 51, 61, 71, 81, 91]
+
+        # Giới hạn vòng lặp hạ cấp
+        while current_exp < 0 and current_lv > 1:
+            current_lv -= 1
+            current_exp += exp_needed(current_lv) 
+
+            if current_lv in points:
+                current_exp = 0
+                break
+
         await users_col.update_one(
             {"_id": uid}, 
-            {"$set": {"level": new_lv, "exp": exp}}
+            {"$set": {"level": current_lv, "exp": int(max(0, current_exp))}}
         )
-        
-        realm_name = get_realm(new_lv)
-        embed = discord.Embed(
-            title="✨ CẢNH GIỚI PHI THĂNG ✨", 
-            description=f"Chúc mừng đạo hữu **{name}** đã lên **Cấp {new_lv}**!\n🧘 Cảnh giới: **{realm_name}**", 
-            color=discord.Color.green()
-        )
-        if channel: 
-            try:
-                await channel.send(embed=embed)
-            except:
-                pass 
-async def _level_down(uid):
-    user = await users_col.find_one({"_id": uid})
-    current_lv = user.get("level", 1)
-    current_exp = user.get("exp", 0)
-    
-    if current_exp >= 0: return False # Không nợ thì không rớt
-
-    points = [11, 21, 31, 41, 51, 61, 71, 81, 91]
-    original_lv = current_lv
-
-    while current_exp < 0 and current_lv > 1:
-        # 1. Hạ cấp trước
-        current_lv -= 1
-        
-        # 2. Lấy EXP của cấp vừa hạ để trả nợ
-        # (Người chơi rớt 1 cấp thì "hồi" lại được số EXP để lên cấp đó)
-        current_exp += exp_needed(current_lv) 
-
-        # 3. Nếu chạm mốc bảo hiểm thì xóa nợ, dừng rớt
-        if current_lv in points:
-            current_exp = 0
-            break
-
-    # Nếu sau khi cộng hết mà vẫn âm (nợ quá nhiều), thì reset về 0
-    if current_exp < 0: current_exp = 0
-
-    await users_col.update_one(
-        {"_id": uid}, 
-        {"$set": {"level": current_lv, "exp": int(current_exp)}}
-    )
-    
-    return current_lv < original_lv
+        return current_lv < original_lv
+    except Exception as e:
+        print(f"Lỗi level_down: {e}")
+        return False
 # ========== VÒNG LẶP THIÊN Ý (MONGODB) ==========
 @tasks.loop(hours=4.8)
 async def thien_y_loop():
@@ -3057,58 +3063,53 @@ async def haiduoc(interaction: discord.Interaction):
 @bot.tree.command(name="thuhoach", description="Trở về từ Linh Sơn và bán thảo dược")
 async def thuhoach(interaction: discord.Interaction):
     ALLOWED_CHANNEL_ID = 1461017212365181160
-    VIP_UID = "" # Thay bằng ID Discord bạn muốn ưu tiên (ví dụ: "123456789")
+    VIP_UID = "" 
     
+    # 1. PHẢI PHẢN HỒI NGAY LẬP TỨC (Tránh lỗi 10062)
+    # Nếu dùng ephemeral=True ở defer, thì các tin nhắn sau cũng phải ephemeral
+    await interaction.response.defer() 
+
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
-        return await interaction.response.send_message(
-            f"❌ Linh Sơn không nằm ở đây! Đạo hữu phải đến kênh <#{ALLOWED_CHANNEL_ID}> mới có thể thu hoạch.", 
-            ephemeral=True
+        return await interaction.followup.send(
+            f"❌ Linh Sơn không nằm ở đây! Đạo hữu phải đến kênh <#{ALLOWED_CHANNEL_ID}> mới có thể thu hoạch."
         )
     
     uid = str(interaction.user.id)
     user_data = await users_col.find_one({"_id": uid})
     
     if not user_data:
-        return await interaction.response.send_message("❌ Đạo hữu chưa có hồ sơ tu tiên!", ephemeral=True)
+        return await interaction.followup.send("❌ Đạo hữu chưa có hồ sơ tu tiên!")
 
     now = time.time()
     finish_time = user_data.get("haiduoc_time", 0)
 
-    # 1. Kiểm tra xem đã dùng lệnh /haiduoc chưa
     if finish_time == 0:
-        return await interaction.response.send_message("❌ Đạo hữu hiện không có thuốc để thu hoạch. Hãy dùng `/haiduoc` trước!", ephemeral=True)
+        return await interaction.followup.send("❌ Đạo hữu hiện không có thuốc để thu hoạch. Hãy dùng `/haiduoc` trước!")
 
-    # 2. Kiểm tra xem đã đủ thời gian chưa
     if now < finish_time:
         remaining = int((finish_time - now) / 60)
-        return await interaction.response.send_message(f"⏳ Thuốc chưa chín hoặc gùi chưa đầy! Cần thêm khoảng **{remaining} phút** nữa.", ephemeral=True)
+        return await interaction.followup.send(f"⏳ Thuốc chưa chín hoặc gùi chưa đầy! Cần thêm khoảng **{remaining} phút** nữa.")
 
-    # 3. XỬ LÝ PHẦN THƯỞNG & KIỂM TRA PET
+    # --- LOGIC TÍNH THƯỞNG (Giữ nguyên) ---
     pet_name = user_data.get("pet")
     is_rabbit = (pet_name == "Thái Âm Thỏ Ngọc")
 
-    # --- LOGIC TÍNH THƯỞNG ---
     if is_rabbit:
-        # Có Thỏ: Thưởng cao hơn
         lt_reward = random.choices([1, 2, 3, 4, 5], weights=[35, 30, 20, 10, 5], k=1)[0]
-        exp_reward = random.randint(100, 500) # Random 100 đến 500
+        exp_reward = random.randint(100, 500)
         pet_buff_msg = "🐇 **Thái Âm Ngọc Thố** nhanh nhẹn đào bới, tìm được nhiều tiên dược hơn!"
     else:
-        # Không Thỏ: Thưởng mặc định
         lt_reward = random.choices([1, 2], weights=[70, 30], k=1)[0]
         exp_reward = random.randint(0, 300)
         pet_buff_msg = ""
     
     rare_msg = ""
-    
-    # --- LOGIC TIÊN THẠCH (Giữ nguyên) ---
     drop_rate = 1.0 if uid == VIP_UID else 0.01
     
     if random.random() < drop_rate:
         await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": 1}})
         rare_msg = "\n🔮 **CƠ DUYÊN:** Đạo hữu nhặt được một viên **Tiên Thạch** ẩn dưới gốc linh chi!"
 
-    # Cập nhật database: Cộng quà và reset haiduoc_time về 0
     await users_col.update_one(
         {"_id": uid}, 
         {
@@ -3117,24 +3118,22 @@ async def thuhoach(interaction: discord.Interaction):
         }
     )
     
-    # Gọi hàm check lên cấp (nếu có)
+    # Hàm này có thể chạy lâu, nhưng giờ đã có defer() nên không sợ
     await check_level_up(uid, interaction.channel, interaction.user.display_name)
     
-    # --- GỬI KẾT QUẢ ---
+    # --- GỬI KẾT QUẢ (Dùng followup.send thay vì response.send_message) ---
     if is_rabbit:
-        # Nếu có Thỏ -> Gửi Embed xịn xò
         embed = discord.Embed(
             title="🐇 THU HOẠCH ĐẠI THẮNG",
             description=f"{pet_buff_msg}\n\n"
                         f"💎 Linh Thạch: `+{lt_reward}`\n"
                         f"✨ Kinh nghiệm: `+{exp_reward}`{rare_msg}",
-            color=0xa8c0ff # Màu ánh trăng của Thỏ
+            color=0xa8c0ff 
         )
         embed.set_footer(text=f"Đạo hữu: {interaction.user.display_name}")
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
     else:
-        # Nếu không có Thỏ -> Gửi tin nhắn text thường (như cũ)
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"✅ **THU HOẠCH THÀNH CÔNG**\n"
             f"Đạo hữu đã trở về an toàn và bán thảo dược cho hiệu thuốc:\n"
             f"💎 `+{lt_reward}` Linh Thạch\n"
@@ -3404,6 +3403,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
