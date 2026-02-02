@@ -858,14 +858,14 @@ async def info(interaction: discord.Interaction):
         await interaction.response.defer()
         uid = str(interaction.user.id)
         
-        # 1. Lấy dữ liệu
+        # 1. Lấy dữ liệu từ Database
         u = await users_col.find_one({"_id": uid})
         if not u:
             return await interaction.followup.send("⚠️ Đạo hữu chưa có tên trong sổ sinh tử!")
         
         eq = await eq_col.find_one({"_id": uid}) or {}
         
-        # 2. Thu thập thông tin & Xử lý giá trị mặc định
+        # 2. Thu thập thông tin từ User Profile
         level = u.get("level", 1)
         cur_exp = u.get("exp", 0)
         linh_thach = u.get("linh_thach", 0)
@@ -874,14 +874,15 @@ async def info(interaction: discord.Interaction):
         than_khi_name = u.get("than_khi")
         thanh_giap_name = u.get("thanh_giap")
         gioi_chi = u.get("gioi_chi")
-        chien_ung_name = u.get("chien_ung") # <--- Bổ sung Chiến Ủng
         an_de_name = u.get("an_de")
+        chien_ung_name = u.get("chien_ung") # <--- Lấy dữ liệu Chiến Ủng
         duc_an_progress = u.get("duc_an_progress", 0)
 
         # 3. Tính toán Lực chiến & Cảnh giới
         try:
             total_power = await calc_power(uid)
-        except:
+        except Exception as e:
+            print(f"Lỗi calc_power: {e}")
             total_power = 0
             
         try:
@@ -894,17 +895,11 @@ async def info(interaction: discord.Interaction):
         embed_color = discord.Color.blue()
         header = f"📜 HỒ SƠ TU TIÊN: {interaction.user.display_name}"
 
-        # Ưu tiên màu sắc: Thần Khí > Chiến Ủng Chí Tôn > Tiên Nhân
         if is_immortal:
             embed_color = discord.Color.from_rgb(255, 255, 0)
             header = f"🌌 [TIÊN NHÂN] {interaction.user.display_name}"
-        
-        if than_khi_name or thanh_giap_name or gioi_chi:
+        elif than_khi_name or thanh_giap_name or gioi_chi or chien_ung_name:
             embed_color = discord.Color.gold()
-        
-        # Nếu sở hữu ủng Chí Tôn, đổi sang màu trắng bạc đặc biệt
-        if chien_ung_name == "Thiên Đạo Vô Thượng Túc":
-            embed_color = discord.Color.from_rgb(255, 255, 255)
 
         # 5. Khởi tạo Embed chính
         embed = discord.Embed(title=header, color=embed_color)
@@ -916,39 +911,48 @@ async def info(interaction: discord.Interaction):
         tai_san = f"🔹 Linh Thạch: `{int(linh_thach):,}`\n🔮 Tiên Thạch: `{int(tien_thach):,}`"
         embed.add_field(name="💎 Tài Sản", value=tai_san, inline=True)
 
-        # Xử lý EXP
+        # Xử lý hiển thị Linh Lực (EXP)
         try:
             needed = exp_needed(level)
-            exp_str = f"`{int(cur_exp):,} / {int(needed):,}`" if isinstance(needed, (int, float)) else f"`{int(cur_exp):,} / {needed}`"
+            if isinstance(needed, (int, float)):
+                exp_str = f"`{int(cur_exp):,} / {int(needed):,}`"
+            else:
+                exp_str = f"`{int(cur_exp):,} / {needed}`"
         except:
             exp_str = f"`{int(cur_exp):,}`"
         embed.add_field(name="✨ Linh Lực", value=exp_str, inline=False)
 
-        # 6. Tổng hợp Trang bị (Tích hợp Chiến Ủng)
+        # 6. Tổng hợp Trang bị (Cập nhật logic hiển thị Chiến Ủng)
         weapon = f"🌟 **{than_khi_name}**" if than_khi_name else f"⚔️ Kiếm Cấp {eq.get('Kiếm', 0)}"
         nhan = f"💍 **{gioi_chi}**" if gioi_chi else f"💍 Nhẫn Cấp {eq.get('Nhẫn', 0) or eq.get('Giới Chỉ', 0)}"
         giap = f"🛡️ **{thanh_giap_name}**" if thanh_giap_name else f"🛡️ Giáp Cấp {eq.get('Giáp', 0)}"
         
-        # Logic hiển thị Ủng: Nếu có Chiến Ủng thì hiện tên, không thì hiện cấp độ thường
-        ung = f"👢 **{chien_ung_name}**" if chien_ung_name else f"👢 Ủng Cấp {eq.get('Ủng', 0)}"
-        
-        items_str = f"{weapon}\n{nhan}\n{giap}\n{ung}\n🧤 Tay: {eq.get('Tay', 0)}"
+        # Logic hiển thị Ủng: Nếu có Chiến Ủng trong Config thì hiện tên, không thì hiện cấp độ thường
+        if chien_ung_name and chien_ung_name in CHIEN_UNG_CONFIG:
+            ung_display = f"👢 **{chien_ung_name}**"
+        else:
+            ung_display = f"👢 Ủng Cấp {eq.get('Ủng', 0)}"
+            
+        items_str = f"{weapon}\n{nhan}\n{giap}\n{ung_display}\n🧤 Tay: {eq.get('Tay', 0)}"
         embed.add_field(name="📦 Trang Bị", value=items_str, inline=True)
         
         an = f"👑 **{an_de_name}**" if an_de_name else f"🔨 Đúc: {duc_an_progress}/10" if duc_an_progress > 0 else "❌ Chưa có"
         extra = f"🐾 **{pet_name or 'Chưa có'}**\n{an}"
         embed.add_field(name="🦄 Linh Thú & Ấn", value=extra, inline=True)
 
-        # 7. Gửi Embeds
+        # 7. Xử lý hiển thị cho Tiên Nhân (Embed phụ)
         res_embeds = [embed]
         if is_immortal:
             import random
-            if level >= 100: tu_vi = "Thiên Tiên"
-            elif level >= 90: tu_vi = "Kim Tiên"
-            else: tu_vi = "Chân Tiên"
-            
+            if level >= 100:
+                tu_vi = "Thiên Tiên"
+            elif level >= 90:
+                tu_vi = "Kim Tiên"
+            else:
+                tu_vi = "Chân Tiên"
+                
             name = interaction.user.display_name 
-            chan_ngon = random.choice(DANH_NGON)
+            chan_ngon = random.choice(DANH_NGON) if 'DANH_NGON' in globals() else "Tu hành là nghịch thiên nhi hành."
             sub_embed = discord.Embed(
                 description=(
                     f"🌌 **THIÊN ĐẠO CHÂN NGÔN**\n\n"
@@ -960,7 +964,7 @@ async def info(interaction: discord.Interaction):
             res_embeds.append(sub_embed)
         else:
             embed.set_footer(text="Hữu duyên thiên lý năng tương ngộ.")
-            
+
         await interaction.followup.send(embeds=res_embeds)
 
     except Exception as e:
@@ -3400,6 +3404,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
