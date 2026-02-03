@@ -2704,13 +2704,14 @@ async def phong_than_bang(interaction: discord.Interaction):
     await interaction.response.defer()
     
     try:
-        # 1. Cập nhật Query: Thêm điều kiện tìm kiếm "gioi_chi"
+        # 1. Cập nhật Query: Thêm điều kiện tìm kiếm "chien_ung"
         cursor = users_col.find({
             "$or": [
                 {"than_khi": {"$exists": True, "$ne": None}},
                 {"thanh_giap": {"$exists": True, "$ne": None}},
                 {"pet": {"$exists": True, "$ne": None}},
-                {"gioi_chi": {"$exists": True, "$ne": None}} # Bổ sung Giới Chỉ
+                {"gioi_chi": {"$exists": True, "$ne": None}},
+                {"chien_ung": {"$exists": True, "$ne": None}} # Bổ sung Chiến Ủng
             ]
         })
         
@@ -2724,12 +2725,14 @@ async def phong_than_bang(interaction: discord.Interaction):
             tk = u.get("than_khi")
             tg = u.get("thanh_giap")
             pet = u.get("pet")
-            gc = u.get("gioi_chi") # Lấy dữ liệu Giới Chỉ
+            gc = u.get("gioi_chi")
+            cu = u.get("chien_ung") # Lấy dữ liệu Chiến Ủng
             
             details = []
             if tk: details.append(f"⚔️ `{tk}`")
             if tg: details.append(f"🛡️ `{tg}`")
-            if gc: details.append(f"💍 `{gc}`") # Icon nhẫn cho Giới Chỉ
+            if gc: details.append(f"💍 `{gc}`") 
+            if cu: details.append(f"👢 `{cu}`") # Icon ủng/giày cho Chiến Ủng
             if pet: details.append(f"🐾 `{pet}`")
             
             if details:
@@ -2751,9 +2754,10 @@ async def phong_than_bang(interaction: discord.Interaction):
         
         top_str = ""
         
-        # Chỉ hiển thị Top 15
+        # Hiển thị Top 15
         for i, entry in enumerate(leaderboard[:15]):
             try:
+                # Thử lấy member từ cache của server
                 member = interaction.guild.get_member(int(entry["id"]))
                 name = member.display_name if member else f"Ẩn danh ({entry['id'][-4:]})"
             except:
@@ -2776,7 +2780,8 @@ async def phong_than_bang(interaction: discord.Interaction):
 
     except Exception as e:
         print(f"Lỗi Phong Thần Bảng: {e}")
-        await interaction.followup.send("⚠️ Pháp trận nhiễu loạn, không thể xem bảng phong thần!")
+        # Dùng followup vì đã defer ở trên
+        await interaction.followup.send("⚠️ Pháp trận nhiễu luận, không thể xem bảng phong thần!")
 #bicanh
 active_bicanh_sessions = set()
 @bot.tree.command(name="bicanh", description="Khám phá Bí Cảnh (Trợ chiến không tốn lượt, dính bẫy cùng chịu)")
@@ -3403,6 +3408,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
