@@ -3548,7 +3548,7 @@ async def leothap(interaction: discord.Interaction):
     
     # Tỷ lệ thắng: Nếu LC người > LC tháp thì tỷ lệ cao, tối đa 95%
     if user_power >= tower_power:
-        win_rate = 0.8 + min((user_power - tower_power) / tower_power, 0.15) # Max 95%
+        win_rate = 0.7 + min((user_power - tower_power) / tower_power, 0.1) # Max 95%
     else:
         # Nếu yếu hơn, tỷ lệ thấp dần
         win_rate = 0.5 * (user_power / tower_power)
@@ -3564,15 +3564,16 @@ async def leothap(interaction: discord.Interaction):
         # 1. Tính thưởng
         reward_msg = ""
         inc_data = {}
-        
-        # Tầng 10, 20, 30, 40, 50: Nhận Tiên Thạch
-        if current_floor % 10 == 0:
+        if current_floor == 10:
+            inc_data["linh_thach"] = 15
+            reward_msg = "💎 Phần thưởng: **15 Linh Thạch**"
+        elif current_floor % 10 == 0:
             inc_data["tien_thach"] = 1
             reward_msg = "💎 Phần thưởng: **1 Tiên Thạch**"
         else:
-            # Các tầng khác: 5 Linh Thạch
-            inc_data["linh_thach"] = 5
-            reward_msg = "💎 Phần thưởng: **5 Linh Thạch**"
+            # Các tầng lẻ khác: 5 Linh Thạch
+            inc_data["linh_thach"] = 3
+            reward_msg = "💎 Phần thưởng: **3 Linh Thạch**"
             
         # Thưởng thêm chút EXP
         exp_gain = current_floor * 50
@@ -3609,6 +3610,7 @@ async def leothap(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
