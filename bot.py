@@ -258,7 +258,7 @@ BI_CANH_CONFIG = {
 }
 PET_CONFIG = {
     "Cửu Thiên Hỏa Phượng": {
-        "atk": 180, "hp": 2500, 
+        "atk": 400, "hp": 4000, 
         "drop_buff": 0.5, "break_buff": 0, "risk_reduce": 0,
         "effect": "Tăng 50% rơi đồ", "color": 0xe74c3c, "icon": "🔥",
         "quotes": [
@@ -268,7 +268,7 @@ PET_CONFIG = {
         ]
     },
     "Thái Hư Cổ Long": {
-        "atk": 300, "hp": 5000, 
+        "atk": 600, "hp": 6000, 
         "break_buff": 0, "risk_reduce": 0,
         "effect": "Tăng 15% Tổng Lực Chiến", "color": 0x1abc9c, "icon": "🐉",
         "quotes": [
@@ -278,7 +278,7 @@ PET_CONFIG = {
         ]
     },
     "Thánh Linh Khưu": {
-        "atk": 160, "hp": 2200,
+        "atk": 400, "hp": 4000,
         "trap_heal": 0.8, 
         "break_buff": 0, "risk_reduce": 0,
         "effect": "Cung cấp khả năng chữa trị", "color": 0x33ff99, "icon": "🦌",
@@ -289,7 +289,7 @@ PET_CONFIG = {
         ]
     },
     "U Minh Tước": {
-        "atk": 220, "hp": 2000, 
+        "atk": 400, "hp": 4000, 
         "break_buff": 0, "risk_reduce": 0,
         "effect": "Tăng 5% tỷ lệ thắng mọi trận đấu", "icon": "🌀", "color": 0x4B0082,
         "win_rt": 5,
@@ -301,7 +301,7 @@ PET_CONFIG = {
         ]
     },
     "Băng Tinh Hổ": {
-        "atk": 170, "hp": 2300, 
+        "atk": 400, "hp": 4000, 
         "break_buff": 5, "risk_reduce": 0,
         "effect": "Tăng 5% tỉ lệ đột phá", "color": 0x3498db, "icon": "❄️",
         "quotes": [
@@ -311,7 +311,7 @@ PET_CONFIG = {
         ]
     },
     "Thượng Cổ Thao Thiết": {
-        "atk": 170, "hp": 2500, 
+        "atk": 400, "hp": 4000, 
         "exp_mult": 2, "break_buff": 0, "risk_reduce": 0,
         "effect": "Tăng 15% EXP", "color": 0x9b59b6, "icon": "🐾",
         "quotes": [
@@ -321,7 +321,7 @@ PET_CONFIG = {
         ]
     },
     "Thái Cổ Trấn Thế Quy": {
-        "atk": 150, "hp": 3000, 
+        "atk": 400, "hp": 4000, 
         "break_buff": 0, "risk_reduce": 1,
         "effect": "Giảm 50% rủi ro Lôi Kiếp", "color": 0x2ecc71, "icon": "🐢",
         "quotes": [
@@ -343,7 +343,7 @@ PET_CONFIG = {
         ]
     },
     "Hóa Hình Hồ Ly": {
-        "atk": 190, "hp": 2500, 
+        "atk": 400, "hp": 4000, 
         "lt_buff": 0.2, "break_buff": 0, "risk_reduce": 0,
         "effect": "Tăng 20% Linh Thạch", "color": 0xff99cc, "icon": "🌸",
         "quotes": [
@@ -3605,6 +3605,7 @@ async def leothap(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
