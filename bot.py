@@ -11,7 +11,8 @@ import asyncio
 import time
 import datetime
 from datetime import datetime, timedelta
-
+from discord.ext import tasks, commands
+import datetime as dt
 
 
 # ========== KẾT NỐI MONGODB ==========
@@ -707,64 +708,116 @@ async def check_level_down(uid):
         print(f"Lỗi level_down: {e}")
         return False
 # ========== VÒNG LẶP THIÊN Ý (MONGODB) ==========
-@tasks.loop(hours=4.8)
-async def thien_y_loop():
-    is_thien_y = random.choice([True, False])
-    percent = random.randint(5, 10)
-    if is_thien_y:
-        await users_col.update_many({}, {"$mul": {"exp": 1 + (percent / 100)}})
-        msg = f"Tất cả đạo hữu được ban phúc, tăng **{percent}%** EXP!"
+@tasks.loop(time=dt.time(hour=0, minute=0, second=0)) # Nhớ chỉnh giờ phù hợp với server
+async def daily_tower_reset():
+    # ID kênh thông báo
+    ANNOUNCE_CHANNEL_ID = 1461017212365181160 
+    channel = bot.get_channel(ANNOUNCE_CHANNEL_ID)
+    
+    if not channel: return
+
+    # --- 1. TÌM VÀ TRAO THƯỞNG NGƯỜI MẠNH NHẤT HÔM QUA ---
+    # Lấy những người có tầng > 1 để xếp hạng
+    cursor = users_col.find({"leothap.floor": {"$gt": 1}}).sort([
+        ("leothap.floor", -1), 
+        ("leothap.last_active", 1) # Ai lên trước xếp trên
+    ]).limit(3)
+    
+    top_players = await cursor.to_list(length=3)
+    
+    msg = "🗼 **TỔNG KẾT VẠN MA THÁP (MÙA GIẢI NGÀY)** 🗼\n\n"
+    
+    if top_players:
+        for i, user in enumerate(top_players):
+            uid = user["_id"]
+            # Floor hiện tại là floor đang đứng (ví dụ đang đánh tầng 10), 
+            # nghĩa là đã qua tầng 9. Nên hiển thị tầng cao nhất đã qua (floor - 1)
+            # Tuy nhiên nếu họ chưa qua tầng 1 (vẫn floor 1) thì ko lọt vào list này do query $gt 1
+            floor_reached = user.get("leothap", {}).get("floor", 1) - 1
+            
+            name = f"<@{uid}>"
+            reward_txt = ""
+            
+            if i == 0: 
+                await users_col.update_one({"_id": uid}, {"$inc": {"tien_thach": 1}})
+                reward_txt = "1 Tiên Thạch 🔮"
+                rank_icon = "🥇"
+            elif i == 1:
+                await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": 50}})
+                reward_txt = "50 Linh Thạch 💎"
+                rank_icon = "🥈"
+            elif i == 2:
+                await users_col.update_one({"_id": uid}, {"$inc": {"linh_thach": 30}})
+                reward_txt = "30 Linh Thạch 💎"
+                rank_icon = "🥉"
+                
+            msg += f"{rank_icon} **Top {i+1}:** {name} - Chinh phục **Tầng {floor_reached}**\n🎁 Thưởng: {reward_txt}\n\n"
     else:
-        await users_col.update_many({}, {"$mul": {"exp": max(0, 1 - (percent / 100))}})
-        msg = f"Cảnh báo! Tâm ma quấy nhiễu, tổn hao **{percent}%** EXP!"
-    # (Đoạn này đạo hữu có thể thêm logic gửi tin nhắn vào kênh NOTIFY_CHANNELS nếu muốn)
-@tasks.loop(minutes=30)
-async def update_server_avg():
-    global server_avg_lv
-    try:
-        # Chỉ lấy Top 10 cao thủ hàng đầu server
-        top_players = await users_col.find().sort([("level", -1)]).limit(15).to_list(length=15)
-        if top_players:
-            total_lv = sum(p.get("level", 1) for p in top_players)
-            server_avg_lv = total_lv / len(top_players)
-            print(f"✨ [Thiên Đạo] Level trung bình Top 10: {server_avg_lv:.2f}")
-    except Exception as e:
-        print(f"❌ Lỗi cập nhật Thiên Đạo: {e}")
+        msg += "🍃 Hôm nay Vạn Ma Tháp vắng tanh như chùa Bà Đanh...\n"
+
+    msg += "🔄 **Hệ thống đã Reset!** Mời chư vị đạo hữu bắt đầu leo lại từ **Tầng 1**."
+    await channel.send(msg)
+
+    # --- 2. RESET TOÀN BỘ SERVER VỀ TẦNG 1 ---
+    # Mục đích: Đảm bảo người không online hôm nay thì ngày mai vẫn về tầng 1
+    # Nếu không làm bước này, người top 1 hôm nay không onl ngày mai vẫn sẽ được tính là top 1
+    
+    today_new = datetime.now().strftime("%Y-%m-%d")
+    
+    await users_col.update_many(
+        {}, # Chọn tất cả user
+        {
+            "$set": {
+                "leothap.floor": 1,      # Về tầng 1
+                "leothap.attempts": 3,   # Hồi 3 lượt
+                "leothap.last_active": today_new # Đánh dấu ngày mới
+            }
+        }
+    )
+
 # ========== EVENTS ==========
 @bot.event
 async def on_ready():
     try:
-        # 1. ƯU TIÊN: Đồng bộ lệnh Slash trước để người dùng thấy lệnh ngay
+        print("-----------------------------------")
+        # 1. ƯU TIÊN: Đồng bộ lệnh Slash
+        # Lưu ý: Sync toàn bộ server mỗi lần khởi động có thể bị Discord giới hạn rate-limit nếu restart quá nhiều.
         print("🔄 Đang đồng bộ lệnh Slash...")
         synced = await bot.tree.sync()
         print(f"✅ Đã đồng bộ {len(synced)} lệnh Slash.")
         
-        print(f"✅ Đã đăng nhập: {bot.user}")
+        print(f"✅ Đã đăng nhập: {bot.user} (ID: {bot.user.id})")
 
-        # 2. XỬ LÝ DATABASE (Chạy ngầm hoặc chạy sau)
+        # 2. XỬ LÝ DATABASE
         print("⏳ Đang tối ưu hóa Database (Tạo Index)...")
-        # Sử dụng background task hoặc làm tuần tự nhưng sau khi đã Sync
+        # Tạo index giúp tìm kiếm BXH và kho đồ nhanh hơn gấp 10 lần
+        # Dùng background=True (nếu driver hỗ trợ) hoặc để await như này cũng ổn với data nhỏ/vừa
         await users_col.create_index([("level", -1)])
         await users_col.create_index([("exp", -1)])
         await users_col.create_index([("than_khi", 1)])
-        await users_col.create_index([("thanh_giap", 1)])
-        await users_col.create_index([("pet", 1)])
+        await users_col.create_index([("leothap.floor", -1)]) # Thêm index cho BXH Tháp
         print("✅ Tối ưu hóa Database hoàn tất!")
-
         # 3. KHỞI CHẠY CÁC VÒNG LẶP (LOOPS)
-        await update_server_avg() 
-        if not update_server_avg.is_running(): 
-            update_server_avg.start()
-            print("📈 Đã chạy vòng lặp Cập nhật Server.")
+        # Kiểm tra trước khi start để tránh lỗi "Task is already running"
+        if not daily_tower_reset.is_running():
+            daily_tower_reset.start()
+            print("🗼 Đã kích hoạt: Reset Tháp (0h00)")
             
-        if not thien_y_loop.is_running(): 
-            thien_y_loop.start()
-            print("🌌 Đã chạy vòng lặp Thiên Ý.")
-            
-        print("🚀 Bot đã sẵn sàng và chạy mượt hơn!")
+        # 4. THIẾT LẬP TRẠNG THÁI (PRESENCE)
+        await bot.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.playing, 
+                name="/tu_tien | Tu Tiên Lộ"
+            ),
+            status=discord.Status.online
+        )
+
+        print("🚀 BOT ĐÃ SẴN SÀNG HOẠT ĐỘNG!")
+        print("-----------------------------------")
 
     except Exception as e:
-        # Lỗi ở Index hay Loop sẽ không làm bot bị sập hoàn toàn nếu ta bắt lỗi tốt
+        import traceback
+        traceback.print_exc() # In chi tiết lỗi để dễ debug hơn
         print(f"❌ Lỗi khởi động: {e}")
 @bot.event
 async def on_message(message):
@@ -3450,10 +3503,113 @@ async def shop(interaction: discord.Interaction):
     embed.set_footer(text="Giao dịch sòng phẳng, không nợ nần!")
     
     await interaction.response.send_message(embed=embed, view=ShopView())
+@bot.tree.command(name="leothap", description="Khiêu chiến Vạn Ma Tháp (Reset về Tầng 1 mỗi ngày)")
+async def leothap(interaction: discord.Interaction):
+    await interaction.response.defer()
+    
+    uid = str(interaction.user.id)
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    u_data = await users_col.find_one({"_id": uid})
+    if not u_data:
+        return await interaction.followup.send("❌ Đạo hữu chưa bước vào con đường tu tiên!")
 
+    # Lấy dữ liệu tháp
+    tower_data = u_data.get("leothap", {"floor": 1, "attempts": 3, "last_active": ""})
+    
+    # --- LOGIC RESET NGÀY MỚI (QUAN TRỌNG) ---
+    if tower_data.get("last_active") != today:
+        tower_data["attempts"] = 3
+        tower_data["floor"] = 1       # <--- THÊM DÒNG NÀY: Reset về tầng 1
+        tower_data["last_active"] = today
+        
+        # Cập nhật DB ngay lập tức
+        await users_col.update_one(
+            {"_id": uid}, 
+            {"$set": {"leothap": tower_data}}
+        )
+
+    current_floor = tower_data.get("floor", 1)
+    attempts = tower_data.get("attempts", 3)
+
+    # --- 2. KIỂM TRA ĐIỀU KIỆN ---
+    if current_floor > 50:
+        return await interaction.followup.send("🏆 Đạo hữu đã chinh phục đỉnh Vạn Ma Tháp! Hãy đợi mùa giải mới.")
+    
+    if attempts <= 0:
+        return await interaction.followup.send(f"❌ Đạo hữu đã hết sức lực hôm nay! (Còn lại: 0 lượt)\n*Hãy quay lại vào ngày mai.*")
+
+    # --- 3. TÍNH TOÁN SỨC MẠNH ---
+    # Công thức: Tầng 1 = 15k, Tầng 50 = 100k
+    # Mỗi tầng tăng khoảng: (100000 - 15000) / 49 ≈ 1735
+    tower_power = int(15000 + (current_floor - 1) * 1735)
+    
+    user_power = await calc_power(uid) # Hàm tính LC của đạo hữu
+    
+    # Tỷ lệ thắng: Nếu LC người > LC tháp thì tỷ lệ cao, tối đa 95%
+    if user_power >= tower_power:
+        win_rate = 0.8 + min((user_power - tower_power) / tower_power, 0.15) # Max 95%
+    else:
+        # Nếu yếu hơn, tỷ lệ thấp dần
+        win_rate = 0.5 * (user_power / tower_power)
+    
+    # --- 4. GIAO CHIẾN ---
+    is_win = random.random() < win_rate
+    
+    embed = discord.Embed(title=f"🗼 VẠN MA THÁP - TẦNG {current_floor}", color=discord.Color.dark_magenta())
+    embed.add_field(name="⚔️ Tương quan lực lượng", value=f"Tu sĩ: `{user_power:,}` vs Thủ Vệ: `{tower_power:,}`")
+
+    if is_win:
+        # --- XỬ LÝ THẮNG ---
+        # 1. Tính thưởng
+        reward_msg = ""
+        inc_data = {}
+        
+        # Tầng 10, 20, 30, 40, 50: Nhận Tiên Thạch
+        if current_floor % 10 == 0:
+            inc_data["tien_thach"] = 1
+            reward_msg = "💎 Phần thưởng: **1 Tiên Thạch**"
+        else:
+            # Các tầng khác: 5 Linh Thạch
+            inc_data["linh_thach"] = 5
+            reward_msg = "💎 Phần thưởng: **5 Linh Thạch**"
+            
+        # Thưởng thêm chút EXP
+        exp_gain = current_floor * 50
+        inc_data["exp"] = exp_gain
+        reward_msg += f" và `{exp_gain}` EXP"
+
+        # 2. Cập nhật DB (Tăng tầng, KHÔNG trừ lượt)
+        tower_data["floor"] = current_floor + 1
+        
+        update_query = {
+            "$set": {"leothap": tower_data},
+            "$inc": inc_data
+        }
+        await users_col.update_one({"_id": uid}, update_query)
+        await check_level_up(uid, interaction.channel, interaction.user.display_name)
+
+        embed.description = f"🎉 **CHIẾN THẮNG!**\nĐạo hữu đã đánh bại Thủ Vệ tầng {current_floor}.\n{reward_msg}\n\n🔥 **Tiếp tục tiến lên tầng {current_floor + 1}!** (Không bị trừ lượt)"
+        embed.color = discord.Color.green()
+        
+    else:
+        # --- XỬ LÝ THUA ---
+        # Trừ lượt
+        tower_data["attempts"] = attempts - 1
+        
+        await users_col.update_one(
+            {"_id": uid}, 
+            {"$set": {"leothap": tower_data}}
+        )
+
+        embed.description = f"💀 **THẤT BẠI!**\nThủ Vệ quá mạnh, đạo hữu bị đánh bật khỏi tháp.\n📉 **Số lượt còn lại:** `{tower_data['attempts']}/3`"
+        embed.color = discord.Color.red()
+
+    await interaction.followup.send(embed=embed)
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
