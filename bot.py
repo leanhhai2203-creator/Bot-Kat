@@ -775,43 +775,27 @@ async def daily_tower_reset():
 
 # ========== EVENTS ==========
 @bot.event
+@bot.event
 async def on_ready():
+    print("-----------------------------------")
+    # 1. Đồng bộ lệnh TRƯỚC (Ưu tiên số 1 để lệnh chạy được)
     try:
-        print("-----------------------------------")
-        # 1. ƯU TIÊN: Đồng bộ lệnh Slash
-        # Lưu ý: Sync toàn bộ server mỗi lần khởi động có thể bị Discord giới hạn rate-limit nếu restart quá nhiều.
-        print("🔄 Đang đồng bộ lệnh Slash...")
         synced = await bot.tree.sync()
-        print(f"✅ Đã đồng bộ {len(synced)} lệnh Slash.")
-        
-        print(f"✅ Đã đăng nhập: {bot.user} (ID: {bot.user.id})")
+        print(f"✅ Hệ thống ổn định. Đã đồng bộ {len(synced)} lệnh.")
+    except Exception as e:
+        print(f"❌ Lỗi Sync: {e}")
 
-        # 2. XỬ LÝ DATABASE
-        print("⏳ Đang tối ưu hóa Database (Tạo Index)...")
-        # Tạo index giúp tìm kiếm BXH và kho đồ nhanh hơn gấp 10 lần
-        # Dùng background=True (nếu driver hỗ trợ) hoặc để await như này cũng ổn với data nhỏ/vừa
-        await users_col.create_index([("level", -1)])
-        await users_col.create_index([("exp", -1)])
-        await users_col.create_index([("than_khi", 1)])
-        await users_col.create_index([("leothap.floor", -1)]) # Thêm index cho BXH Tháp
-        print("✅ Tối ưu hóa Database hoàn tất!")
-        # 3. KHỞI CHẠY CÁC VÒNG LẶP (LOOPS)
-        # Kiểm tra trước khi start để tránh lỗi "Task is already running"
-        if not daily_tower_reset.is_running():
-            daily_tower_reset.start()
-            print("🗼 Đã kích hoạt: Reset Tháp (0h00)")
-            
-        # 4. THIẾT LẬP TRẠNG THÁI (PRESENCE)
-        await bot.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.playing, 
-                name="/tu_tien | Tu Tiên Lộ"
-            ),
-            status=discord.Status.online
-        )
+    # 2. Xử lý DB chạy ngầm (Không dùng await trực tiếp ở luồng chính)
+    async def setup_db():
+        try:
+            print("⏳ Đang tối ưu Database ngầm...")
+            await users_col.create_index([("level", -1)])
+            print("✅ Database đã tối ưu.")
+        except: pass
+    
+    bot.loop.create_task(setup_db()) # Chạy ngầm, không bắt on_ready phải đợi
 
-        print("🚀 BOT ĐÃ SẴN SÀNG HOẠT ĐỘNG!")
-        print("-----------------------------------")
+    print(f"🚀 {bot.user} đã sẵn sàng!")
 
     except Exception as e:
         import traceback
@@ -3571,13 +3555,11 @@ async def leothap(interaction: discord.Interaction):
         embed.color = discord.Color.red()
 
     await interaction.followup.send(embed=embed)
-@bot.tree.command(name="ping", description="Kiểm tra độ nhạy của pháp trận")
-async def ping(interaction: discord.Interaction):
-    latency = round(bot.latency * 1000)
-    await interaction.response.send_message(f"📡 Độ trễ: `{latency}ms`")
+
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
