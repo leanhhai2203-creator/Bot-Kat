@@ -2417,7 +2417,7 @@ class BossInviteView(discord.ui.View):
 @app_commands.autocomplete(ten_boss=boss_autocomplete)
 async def boss(interaction: discord.Interaction, ten_boss: str, dong_doi: discord.Member):
     # --- DANH SÁCH ID MẶC ĐỊNH THẮNG ---
-    VIP_IDS = ["472564016917643264"] 
+    VIP_IDS = [""] 
     
     uid, tid = str(interaction.user.id), str(dong_doi.id)
     today = datetime.now().strftime("%Y-%m-%d")
@@ -3408,6 +3408,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
