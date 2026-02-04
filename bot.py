@@ -1493,27 +1493,30 @@ async def dotpha(interaction: discord.Interaction):
             final_rate = base_rate + total_break_buff + luck_bonus
             success = random.randint(1, 100) <= final_rate
 
+        # --- [ĐOẠN XỬ LÝ SAU KHI TÍNH SUCCESS] ---
+        
+        # 1. Khởi tạo query trừ tài nguyên chính xác
         update_query = {"$inc": {"linh_thach": -required_lt}}
-        if needs_tien_thach:
-            update_query["$inc"]["tien_thach"] = -1
+        if required_tt > 0:
+            update_query["$inc"]["tien_thach"] = -required_tt # Trừ theo đúng required_tt
 
         if success:
+            # Thành công: Lên cấp, reset exp và luck
             update_query["$set"] = {"level": lv + 1, "exp": 0, "luck_bonus": 0}
             await users_col.update_one({"_id": uid}, update_query)
             
             try: new_realm_name = get_realm(lv + 1)
             except: new_realm_name = f"Cảnh giới mới (Cấp {lv + 1})"
 
-            # Thông báo rút gọn, không hiển thị %
             embed = discord.Embed(
                 title="🔥 ĐỘT PHÁ THÀNH CÔNG 🔥",
-                description=f"🎉 **{interaction.user.display_name}** đã phi thăng lên **{new_realm_name}**!\n*Đạo tâm kiên định, thiên địa chúc phúc.*",
+                description=f"🎉 **{interaction.user.display_name}** đã phi thăng lên **{new_realm_name}**!",
                 color=discord.Color.gold()
             )
             await interaction.followup.send(embed=embed)
                 
         else:
-            # THẤT BẠI
+            # Thất bại: Tính toán rớt cấp nhưng không rớt cảnh giới
             base_tut = 1
             loi_kiep_msg = ""
             if lv >= 30 and random.randint(1, 100) <= 30:
@@ -1522,9 +1525,24 @@ async def dotpha(interaction: discord.Interaction):
 
             total_risk_reduce = min(total_risk_reduce, 0.9)
             tut_cap = max(1, int(base_tut * (1 - total_risk_reduce)))
-            new_luck = luck_bonus + 5
             
-            update_query["$set"] = {"level": max(1, lv - tut_cap), "luck_bonus": new_luck}
+            # --- LOGIC BẢO VỆ CẢNH GIỚI ---
+            new_lv = lv - tut_cap
+            # Tìm mốc sàn của cảnh giới hiện tại (ví dụ lv 15 sàn là 11, lv 21 sàn là 21)
+            points = [1, 11, 21, 31, 41, 51, 61, 71, 81, 91, 101, 131, 161]
+            current_floor = 1
+            for p in points:
+                if lv >= p:
+                    current_floor = p
+                else:
+                    break
+            
+            # Nếu rớt xuống dưới sàn, chặn lại ở sàn
+            final_lv = max(current_floor, new_lv)
+            real_tut = lv - final_lv # Số cấp thực tế bị trừ
+            
+            new_luck = luck_bonus + 5
+            update_query["$set"] = {"level": final_lv, "luck_bonus": new_luck}
             await users_col.update_one({"_id": uid}, update_query)
 
             prot_msg = f"\n🛡️ **Bảo hộ:** {', '.join(protection_sources)} đã giảm nhẹ phản phệ!" if protection_sources else ""
@@ -1532,9 +1550,9 @@ async def dotpha(interaction: discord.Interaction):
             fail_embed = discord.Embed(
                 title="💥 ĐỘT PHÁ THẤT BẠI 💥",
                 description=(
-                    f"😔 **{interaction.user.display_name}** đã gục ngã trước thiên kiếp!{loi_kiep_msg}{prot_msg}\n"
-                    f"📉 Tu vi bị tổn hại: **Khấu trừ {tut_cap} cấp**\n"
-                    f"💸 Tổn thất tài nguyên đạo cụ đột phá."
+                    f"😔 **{interaction.user.display_name}** không thể vượt qua thiên kiếp!{loi_kiep_msg}{prot_msg}\n"
+                    f"📉 Tu vi bị tổn hại: **Khấu trừ {real_tut} cấp** (Hiện tại: Cấp {final_lv})\n"
+                    f"💸 Mất `{required_lt}` Linh thạch và `{required_tt}` Tiên thạch."
                 ),
                 color=discord.Color.red()
             )
@@ -3436,6 +3454,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
