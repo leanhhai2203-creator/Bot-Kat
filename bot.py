@@ -816,83 +816,83 @@ async def on_ready():
         print(f"❌ Lỗi khởi động: {e}")
 @bot.event
 async def on_message(message):
-    if message.author.bot: return
+    # 1. PHÁP TRẬN HỘ THÂN: Không xử lý tin nhắn từ Bot
+    if message.author.bot: 
+        return
     
     uid = str(message.author.id)
     now_dt = datetime.now()
     now_ts = now_dt.timestamp()
     content = message.content.strip().lower()
 
-    # 1. BỘ LỌC SPAM & TRÙNG LẶP
-    if content == last_msg_content.get(uid): return 
-    if not (len(content) >= MIN_MSG_LEN and now_ts - last_msg_time.get(uid, 0) >= MSG_COOLDOWN):
+    # 2. BỘ LỌC TÂM MA: Chống spam và tin nhắn rác
+    # Kiểm tra tin nhắn trùng lặp hoặc quá nhanh
+    if content == last_msg_content.get(uid): 
+        return 
+        
+    is_cooldown = (now_ts - last_msg_time.get(uid, 0)) < MSG_COOLDOWN
+    is_too_short = len(content) < MIN_MSG_LEN
+    
+    if is_cooldown or is_too_short:
+        # Vẫn cho phép chạy lệnh (prefix) dù đang trong cooldown chat lấy EXP
+        await bot.process_commands(message)
         return
 
+    # Cập nhật nhật ký hành tung
     last_msg_time[uid] = now_ts
     last_msg_content[uid] = content
     
-    # 2. TRUY VẤN DỮ LIỆU TU SĨ
+    # 3. TRUY VẤN LINH CĂN: Lấy dữ liệu từ MongoDB
     user_data = await users_col.find_one({"_id": uid})
+    
+    # Nếu là tu sĩ mới, khai mở hồ sơ
     if not user_data:
-        user_data = {"level": 1, "exp": 0, "linh_thach": 10, "pet": None}
+        user_data = {
+            "level": 1, 
+            "exp": 0, 
+            "linh_thach": 10, 
+            "pet": None,
+            "ban_exp_until": None
+        }
         await users_col.insert_one({"_id": uid, **user_data})
 
-    # --- KIỂM TRA TRẠNG THÁI CẤM TÚC (ĐÃ SỬA) ---
+    # 4. KIỂM TRA CẤM TÚC: Xem có bị phạt không nhận EXP không
     ban_until = user_data.get("ban_exp_until")
     if ban_until:
-        # Đảm bảo so sánh cùng kiểu datetime
-        # Nếu ban_until trong DB bị lưu nhầm là số, ta dùng datetime.fromtimestamp
+        # Chuyển đổi timestamp sang datetime nếu cần
         if isinstance(ban_until, (int, float)):
             ban_until = datetime.fromtimestamp(ban_until)
 
         if now_dt < ban_until:
+            # Gửi cảnh báo sau mỗi 60s để tránh làm phiền
             if uid not in last_ban_warn or (now_ts - last_ban_warn[uid]) > 60:
                 time_str = ban_until.strftime('%H:%M %d/%m')
                 await message.channel.send(
-                    f"⚠️ {message.author.mention}, đạo hữu đang bị cấm túc. Hết hạn: {time_str}",
+                    f"⚠️ {message.author.mention}, đạo hữu đang bị cấm túc (không thể nhận tu vi). Hết hạn: **{time_str}**",
                     delete_after=10
                 )
                 last_ban_warn[uid] = now_ts
             
+            # Bị cấm túc vẫn cho dùng lệnh nhưng không cộng EXP
             await bot.process_commands(message)
-            return # Dừng tại đây, không xuống phần cộng EXP
-    # ------------------------------------------
-    # --------------------------------------
+            return
 
-    # 3. TÍNH TOÁN HỆ SỐ KÊNH
-    rate = CHANNEL_EXP_RATES.get(message.channel.id, 0.1)
-    base_exp = int(MSG_EXP * rate)
-    
-    # --- LOGIC BUFF X2 CHO NGƯỜI LV THẤP ---
-    global server_avg_lv
-    user_lv = user_data.get("level", 1)
-    is_server_buffed = False
-    
-    if user_lv < server_avg_lv:
-        base_exp = base_exp * 2  
-        is_server_buffed = True
-    # --------------------------------------
+    # 5. CƠ DUYÊN GIÁNG LÂM: Cộng EXP và kiểm tra Thăng Cấp
+    try:
+        # Cộng tu vi vào Database
+        await users_col.update_one(
+            {"_id": uid}, 
+            {"$inc": {"exp": MSG_EXP}}
+        )
 
-    # 4. LOGIC LINH THÚ & ICON
-    pet_bonus = 0
-    user_pet = user_data.get("pet")
-    
-    if user_pet in PET_CONFIG:
-        pet_info = PET_CONFIG[user_pet]
-        try: await message.add_reaction(pet_info["icon"])
-        except: pass
+        # GỌI PHÁP TRẬN THĂNG CẤP (Đã sửa tên hàm để tránh NameError)
+        await check_level_up(uid, message.channel, message.author.display_name)
+        
+    except Exception as e:
+        print(f"❌ Lỗi khi cộng tu vi cho {message.author.name}: {e}")
 
-        if user_pet == "Thượng Cổ Thao Thiết":
-            pet_bonus = int(base_exp * (pet_info.get("exp_mult", 1.15) - 1))
-            if is_server_buffed:
-                try: await message.add_reaction("✨")
-                except: pass
-    
-    elif is_server_buffed:
-        try: await message.add_reaction("✨")
-        except: pass
-
-    # 5. TỔNG KẾT & GHI DANH
+    # 6. THÔNG ĐẠO: Xử lý các lệnh prefix (!...)
+    await bot.process_commands(message)
     total_gain = base_exp + pet_bonus
     await add_exp(uid, total_gain)
     await _level_up(uid, message.channel, message.author.display_name)
@@ -3605,6 +3605,7 @@ async def leothap(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
