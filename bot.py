@@ -681,17 +681,20 @@ async def check_level_down(uid):
         if current_exp >= 0: return False
 
         original_lv = current_lv
+        # Các mốc đầu của cảnh giới (11: Trúc Cơ, 21: Kim Đan...)
         points = [11, 21, 31, 41, 51, 61, 71, 81, 91]
 
-        # Giới hạn vòng lặp hạ cấp
         while current_exp < 0 and current_lv > 1:
-            current_lv -= 1
-            current_exp += exp_needed(current_lv) 
-
+            # KIỂM TRA TRƯỚC: Nếu đang ở mốc đại cảnh giới, không cho giảm nữa
             if current_lv in points:
-                current_exp = 0
-                break
+                current_exp = 0 # Reset về 0 thay vì để âm
+                break 
+            
+            # Nếu không phải mốc cảnh giới, tiến hành hạ 1 cấp
+            current_lv -= 1
+            current_exp += exp_needed(current_lv)
 
+        # Cập nhật DB
         await users_col.update_one(
             {"_id": uid}, 
             {"$set": {"level": current_lv, "exp": int(max(0, current_exp))}}
@@ -3408,6 +3411,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
