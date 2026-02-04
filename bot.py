@@ -625,49 +625,51 @@ async def _up(uid, channel, name):
             except:
                 pass # Tránh treo bot nếu channel bị xóa hoặc thiếu quyền
     # Không cần phần 'else' cập nhật exp nếu đạo hữu đã dùng $inc trong hàm add_exp
-async def check_level_up(uid, channel, name):
-    try:
-        uid = str(uid)
-        u = await users_col.find_one({"_id": uid})
-        if not u: return
-        
-        lv = u.get("level", 1)
-        exp = u.get("exp", 0)
-        new_lv = lv
-        leveled = False
+async def check_level_up(uid, channel, display_name):
+    u = await users_col.find_one({"_id": uid})
+    if not u:
+        return
 
-        # Vòng lặp kiểm tra thăng cấp
-        while exp >= exp_needed(new_lv):
-            # CHỐT CHẶN: Nếu đang ở đỉnh (10, 20...), bắt buộc phải dừng để Đột Phá (nếu đạo hữu có lệnh đó)
-            # Nếu đạo hữu muốn lên thẳng luôn, hãy xóa 2 dòng if này.
-            if new_lv % 10 == 0:
-                break
+    lv = u.get("level", 1)
+    exp = u.get("exp", 0)
+    leothap_data = u.get("leothap", {"max_floor": 0, "attempts": 3})
+    
+    new_lv = lv
+    leveled_up = False
 
-            exp -= exp_needed(new_lv) # Trừ exp của cấp hiện tại
-            new_lv += 1               # Lên cấp mới
-            leveled = True
+    # Vòng lặp tối ưu: Giới hạn tối đa 100 cấp một lúc để tránh treo CPU
+    # Chỉ cho phép lên cấp nếu chưa chạm mốc Đột Phá (mỗi 10 cấp)
+    max_loop = 0
+    while exp >= exp_needed(new_lv) and max_loop < 100:
+        # Nếu đạt mốc 10, 20, 30... thì dừng lại bắt người chơi dùng lệnh /dotpha
+        if new_lv % 10 == 0:
+            break
             
-            if new_lv >= 100: break
-            if exp < 0: exp = 0 # Đảm bảo không âm
+        exp -= exp_needed(new_lv)
+        new_lv += 1
+        leveled_up = True
+        max_loop += 1
 
-        if leveled:
-            await users_col.update_one(
-                {"_id": uid}, 
-                {"$set": {"level": new_lv, "exp": exp}}
-            )
-            
-            realm_name = get_realm(new_lv)
-            embed = discord.Embed(
-                title="✨ CẢNH GIỚI PHI THĂNG ✨", 
-                description=f"Chúc mừng đạo hữu **{name}** đã lên **Cấp {new_lv}**!\n🧘 Cảnh giới: **{realm_name}**", 
-                color=discord.Color.green()
-            )
-            embed.set_footer(text="Tu vi tinh tiến, thiên địa chúc mừng!")
-            
-            if channel:
-                await channel.send(embed=embed)
-    except Exception as e:
-        print(f"Lỗi check_level_up: {e}")
+    if leveled_up:
+        # Cập nhật vào Database một lần duy nhất sau khi tính toán xong
+        await users_col.update_one(
+            {"_id": uid},
+            {"$set": {"level": new_lv, "exp": exp}}
+        )
+
+        # Thông báo chúc mừng
+        embed = discord.Embed(
+            title="✨ CẢNH GIỚI ĐỘT PHÁ ✨",
+            description=f"Chúc mừng **{display_name}** đã tu hành tinh tấn!\n\n"
+                        f"📈 Cấp độ: `{lv}` ➔ `{new_lv}`\n"
+                        f"⭐ Trạng thái: " + ("`Đỉnh Phong (Cần đột phá)`" if new_lv % 10 == 0 else "`Ổn định`"),
+            color=discord.Color.gold()
+        )
+
+        try:
+            await channel.send(embed=embed)
+        except:
+            pass # Tránh lỗi nếu bot không có quyền gửi tin vào kênh đó
 
 async def check_level_down(uid):
     try:
@@ -3610,9 +3612,14 @@ async def leothap(interaction: discord.Interaction):
         embed.color = discord.Color.red()
 
     await interaction.followup.send(embed=embed)
+@bot.tree.command(name="ping", description="Kiểm tra độ nhạy của pháp trận")
+async def ping(interaction: discord.Interaction):
+    latency = round(bot.latency * 1000)
+    await interaction.response.send_message(f"📡 Độ trễ: `{latency}ms`")
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
