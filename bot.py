@@ -819,48 +819,44 @@ async def on_ready():
         print(f"❌ Lỗi khởi động: {e}")
 @bot.event
 async def on_message(message):
-    # 1. Không xử lý tin nhắn từ Bot
     if message.author.bot: 
         return
-    
-    uid = str(message.author.id)
-    now_dt = datetime.now()
-    now_ts = now_dt.timestamp()
-    content = message.content.strip().lower()
 
-    # 2. BỘ LỌC CHỐNG SPAM
-    if content == last_msg_content.get(uid): 
-        return 
-        
-    is_cooldown = (now_ts - last_msg_time.get(uid, 0)) < MSG_COOLDOWN
-    is_too_short = len(content) < MIN_MSG_LEN
-    
-    if is_cooldown or is_too_short:
-        # Vẫn cho phép chạy lệnh prefix (!) dù đang cooldown lấy EXP
+    uid = str(message.author.id)
+    content = message.content.strip().lower()
+    now_ts = time.time()
+
+    # --- BỘ LỌC CHỐNG SPAM ---
+    if content == last_msg_content.get(uid): return
+    if (now_ts - last_msg_time.get(uid, 0)) < MSG_COOLDOWN:
+        await bot.process_commands(message)
+        return
+    if len(content) < MIN_MSG_LEN:
         await bot.process_commands(message)
         return
 
-    # Cập nhật nhật ký
     last_msg_time[uid] = now_ts
     last_msg_content[uid] = content
-    
-    # 3. CỘNG TU VI & KIỂM TRA THĂNG CẤP (Tối ưu 2 trong 1)
-    try:
-        # Vừa cộng EXP vừa lấy dữ liệu mới trong 1 lệnh duy nhất (Cực kỳ quan trọng để chống lag)
-        updated_user = await users_col.find_one_and_update(
-            {"_id": uid},
-            {"$inc": {"exp": MSG_EXP}},
-            upsert=True, # Nếu chưa có profile thì tự tạo mới
-            return_document=motor.motor_asyncio.ReturnDocument.AFTER
-        )
 
-        # Kiểm tra thăng cấp bằng dữ liệu vừa lấy được
-        await check_level_up(uid, message.channel, message.author.display_name, user_data=updated_user)
-        
-    except Exception as e:
-        print(f"❌ Lỗi xử lý EXP cho {message.author.name}: {e}")
+    # --- CHẠY NGẦM CỘNG EXP (KHÔNG CHỜ ĐỢI) ---
+    # Việc này giúp giải phóng luồng để bot.process_commands chạy ngay lập tức
+    async def background_exp_task():
+        try:
+            # Vừa cộng vừa lấy data mới nhất
+            user_data = await users_col.find_one_and_update(
+                {"_id": uid},
+                {"$inc": {"exp": MSG_EXP}},
+                upsert=True,
+                return_document=motor.motor_asyncio.ReturnDocument.AFTER
+            )
+            # Kiểm tra lên cấp
+            await check_level_up(uid, message.channel, message.author.display_name, user_data=user_data)
+        except Exception as e:
+            print(f"❌ Lỗi xử lý EXP ngầm: {e}")
 
-    # 4. XỬ LÝ LỆNH PREFIX (Chỉ gọi 1 lần duy nhất)
+    bot.loop.create_task(background_exp_task())
+
+    # Xử lý các lệnh prefix (!)
     await bot.process_commands(message)
 
 @bot.tree.error
@@ -3582,6 +3578,7 @@ async def ping(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
