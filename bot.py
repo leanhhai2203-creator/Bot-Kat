@@ -898,6 +898,14 @@ async def on_message(message):
     await _level_up(uid, message.channel, message.author.display_name)
     await bot.process_commands(message)
 
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.CommandOnCooldown):
+        await interaction.response.send_message(f"⏳ Đạo hữu hãy nghỉ ngơi chút, {error.retry_after:.1f}s sau thử lại!", ephemeral=True)
+    else:
+        print(f"❌ Lỗi lệnh Slash: {error}")
+        if not interaction.response.is_done():
+            await interaction.response.send_message("⚡ Pháp trận gặp trục trặc, hãy thử lại sau!", ephemeral=True)
 # Hàm phụ để phát thông báo chấn động đến tất cả kênh trong NOTIFY_CHANNELS
 async def broadcast_anomaly(bot, title, message, color, thumbnail_url=None):
     for channel_id in NOTIFY_CHANNELS:
@@ -3605,6 +3613,7 @@ async def leothap(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
