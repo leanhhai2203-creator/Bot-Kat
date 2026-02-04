@@ -776,35 +776,31 @@ async def daily_tower_reset():
 # ========== EVENTS ==========
 @bot.event
 async def on_ready():
-    try:
-        print("-----------------------------------")
-        # 1. Đồng bộ lệnh Slash (Phải nằm trong try)
-        print("🔄 Đang đồng bộ lệnh Slash...")
-        synced = await bot.tree.sync()
-        print(f"✅ Hệ thống ổn định. Đã đồng bộ {len(synced)} lệnh.")
+    print("-----------------------------------")
+    print(f"✅ Đã đăng nhập: {bot.user} (ID: {bot.user.id})")
 
-        # 2. Xử lý DB chạy ngầm
-        async def setup_db():
-            try:
-                print("⏳ Đang tối ưu Database ngầm...")
-                await users_col.create_index([("level", -1)])
-                print("✅ Database đã tối ưu.")
-            except Exception as db_e:
-                print(f"⚠️ Lỗi Index DB: {db_e}")
-        
-        bot.loop.create_task(setup_db())
+    # 1. XỬ LÝ DATABASE (Chạy ngầm)
+    async def setup_db():
+        try:
+            print("⏳ Đang tối ưu hóa Database...")
+            await users_col.create_index([("level", -1)])
+            await users_col.create_index([("exp", -1)])
+            await users_col.create_index([("leothap.floor", -1)])
+            print("✅ Tối ưu hóa Database hoàn tất!")
+        except Exception as e:
+            print(f"⚠️ Lỗi Index DB: {e}")
+    
+    bot.loop.create_task(setup_db())
 
-        # 3. Trạng thái Bot
-        await bot.change_presence(
-            activity=discord.Game(name="/tu_tien | Tu Tiên Lộ")
-        )
-        print(f"🚀 {bot.user} đã sẵn sàng hoạt động!")
-        print("-----------------------------------")
+    # 2. LOOP
+    if not daily_tower_reset.is_running():
+        daily_tower_reset.start()
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"❌ Lỗi khởi động hệ thống: {e}")
+    # 3. PRESENCE
+    await bot.change_presence(activity=discord.Game(name="/tu_tien | Tu Tiên Lộ"))
+    
+    print("🚀 BOT ĐÃ SẴN SÀNG (Lưu ý: Không tự động Sync lệnh)")
+    print("-----------------------------------")
 @bot.event
 async def on_message(message):
     # 1. Pháp trận hộ thân: Không xử lý tin nhắn từ Bot
@@ -3564,10 +3560,23 @@ async def leothap(interaction: discord.Interaction):
         embed.color = discord.Color.red()
 
     await interaction.followup.send(embed=embed)
-
+@bot.command()
+async def sync(ctx):
+    # Chỉ Admin mới được dùng (thay ID của đạo hữu vào nếu cần)
+    if ctx.author.id != ADMIN_ID:
+        return
+    
+    msg = await ctx.send("🔄 Đang đồng bộ lệnh...")
+    try:
+        synced = await bot.tree.sync()
+        await msg.edit(content=f"✅ Đã đồng bộ {len(synced)} lệnh Slash thành công!")
+        print(f"Admin {ctx.author.name} đã đồng bộ lệnh.")
+    except Exception as e:
+        await msg.edit(content=f"❌ Lỗi: {e}")
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
