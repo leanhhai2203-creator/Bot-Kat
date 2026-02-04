@@ -775,32 +775,26 @@ async def daily_tower_reset():
 
 # ========== EVENTS ==========
 @bot.event
-async def on_ready():
-    print("-----------------------------------")
-    print(f"✅ Đã đăng nhập: {bot.user} (ID: {bot.user.id})")
+async def on_message(message):
+    if message.author.bot: 
+        return
 
-    # 1. XỬ LÝ DATABASE (Chạy ngầm)
-    async def setup_db():
-        try:
-            print("⏳ Đang tối ưu hóa Database...")
-            await users_col.create_index([("level", -1)])
-            await users_col.create_index([("exp", -1)])
-            await users_col.create_index([("leothap.floor", -1)])
-            print("✅ Tối ưu hóa Database hoàn tất!")
-        except Exception as e:
-            print(f"⚠️ Lỗi Index DB: {e}")
-    
-    bot.loop.create_task(setup_db())
+    # ƯU TIÊN SỐ 1: Nếu là lệnh (bắt đầu bằng !), chạy ngay không lọc cooldown
+    if message.content.startswith("!"):
+        await bot.process_commands(message)
+        return
 
-    # 2. LOOP
-    if not daily_tower_reset.is_running():
-        daily_tower_reset.start()
+    # Sau đó mới đến bộ lọc EXP cho tin nhắn thường
+    uid = str(message.author.id)
+    now_ts = time.time()
+    content = message.content.strip().lower()
 
-    # 3. PRESENCE
-    await bot.change_presence(activity=discord.Game(name="/tu_tien | Tu Tiên Lộ"))
-    
-    print("🚀 BOT ĐÃ SẴN SÀNG (Lưu ý: Không tự động Sync lệnh)")
-    print("-----------------------------------")
+    if content == last_msg_content.get(uid) or (now_ts - last_msg_time.get(uid, 0)) < MSG_COOLDOWN:
+        return
+
+    # (Phần code cộng EXP ngầm của đạo hữu giữ nguyên ở đây...)
+    last_msg_time[uid] = now_ts
+    last_msg_content[uid] = content
 @bot.event
 async def on_message(message):
     # 1. Pháp trận hộ thân: Không xử lý tin nhắn từ Bot
@@ -3560,22 +3554,26 @@ async def leothap(interaction: discord.Interaction):
         embed.color = discord.Color.red()
 
     await interaction.followup.send(embed=embed)
-@bot.command()
-async def sync(ctx):
-    # Chỉ Admin mới được dùng (thay ID của đạo hữu vào nếu cần)
-    if ctx.author.id != ADMIN_ID:
+@bot.command(name="sync")
+async def sync_commands(ctx):
+    # Ép kiểu để so sánh chính xác
+    if int(ctx.author.id) != int(ADMIN_ID):
+        await ctx.send("❌ Đạo hữu không có quyền hạn thực hiện pháp thuật này!")
         return
-    
-    msg = await ctx.send("🔄 Đang đồng bộ lệnh...")
+
+    print(f"🔄 Đang bắt đầu đồng bộ theo lệnh của {ctx.author}...")
     try:
+        # Đồng bộ lệnh Slash
         synced = await bot.tree.sync()
-        await msg.edit(content=f"✅ Đã đồng bộ {len(synced)} lệnh Slash thành công!")
-        print(f"Admin {ctx.author.name} đã đồng bộ lệnh.")
+        await ctx.send(f"✅ Pháp trận đã thông! Đã đồng bộ `{len(synced)}` lệnh Slash thành công.")
+        print(f"✅ Sync hoàn tất: {len(synced)} lệnh.")
     except Exception as e:
-        await msg.edit(content=f"❌ Lỗi: {e}")
+        await ctx.send(f"⚠️ Lỗi kết nối Discord API: `{e}`")
+        print(f"❌ Lỗi Sync: {e}")
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
