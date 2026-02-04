@@ -625,25 +625,27 @@ async def _up(uid, channel, name):
             except:
                 pass # Tránh treo bot nếu channel bị xóa hoặc thiếu quyền
     # Không cần phần 'else' cập nhật exp nếu đạo hữu đã dùng $inc trong hàm add_exp
-async def check_level_up(uid, channel, display_name):
-    u = await users_col.find_one({"_id": uid})
-    if not u:
-        return
+async def check_level_up(uid, channel, display_name, user_data=None):
+    # Nếu không truyền user_data vào thì mới đi tìm trong DB (tiết kiệm tài nguyên)
+    if user_data is None:
+        user_data = await users_col.find_one({"_id": uid})
+    
+    if not user_data: return
 
-    lv = u.get("level", 1)
-    exp = u.get("exp", 0)
-    leothap_data = u.get("leothap", {"max_floor": 0, "attempts": 3})
+    lv = user_data.get("level", 1)
+    exp = user_data.get("exp", 0)
     
     new_lv = lv
     leveled_up = False
-
-    # Vòng lặp tối ưu: Giới hạn tối đa 100 cấp một lúc để tránh treo CPU
-    # Chỉ cho phép lên cấp nếu chưa chạm mốc Đột Phá (mỗi 10 cấp)
     max_loop = 0
+
+    # Vòng lặp tăng cấp logic
     while exp >= exp_needed(new_lv) and max_loop < 100:
-        # Nếu đạt mốc 10, 20, 30... thì dừng lại bắt người chơi dùng lệnh /dotpha
-        if new_lv % 10 == 0:
-            break
+        next_lv = new_lv + 1
+        
+        # Chặn ở mốc 10, 20, 30... để ép dùng lệnh /dotpha
+        if next_lv > 1 and (next_lv - 1) % 10 == 0:
+            break 
             
         exp -= exp_needed(new_lv)
         new_lv += 1
@@ -651,25 +653,24 @@ async def check_level_up(uid, channel, display_name):
         max_loop += 1
 
     if leveled_up:
-        # Cập nhật vào Database một lần duy nhất sau khi tính toán xong
+        # Cập nhật DB 1 lần duy nhất
         await users_col.update_one(
             {"_id": uid},
             {"$set": {"level": new_lv, "exp": exp}}
         )
 
-        # Thông báo chúc mừng
+        is_max = (new_lv % 10 == 0)
         embed = discord.Embed(
             title="✨ CẢNH GIỚI ĐỘT PHÁ ✨",
             description=f"Chúc mừng **{display_name}** đã tu hành tinh tấn!\n\n"
                         f"📈 Cấp độ: `{lv}` ➔ `{new_lv}`\n"
-                        f"⭐ Trạng thái: " + ("`Đỉnh Phong (Cần đột phá)`" if new_lv % 10 == 0 else "`Ổn định`"),
-            color=discord.Color.gold()
+                        f"⭐ Trạng thái: " + ("`Đỉnh Phong (Cần /dotpha)`" if is_max else "`Ổn định`"),
+            color=discord.Color.gold() if is_max else discord.Color.green()
         )
-
         try:
             await channel.send(embed=embed)
         except:
-            pass # Tránh lỗi nếu bot không có quyền gửi tin vào kênh đó
+            pass
 
 async def check_level_down(uid):
     try:
@@ -818,7 +819,7 @@ async def on_ready():
         print(f"❌ Lỗi khởi động: {e}")
 @bot.event
 async def on_message(message):
-    # 1. PHÁP TRẬN HỘ THÂN: Không xử lý tin nhắn từ Bot
+    # 1. Không xử lý tin nhắn từ Bot
     if message.author.bot: 
         return
     
@@ -827,8 +828,7 @@ async def on_message(message):
     now_ts = now_dt.timestamp()
     content = message.content.strip().lower()
 
-    # 2. BỘ LỌC TÂM MA: Chống spam và tin nhắn rác
-    # Kiểm tra tin nhắn trùng lặp hoặc quá nhanh
+    # 2. BỘ LỌC CHỐNG SPAM
     if content == last_msg_content.get(uid): 
         return 
         
@@ -836,68 +836,31 @@ async def on_message(message):
     is_too_short = len(content) < MIN_MSG_LEN
     
     if is_cooldown or is_too_short:
-        # Vẫn cho phép chạy lệnh (prefix) dù đang trong cooldown chat lấy EXP
+        # Vẫn cho phép chạy lệnh prefix (!) dù đang cooldown lấy EXP
         await bot.process_commands(message)
         return
 
-    # Cập nhật nhật ký hành tung
+    # Cập nhật nhật ký
     last_msg_time[uid] = now_ts
     last_msg_content[uid] = content
     
-    # 3. TRUY VẤN LINH CĂN: Lấy dữ liệu từ MongoDB
-    user_data = await users_col.find_one({"_id": uid})
-    
-    # Nếu là tu sĩ mới, khai mở hồ sơ
-    if not user_data:
-        user_data = {
-            "level": 1, 
-            "exp": 0, 
-            "linh_thach": 10, 
-            "pet": None,
-            "ban_exp_until": None
-        }
-        await users_col.insert_one({"_id": uid, **user_data})
-
-    # 4. KIỂM TRA CẤM TÚC: Xem có bị phạt không nhận EXP không
-    ban_until = user_data.get("ban_exp_until")
-    if ban_until:
-        # Chuyển đổi timestamp sang datetime nếu cần
-        if isinstance(ban_until, (int, float)):
-            ban_until = datetime.fromtimestamp(ban_until)
-
-        if now_dt < ban_until:
-            # Gửi cảnh báo sau mỗi 60s để tránh làm phiền
-            if uid not in last_ban_warn or (now_ts - last_ban_warn[uid]) > 60:
-                time_str = ban_until.strftime('%H:%M %d/%m')
-                await message.channel.send(
-                    f"⚠️ {message.author.mention}, đạo hữu đang bị cấm túc (không thể nhận tu vi). Hết hạn: **{time_str}**",
-                    delete_after=10
-                )
-                last_ban_warn[uid] = now_ts
-            
-            # Bị cấm túc vẫn cho dùng lệnh nhưng không cộng EXP
-            await bot.process_commands(message)
-            return
-
-    # 5. CƠ DUYÊN GIÁNG LÂM: Cộng EXP và kiểm tra Thăng Cấp
+    # 3. CỘNG TU VI & KIỂM TRA THĂNG CẤP (Tối ưu 2 trong 1)
     try:
-        # Cộng tu vi vào Database
-        await users_col.update_one(
-            {"_id": uid}, 
-            {"$inc": {"exp": MSG_EXP}}
+        # Vừa cộng EXP vừa lấy dữ liệu mới trong 1 lệnh duy nhất (Cực kỳ quan trọng để chống lag)
+        updated_user = await users_col.find_one_and_update(
+            {"_id": uid},
+            {"$inc": {"exp": MSG_EXP}},
+            upsert=True, # Nếu chưa có profile thì tự tạo mới
+            return_document=motor.motor_asyncio.ReturnDocument.AFTER
         )
 
-        # GỌI PHÁP TRẬN THĂNG CẤP (Đã sửa tên hàm để tránh NameError)
-        await check_level_up(uid, message.channel, message.author.display_name)
+        # Kiểm tra thăng cấp bằng dữ liệu vừa lấy được
+        await check_level_up(uid, message.channel, message.author.display_name, user_data=updated_user)
         
     except Exception as e:
-        print(f"❌ Lỗi khi cộng tu vi cho {message.author.name}: {e}")
+        print(f"❌ Lỗi xử lý EXP cho {message.author.name}: {e}")
 
-    # 6. THÔNG ĐẠO: Xử lý các lệnh prefix (!...)
-    await bot.process_commands(message)
-    total_gain = base_exp + pet_bonus
-    await add_exp(uid, total_gain)
-    await _level_up(uid, message.channel, message.author.display_name)
+    # 4. XỬ LÝ LỆNH PREFIX (Chỉ gọi 1 lần duy nhất)
     await bot.process_commands(message)
 
 @bot.tree.error
@@ -3619,6 +3582,7 @@ async def ping(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
