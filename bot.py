@@ -803,6 +803,7 @@ async def on_ready():
         print(f"❌ Lỗi khởi động: {e}")
 @bot.event
 async def on_message(message):
+    # 1. Pháp trận hộ thân: Không xử lý tin nhắn từ Bot
     if message.author.bot: 
         return
 
@@ -810,37 +811,41 @@ async def on_message(message):
     content = message.content.strip().lower()
     now_ts = time.time()
 
-    # --- BỘ LỌC CHỐNG SPAM ---
-    if content == last_msg_content.get(uid): return
-    if (now_ts - last_msg_time.get(uid, 0)) < MSG_COOLDOWN:
-        await bot.process_commands(message)
+    # 2. Bộ lọc tâm ma: Chống spam
+    if content == last_msg_content.get(uid): 
         return
-    if len(content) < MIN_MSG_LEN:
+        
+    is_cooldown = (now_ts - last_msg_time.get(uid, 0)) < MSG_COOLDOWN
+    is_too_short = len(content) < MIN_MSG_LEN
+    
+    if is_cooldown or is_too_short:
+        # Vẫn cho phép chạy lệnh prefix (!) dù đang cooldown lấy EXP
         await bot.process_commands(message)
         return
 
+    # Cập nhật nhật ký hành tung
     last_msg_time[uid] = now_ts
     last_msg_content[uid] = content
 
-    # --- CHẠY NGẦM CỘNG EXP (KHÔNG CHỜ ĐỢI) ---
-    # Việc này giúp giải phóng luồng để bot.process_commands chạy ngay lập tức
+    # 3. Chạy ngầm cộng EXP (Task): Để không làm treo lệnh Slash
     async def background_exp_task():
         try:
-            # Vừa cộng vừa lấy data mới nhất
+            # Vừa cộng vừa lấy data mới nhất trong 1 lần gọi DB
             user_data = await users_col.find_one_and_update(
                 {"_id": uid},
                 {"$inc": {"exp": MSG_EXP}},
                 upsert=True,
                 return_document=motor.motor_asyncio.ReturnDocument.AFTER
             )
-            # Kiểm tra lên cấp
+            # Kiểm tra lên cấp (Hãy chắc chắn hàm check_level_up đã sửa để nhận user_data)
             await check_level_up(uid, message.channel, message.author.display_name, user_data=user_data)
         except Exception as e:
             print(f"❌ Lỗi xử lý EXP ngầm: {e}")
 
+    # Kích hoạt task chạy song song
     bot.loop.create_task(background_exp_task())
 
-    # Xử lý các lệnh prefix (!)
+    # 4. Thông đạo: Xử lý các lệnh prefix (!)
     await bot.process_commands(message)
 
 @bot.tree.error
@@ -3559,6 +3564,7 @@ async def leothap(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
