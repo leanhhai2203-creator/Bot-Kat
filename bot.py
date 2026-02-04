@@ -46,8 +46,11 @@ CHANNEL_EXP_RATES = {
 REALMS = [
     ("Luyện Khí", 10), ("Trúc Cơ", 20), ("Kết Đan", 30),
     ("Nguyên Anh", 40), ("Hóa Thần", 50), ("Luyện Hư", 60),
-    ("Hợp Thể", 70), ("Đại Thừa", 80),
-    ("Chân Tiên", 90), ("Kim Tiên", 100)
+    ("Hợp Thể", 70), ("Đại Thừa", 80), ("Chân Tiên", 90), 
+    ("Kim Tiên", 100),
+    ("Đại La Kim Tiên", 130), 
+    ("Thái Ất Ngọc Tiên", 160), 
+    ("Đạo Tổ", 200)
 ]
 TIEN_NHAN_QUOTES = [
     "仙 'Côn trùng mà cũng đòi rung cây đại thụ? Nực cười!'",
@@ -682,7 +685,7 @@ async def check_level_down(uid):
 
         original_lv = current_lv
         # Các mốc đầu của cảnh giới (11: Trúc Cơ, 21: Kim Đan...)
-        points = [11, 21, 31, 41, 51, 61, 71, 81, 91]
+        points = [11, 21, 31, 41, 51, 61, 71, 81, 91,101,131,161]
 
         while current_exp < 0 and current_lv > 1:
             # KIỂM TRA TRƯỚC: Nếu đang ở mốc đại cảnh giới, không cho giảm nữa
@@ -1419,22 +1422,44 @@ async def dotpha(interaction: discord.Interaction):
         exp = u.get("exp", 0)
         luck_bonus = u.get("luck_bonus", 0) 
 
-        # Kiểm tra điều kiện đỉnh phong
+       # 1. KIỂM TR ĐIỀU KIỆN ĐỈNH PHONG
         if lv % 10 != 0:
-            return await interaction.followup.send(f"❌ Cần đạt đỉnh phong cấp {lv//10*10+10} để đột phá. Hiện tại: **Cấp {lv}**")
+            next_peak = (lv // 10) * 10 + 10
+            return await interaction.followup.send(f"❌ Cần đạt đỉnh phong cấp {next_peak} để đột phá. Hiện tại: **Cấp {lv}**")
 
-        needed = exp_needed(lv)
-        if exp < needed:
-            return await interaction.followup.send(f"❌ Tu vi chưa đủ!")
+        needed_exp = exp_needed(lv)
+        if exp < needed_exp:
+            return await interaction.followup.send(f"❌ Tu vi chưa đủ! Cần `{needed_exp}` EXP.")
 
-        required_lt = 3 if lv < 30 else (10 if lv < 60 else (15 if lv < 80 else 20))
-        needs_tien_thach = (lv >= 80)
-        
+        # 2. XÁC ĐỊNH TÀI NGUYÊN THEO CẤP ĐỘ
+        # 2. XÁC ĐỊNH TÀI NGUYÊN
+        required_tt = 0 # Mặc định là 0
+        if lv < 30: required_lt = 3
+        elif lv < 60: required_lt = 10
+        elif lv < 80: required_lt = 15
+        elif lv < 100: 
+            required_lt = 20
+            required_tt = 1
+        elif lv < 130:
+            required_lt = 30
+            required_tt = 2
+        elif lv < 160:
+            required_lt = 50
+            required_tt = 3
+        else:
+            required_lt = 70
+            required_tt = 5
+            
+        needs_tien_thach = (required_tt > 0)
+
+        # 3. KIỂM TRA LINH THẠCH
         if linh_thach < required_lt:
-            return await interaction.followup.send(f"❌ Linh thạch không đủ để khởi động pháp trận.")
+            return await interaction.followup.send(f"❌ Thiếu Linh Thạch! Cần `{required_lt}` 💎 để khởi động pháp trận.")
         
-        if needs_tien_thach and tien_thach < 1:
-            return await interaction.followup.send(f"❌ Cảnh giới cao cần thêm **1 Tiên Thạch** để trấn giữ tâm ma!")
+        # 4. KIỂM TRA TIÊN THẠCH
+        if required_tt > 0 and tien_thach < required_tt:
+            return await interaction.followup.send(f"❌ Cảnh giới cao cần thêm **{required_tt} Tiên Thạch** 🔮 để trấn giữ tâm ma!")
+
 
         # Quét trang bị tính Buff rủi ro
         equipment_map = [
@@ -3411,6 +3436,7 @@ async def shop(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
