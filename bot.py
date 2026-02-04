@@ -775,32 +775,36 @@ async def daily_tower_reset():
 
 # ========== EVENTS ==========
 @bot.event
-@bot.event
 async def on_ready():
-    print("-----------------------------------")
-    # 1. Đồng bộ lệnh TRƯỚC (Ưu tiên số 1 để lệnh chạy được)
     try:
+        print("-----------------------------------")
+        # 1. Đồng bộ lệnh Slash (Phải nằm trong try)
+        print("🔄 Đang đồng bộ lệnh Slash...")
         synced = await bot.tree.sync()
         print(f"✅ Hệ thống ổn định. Đã đồng bộ {len(synced)} lệnh.")
-    except Exception as e:
-        print(f"❌ Lỗi Sync: {e}")
 
-    # 2. Xử lý DB chạy ngầm (Không dùng await trực tiếp ở luồng chính)
-    async def setup_db():
-        try:
-            print("⏳ Đang tối ưu Database ngầm...")
-            await users_col.create_index([("level", -1)])
-            print("✅ Database đã tối ưu.")
-        except: pass
-    
-    bot.loop.create_task(setup_db()) # Chạy ngầm, không bắt on_ready phải đợi
+        # 2. Xử lý DB chạy ngầm
+        async def setup_db():
+            try:
+                print("⏳ Đang tối ưu Database ngầm...")
+                await users_col.create_index([("level", -1)])
+                print("✅ Database đã tối ưu.")
+            except Exception as db_e:
+                print(f"⚠️ Lỗi Index DB: {db_e}")
+        
+        bot.loop.create_task(setup_db())
 
-    print(f"🚀 {bot.user} đã sẵn sàng!")
+        # 3. Trạng thái Bot
+        await bot.change_presence(
+            activity=discord.Game(name="/tu_tien | Tu Tiên Lộ")
+        )
+        print(f"🚀 {bot.user} đã sẵn sàng hoạt động!")
+        print("-----------------------------------")
 
     except Exception as e:
         import traceback
-        traceback.print_exc() # In chi tiết lỗi để dễ debug hơn
-        print(f"❌ Lỗi khởi động: {e}")
+        traceback.print_exc()
+        print(f"❌ Lỗi khởi động hệ thống: {e}")
 @bot.event
 async def on_message(message):
     # 1. Pháp trận hộ thân: Không xử lý tin nhắn từ Bot
@@ -3564,6 +3568,7 @@ async def leothap(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
