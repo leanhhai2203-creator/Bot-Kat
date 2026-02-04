@@ -625,7 +625,7 @@ async def _up(uid, channel, name):
             except:
                 pass # Tránh treo bot nếu channel bị xóa hoặc thiếu quyền
     # Không cần phần 'else' cập nhật exp nếu đạo hữu đã dùng $inc trong hàm add_exp
-async def check_level_up(uid, channel, name): # Đổi tên cho khớp với lệnh gọi
+async def check_level_up(uid, channel, name):
     try:
         uid = str(uid)
         u = await users_col.find_one({"_id": uid})
@@ -636,25 +636,24 @@ async def check_level_up(uid, channel, name): # Đổi tên cho khớp với l�
         new_lv = lv
         leveled = False
 
-        # Giới hạn vòng lặp tối đa 100 lần để tránh treo bot (Infinite Loop Protection)
-        loop_count = 0
-        while exp >= exp_needed(new_lv) and loop_count < 100:
-            loop_count += 1
-            # Chốt chặn đại cảnh giới (10, 20, 30...)
+        # Vòng lặp kiểm tra thăng cấp
+        while exp >= exp_needed(new_lv):
+            # CHỐT CHẶN: Nếu đang ở đỉnh (10, 20...), bắt buộc phải dừng để Đột Phá (nếu đạo hữu có lệnh đó)
+            # Nếu đạo hữu muốn lên thẳng luôn, hãy xóa 2 dòng if này.
             if new_lv % 10 == 0:
                 break
-                
-            exp -= exp_needed(new_lv)
-            new_lv += 1
+
+            exp -= exp_needed(new_lv) # Trừ exp của cấp hiện tại
+            new_lv += 1               # Lên cấp mới
             leveled = True
             
             if new_lv >= 100: break
+            if exp < 0: exp = 0 # Đảm bảo không âm
 
         if leveled:
-            # Dùng update_one với $set một cách dứt khoát
             await users_col.update_one(
                 {"_id": uid}, 
-                {"$set": {"level": new_lv, "exp": max(0, exp)}}
+                {"$set": {"level": new_lv, "exp": exp}}
             )
             
             realm_name = get_realm(new_lv)
@@ -663,16 +662,12 @@ async def check_level_up(uid, channel, name): # Đổi tên cho khớp với l�
                 description=f"Chúc mừng đạo hữu **{name}** đã lên **Cấp {new_lv}**!\n🧘 Cảnh giới: **{realm_name}**", 
                 color=discord.Color.green()
             )
-            # Không được quên footer để tránh trống trải
             embed.set_footer(text="Tu vi tinh tiến, thiên địa chúc mừng!")
             
             if channel:
-                try:
-                    await channel.send(embed=embed)
-                except Exception as e:
-                    print(f"Không thể gửi tin nhắn thăng cấp: {e}")
+                await channel.send(embed=embed)
     except Exception as e:
-        print(f"Lỗi nghiêm trọng trong check_level_up: {e}")
+        print(f"Lỗi check_level_up: {e}")
 
 async def check_level_down(uid):
     try:
@@ -3610,6 +3605,7 @@ async def leothap(interaction: discord.Interaction):
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
