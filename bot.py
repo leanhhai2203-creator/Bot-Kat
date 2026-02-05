@@ -775,66 +775,91 @@ async def daily_tower_reset():
 
 # ========== EVENTS ==========
 @bot.event
-async def on_message(message):
-    # 1. Bỏ qua nếu là tin nhắn của bot
-    if message.author.bot:
-        return
+async def on_ready():
+    try:
+        print("-----------------------------------")
+        print(f"✅ Đã đăng nhập: {bot.user} (ID: {bot.user.id})")
+        print("⚠️ Chế độ An Toàn: Đã TẮT tự động Sync lệnh.")
+        print("👉 Hãy dùng lệnh '!sync' để cập nhật lệnh Slash.")
 
-    # 2. XỬ LÝ LỆNH PREFIX TRƯỚC (Dấu !)
-    # Dòng này ép Bot phải kiểm tra xem tin nhắn có phải là lệnh không
-    await bot.process_commands(message)
+        # 1. Xử lý DB chạy ngầm
+        async def setup_db():
+            try:
+                print("⏳ Đang tối ưu Database ngầm...")
+                await users_col.create_index([("level", -1)])
+                print("✅ Database đã tối ưu.")
+            except Exception as db_e:
+                print(f"⚠️ Lỗi Index DB: {db_e}")
+        
+        bot.loop.create_task(setup_db())
 
-    # 3. SAU ĐÓ MỚI XỬ LÝ EXP (Nếu không phải lệnh)
-    if not message.content.startswith("!"):
-        uid = str(message.author.id)
-        content = message.content.strip().lower()
-        # ... (phần code lọc cooldown và cộng EXP của đạo hữu giữ nguyên)
+        # 2. Khởi động vòng lặp Reset Tháp
+        if not daily_tower_reset.is_running():
+            daily_tower_reset.start()
+            print("🗼 Vòng lặp Vạn Ma Tháp đã khởi động.")
+
+        # 3. Trạng thái Bot
+        await bot.change_presence(
+            activity=discord.Game(name="/tu_tien | Tu Tiên Lộ")
+        )
+        print(f"🚀 {bot.user} đã sẵn sàng hoạt động!")
+        print("-----------------------------------")
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"❌ Lỗi khởi động hệ thống: {e}")
 @bot.event
 async def on_message(message):
     # 1. Pháp trận hộ thân: Không xử lý tin nhắn từ Bot
     if message.author.bot: 
         return
 
+    # 2. ƯU TIÊN TUYỆT ĐỐI: Xử lý lệnh Prefix (!) trước
+    # Đây là chìa khóa để lệnh !sync hoạt động
+    await bot.process_commands(message)
+
+    # 3. Nếu là lệnh (bắt đầu bằng !), không cộng EXP, không tính cooldown spam
+    if message.content.startswith("!"):
+        return
+
+    # --- PHẦN XỬ LÝ EXP & CHỐNG SPAM ---
     uid = str(message.author.id)
     content = message.content.strip().lower()
     now_ts = time.time()
 
-    # 2. Bộ lọc tâm ma: Chống spam
+    # Bộ lọc tâm ma: Chống spam nội dung giống nhau
     if content == last_msg_content.get(uid): 
         return
         
+    # Bộ lọc thời gian: Cooldown
     is_cooldown = (now_ts - last_msg_time.get(uid, 0)) < MSG_COOLDOWN
     is_too_short = len(content) < MIN_MSG_LEN
     
     if is_cooldown or is_too_short:
-        # Vẫn cho phép chạy lệnh prefix (!) dù đang cooldown lấy EXP
-        await bot.process_commands(message)
         return
 
     # Cập nhật nhật ký hành tung
     last_msg_time[uid] = now_ts
     last_msg_content[uid] = content
 
-    # 3. Chạy ngầm cộng EXP (Task): Để không làm treo lệnh Slash
+    # Chạy ngầm cộng EXP (Task)
     async def background_exp_task():
         try:
-            # Vừa cộng vừa lấy data mới nhất trong 1 lần gọi DB
+            # Vừa cộng vừa lấy data mới nhất
             user_data = await users_col.find_one_and_update(
                 {"_id": uid},
                 {"$inc": {"exp": MSG_EXP}},
                 upsert=True,
                 return_document=motor.motor_asyncio.ReturnDocument.AFTER
             )
-            # Kiểm tra lên cấp (Hãy chắc chắn hàm check_level_up đã sửa để nhận user_data)
+            # Kiểm tra lên cấp
             await check_level_up(uid, message.channel, message.author.display_name, user_data=user_data)
         except Exception as e:
             print(f"❌ Lỗi xử lý EXP ngầm: {e}")
 
     # Kích hoạt task chạy song song
     bot.loop.create_task(background_exp_task())
-
-    # 4. Thông đạo: Xử lý các lệnh prefix (!)
-    await bot.process_commands(message)
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -3575,6 +3600,7 @@ if __name__ == "__main__":
             
     except Exception as e:
         print(f"💥 Lỗi chí mạng khi chạy Bot: {e}")
+
 
 
 
