@@ -3560,9 +3560,23 @@ async def sync(ctx):
         await ctx.send(f"✅ Đã đồng bộ {len(synced)} lệnh Slash!")
     except Exception as e:
         await ctx.send(f"❌ Lỗi: {e}")
-keep_alive()
-token = os.getenv("DISCORD_TOKEN")
-bot.run(token)
+# --- ĐOẠN CUỐI FILE ---
+if __name__ == "__main__":
+    try:
+        keep_alive() # Khởi động web server ngầm
+        print("📡 Web Server đã khởi động.")
+        
+        token = os.getenv("DISCORD_TOKEN")
+        if not token:
+            print("❌ LỖI: Không tìm thấy DISCORD_TOKEN trong Environment Variables!")
+        else:
+            print("🚀 Đang kết nối đến Discord...")
+            bot.run(token)
+            
+    except Exception as e:
+        print(f"💥 Lỗi chí mạng khi chạy Bot: {e}")
+
+
 
 
 
