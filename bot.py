@@ -776,25 +776,19 @@ async def daily_tower_reset():
 # ========== EVENTS ==========
 @bot.event
 async def on_message(message):
-    if message.author.bot: 
+    # 1. Bỏ qua nếu là tin nhắn của bot
+    if message.author.bot:
         return
 
-    # ƯU TIÊN SỐ 1: Nếu là lệnh (bắt đầu bằng !), chạy ngay không lọc cooldown
-    if message.content.startswith("!"):
-        await bot.process_commands(message)
-        return
+    # 2. XỬ LÝ LỆNH PREFIX TRƯỚC (Dấu !)
+    # Dòng này ép Bot phải kiểm tra xem tin nhắn có phải là lệnh không
+    await bot.process_commands(message)
 
-    # Sau đó mới đến bộ lọc EXP cho tin nhắn thường
-    uid = str(message.author.id)
-    now_ts = time.time()
-    content = message.content.strip().lower()
-
-    if content == last_msg_content.get(uid) or (now_ts - last_msg_time.get(uid, 0)) < MSG_COOLDOWN:
-        return
-
-    # (Phần code cộng EXP ngầm của đạo hữu giữ nguyên ở đây...)
-    last_msg_time[uid] = now_ts
-    last_msg_content[uid] = content
+    # 3. SAU ĐÓ MỚI XỬ LÝ EXP (Nếu không phải lệnh)
+    if not message.content.startswith("!"):
+        uid = str(message.author.id)
+        content = message.content.strip().lower()
+        # ... (phần code lọc cooldown và cộng EXP của đạo hữu giữ nguyên)
 @bot.event
 async def on_message(message):
     # 1. Pháp trận hộ thân: Không xử lý tin nhắn từ Bot
@@ -3554,25 +3548,22 @@ async def leothap(interaction: discord.Interaction):
         embed.color = discord.Color.red()
 
     await interaction.followup.send(embed=embed)
-@bot.command(name="sync")
-async def sync_commands(ctx):
-    # Ép kiểu để so sánh chính xác
-    if int(ctx.author.id) != int(ADMIN_ID):
-        await ctx.send("❌ Đạo hữu không có quyền hạn thực hiện pháp thuật này!")
+@bot.command()
+async def sync(ctx):
+    print(f"Lệnh sync được gọi bởi: {ctx.author.id}") # Xem log ở Render/Replit
+    if int(ctx.author.id) != 472564016917643264: # Thay thẳng ID admin vào đây
+        await ctx.send("Sai ID Admin!")
         return
-
-    print(f"🔄 Đang bắt đầu đồng bộ theo lệnh của {ctx.author}...")
+    
     try:
-        # Đồng bộ lệnh Slash
         synced = await bot.tree.sync()
-        await ctx.send(f"✅ Pháp trận đã thông! Đã đồng bộ `{len(synced)}` lệnh Slash thành công.")
-        print(f"✅ Sync hoàn tất: {len(synced)} lệnh.")
+        await ctx.send(f"✅ Đã đồng bộ {len(synced)} lệnh Slash!")
     except Exception as e:
-        await ctx.send(f"⚠️ Lỗi kết nối Discord API: `{e}`")
-        print(f"❌ Lỗi Sync: {e}")
+        await ctx.send(f"❌ Lỗi: {e}")
 keep_alive()
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
+
 
 
 
