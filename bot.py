@@ -816,7 +816,6 @@ async def on_message(message):
         return
 
     # 2. ƯU TIÊN TUYỆT ĐỐI: Xử lý lệnh Prefix (!) trước
-    # Đây là chìa khóa để lệnh !sync hoạt động
     await bot.process_commands(message)
 
     # 3. Nếu là lệnh (bắt đầu bằng !), không cộng EXP, không tính cooldown spam
@@ -828,11 +827,11 @@ async def on_message(message):
     content = message.content.strip().lower()
     now_ts = time.time()
 
-    # Bộ lọc tâm ma: Chống spam nội dung giống nhau
+    # Bộ lọc tâm ma
     if content == last_msg_content.get(uid): 
         return
         
-    # Bộ lọc thời gian: Cooldown
+    # Bộ lọc thời gian
     is_cooldown = (now_ts - last_msg_time.get(uid, 0)) < MSG_COOLDOWN
     is_too_short = len(content) < MIN_MSG_LEN
     
@@ -843,20 +842,32 @@ async def on_message(message):
     last_msg_time[uid] = now_ts
     last_msg_content[uid] = content
 
-    # Chạy ngầm cộng EXP (Task)
+    # Chạy ngầm cộng EXP và Thả biểu tượng Linh thú
     async def background_exp_task():
         try:
-            # Vừa cộng vừa lấy data mới nhất
+            # Vừa cộng vừa lấy data mới nhất (để xem đang trang bị linh thú gì)
             user_data = await users_col.find_one_and_update(
                 {"_id": uid},
                 {"$inc": {"exp": MSG_EXP}},
                 upsert=True,
                 return_document=motor.motor_asyncio.ReturnDocument.AFTER
             )
+            
+            # --- PHẦN THÊM VÀO: LINH THÚ THẢ BIỂU TƯỢNG ---
+            current_pet_name = user_data.get("linh_thu") # Giả định field lưu tên linh thú là "linh_thu"
+            if current_pet_name and current_pet_name in PET_CONFIG:
+                pet_icon = PET_CONFIG[current_pet_name].get("icon", "🐾")
+                try:
+                    await message.add_reaction(pet_icon)
+                except:
+                    pass # Tránh lỗi nếu bot thiếu quyền thả reaction
+            # ----------------------------------------------
+
             # Kiểm tra lên cấp
             await check_level_up(uid, message.channel, message.author.display_name, user_data=user_data)
+            
         except Exception as e:
-            print(f"❌ Lỗi xử lý EXP ngầm: {e}")
+            print(f"❌ Lỗi xử lý EXP & Linh thú ngầm: {e}")
 
     # Kích hoạt task chạy song song
     bot.loop.create_task(background_exp_task())
@@ -3600,6 +3611,7 @@ if __name__ == "__main__":
             
     except Exception as e:
         print(f"💥 Lỗi chí mạng khi chạy Bot: {e}")
+
 
 
 
