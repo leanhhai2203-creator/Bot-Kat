@@ -709,7 +709,7 @@ async def check_level_down(uid):
 @tasks.loop(time=dt.time(hour=0, minute=0, second=0)) # Nhớ chỉnh giờ phù hợp với server
 async def daily_tower_reset():
     # ID kênh thông báo
-    ANNOUNCE_CHANNEL_ID = 1461017212365181160 
+    ANNOUNCE_CHANNEL_ID = 1469715847860846633 
     channel = bot.get_channel(ANNOUNCE_CHANNEL_ID)
     
     if not channel: return
@@ -3096,7 +3096,7 @@ async def bicanh(interaction: discord.Interaction, dong_doi: discord.Member = No
 #full lệnh hái dược
 @bot.tree.command(name="haiduoc", description="Khởi hành vào Linh Sơn hái thuốc")
 async def haiduoc(interaction: discord.Interaction):
-    ALLOWED_CHANNEL_ID = 1461017212365181160
+    ALLOWED_CHANNEL_ID = 1469715847860846633
     
     if interaction.channel_id != ALLOWED_CHANNEL_ID:
         return await interaction.response.send_message(
@@ -3132,7 +3132,7 @@ async def haiduoc(interaction: discord.Interaction):
     )
 @bot.tree.command(name="thuhoach", description="Trở về từ Linh Sơn và bán thảo dược")
 async def thuhoach(interaction: discord.Interaction):
-    ALLOWED_CHANNEL_ID = 1461017212365181160
+    ALLOWED_CHANNEL_ID = 1469715847860846633
     VIP_UID = "" 
     
     # 1. PHẢI PHẢN HỒI NGAY LẬP TỨC (Tránh lỗi 10062)
@@ -3600,6 +3600,7 @@ if __name__ == "__main__":
             
     except Exception as e:
         print(f"💥 Lỗi chí mạng khi chạy Bot: {e}")
+
 
 
 
